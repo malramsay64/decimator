@@ -1,0 +1,12 @@
+[package]
+name = "decimator-relm4"
+version = "0.1.0"
+authors = ["Malcolm Ramsay <m@malramsay.com>"]
+edition = "2021"
+publish = false
+
+[dependencies]
+gettext-rs = { version = "0.7", features = ["gettext-system"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+relm4 = { git = "https://github.com/Relm4/Relm4", features = ["macros"] }
