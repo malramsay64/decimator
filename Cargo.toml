@@ -1,5 +1,5 @@
 [package]
-name = "decimator-relm4"
+name = "decimator-gtk4"
 version = "0.1.0"
 authors = ["Malcolm Ramsay <m@malramsay.com>"]
 edition = "2021"
@@ -9,4 +9,16 @@ publish = false
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-relm4 = { git = "https://github.com/Relm4/Relm4", features = ["macros"] }
+gtk = {package="gtk4", version="*", features = []}
+walkdir = "2.3.2"
+anyhow = "1.0.65"
+rayon = "1.5.3"
+once_cell = "*"
+image = "0.24.5"
+log = "0.4.17"
+glib = "0.16.3"
+
+[build-dependencies]
+glib-build-tools = "0.16.3"
+
+

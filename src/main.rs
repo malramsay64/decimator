@@ -1,193 +1,153 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use gtk::prelude::{BoxExt, ButtonExt, GridExt, GtkWindowExt, OrientableExt};
-use relm4::factory::positions::GridPosition;
-use relm4::factory::{
-    DynamicIndex, FactoryComponent, FactoryComponentSender, FactoryVecDeque, Position,
+use anyhow::Result;
+use glib::{clone, Value};
+use gtk::builders::PictureBuilder;
+use gtk::gdk::Texture;
+use gtk::gdk_pixbuf::Pixbuf;
+use gtk::{
+    gio, Application, ApplicationWindow, Box, Image, Label, ListView, Orientation, Picture,
+    PolicyType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject,
 };
-use relm4::gtk::traits::WidgetExt;
-use relm4::{gtk, ComponentParts, ComponentSender, RelmApp, SimpleComponent, WidgetPlus};
+use gtk::{prelude::*, StringList};
+use image::imageops::FilterType;
+use image::io::Reader as ImageReader;
+use image::ImageBuffer;
+use log::trace;
+use walkdir::{DirEntry, WalkDir};
+// mod image_object;
+// use image_object::ImageObject;
 
-#[derive(Debug)]
-struct PictureComponent {
-    path: PathBuf,
-}
-
-#[derive(Debug)]
-enum CounterMsg {
-    Increment,
-    Decrement,
-}
-
-#[derive(Debug)]
-enum CounterOutput {
-    SendFront(DynamicIndex),
-    MoveUp(DynamicIndex),
-    MoveDown(DynamicIndex),
-}
+const APP_ID: &str = "com.malramsay.Decimator";
 
 struct PictureWidgets {
     image: gtk::Picture,
 }
 
-impl Position<GridPosition> for PictureComponent {
-    fn position(index: usize) -> GridPosition {
-        let x = index % 4;
-        let y = index / 4;
-        GridPosition {
-            column: x as i32,
-            row: y as i32,
-            width: 1,
-            height: 1,
-        }
+fn find_images<P: AsRef<Path>>(directory: &P) -> Result<impl Iterator<Item = PathBuf>> {
+    // First we list all the files in the provided directory.
+    // This has be done in a single threaded manner.
+    Ok(WalkDir::new(directory)
+        .into_iter()
+        // Ignore any directories we don't have permissions for
+        .filter_map(|e| e.ok())
+        // This removes the directories from the listing
+        .filter(is_image)
+        .map(|p| p.into_path()))
+}
+
+fn is_image(entry: &DirEntry) -> bool {
+    match entry.path().extension().map(|s| s.to_str()).flatten() {
+        Some("jpg" | "JPG" | "heic") => true,
+        Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "arw" | "ARW") => false,
+        _ => false,
     }
 }
 
-impl FactoryComponent for PictureComponent {
-    type CommandOutput = ();
-    type Init = PathBuf;
-    type Input = ();
-    type Output = ();
-    type ParentInput = AppMsg;
-    type ParentWidget = gtk::Grid;
-    type Root = gtk::Box;
-    type Widgets = PictureWidgets;
+fn main() -> Result<()> {
+    let app = Application::builder().application_id(APP_ID).build();
 
-    fn output_to_parent_input(_output: Self::Output) -> Option<AppMsg> {
-        None
-    }
+    app.connect_activate(build_ui);
 
-    fn init_root(&self) -> Self::Root {
-        relm4::view! {
-            root = gtk::Box {
-                set_orientation: gtk::Orientation::Horizontal,
-                set_spacing: 10,
-            }
-        }
-        root
-    }
-
-    fn init_model(
-        value: Self::Init,
-        _index: &DynamicIndex,
-        _sender: FactoryComponentSender<Self>,
-    ) -> Self {
-        Self { path: value }
-    }
-
-    fn init_widgets(
-        &mut self,
-        _index: &DynamicIndex,
-        root: &Self::Root,
-        _returned_widget: &gtk::Widget,
-        _sender: FactoryComponentSender<Self>,
-    ) -> Self::Widgets {
-        relm4::view! {
-            image = gtk::Picture {
-                set_filename: self.path.to_str(),
-                set_keep_aspect_ratio: true,
-                set_can_shrink: false,
-            }
-        }
-
-        relm4::view! {
-            label = gtk::Label {
-                set_label: &self.path.to_str().unwrap(),
-                // set_keep_aspect_ratio: true,
-                // set_can_shrink: true,
-            }
-        }
-
-        root.append(&image);
-        // root.append(&label);
-
-        PictureWidgets { image }
-    }
-
-    fn update(&mut self, _msg: Self::Input, _sender: FactoryComponentSender<Self>) {}
-
-    fn update_view(&self, widgets: &mut Self::Widgets, _sender: FactoryComponentSender<Self>) {
-        widgets.image.set_filename(Some(&self.path));
-    }
+    app.run();
+    Ok(())
 }
 
-struct AppModel {
-    pictures: FactoryVecDeque<PictureComponent>,
-}
+fn build_ui(app: &Application) {
+    let path = String::from("/home/malcolm/Pictures/2022/2022-04-14");
+    let images: Vec<_> = find_images(&path)
+        .expect("Image collection failed")
+        .collect();
+    let model: StringList = find_images(&path)
+        .expect("Image collection failed.")
+        .map(|p| {
+            p.into_os_string()
+                .into_string()
+                .expect("Invalid UTF8 path.")
+        })
+        .collect();
 
-#[derive(Debug)]
-enum AppMsg {
-    AddImage(PathBuf),
-}
+    let factory = SignalListItemFactory::new();
+    factory.connect_setup(move |_, list_item| {
+        let image = Picture::new();
+        image.set_size_request(320, 320);
+        list_item.set_child(Some(&image));
+        // let label = Label::new(None);
+        // list_item.set_child(Some(&label));
+    });
 
-#[relm4::component]
-impl SimpleComponent for AppModel {
-    type Init = Vec<PathBuf>;
-    type Input = AppMsg;
-    type Output = ();
-    // AppWidgets is generated by the macro
-    type Widgets = AppWidgets;
+    factory.connect_bind(move |_, list_item| {
+        let string_object = list_item
+            .item()
+            .expect("The item has to exist.")
+            .downcast::<StringObject>()
+            .expect("The item has to be an `StringObject`.");
 
-    view! {
-        gtk::ApplicationWindow {
-            set_title: Some("Grid factory example"),
-            set_default_width: 300,
-            set_default_height: 100,
+        let file_path = string_object.property::<String>("string");
+        trace!("Loading image from {file_path}.");
 
-            gtk::ScrolledWindow{
-                set_hscrollbar_policy: gtk::PolicyType::Never,
-                set_min_content_height: 360,
-                set_vexpand: true,
+        let image = list_item
+            .child()
+            .expect("The child has to exist.")
+            .downcast::<Picture>()
+            .expect("The child has to be a `Picture`.");
 
-                gtk::Box {
-                    append: picture_box = &gtk::Grid {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_column_spacing: 15,
-                        set_row_spacing: 5,
-                    }
-                }
-            }
-        }
-    }
+        let buffer = Pixbuf::from_file_at_scale(&file_path, 320, 320, true)
+            .expect("Image not found")
+            .apply_embedded_orientation()
+            .expect("Unable to apply image orientation.");
 
-    // Initialize the UI.
-    fn init(
-        paths: Self::Init,
-        root: &Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
-        // Insert the macro codegen here
-        let widgets = view_output!();
+        image.set_pixbuf(Some(&buffer));
+    });
 
-        let mut model = AppModel {
-            pictures: FactoryVecDeque::new(widgets.picture_box.clone(), sender.input_sender()),
-        };
+    let selection_model = SingleSelection::builder()
+        .model(&model)
+        .autoselect(true)
+        .build();
+    let list_view = ListView::new(Some(&selection_model), Some(&factory));
 
-        {
-            let mut picture_guard = model.pictures.guard();
-            for p in paths {
-                picture_guard.push_back(p);
-            }
-        }
+    let detail_image = Picture::new();
 
-        ComponentParts { model, widgets }
-    }
+    selection_model.connect_selected_item_notify(clone!(@weak detail_image => move |item| {
+        dbg!(item);
+        let file_path = item
+            .selected_item()
+            .expect("No items selected")
+            .downcast::<StringObject>()
+            .expect("The item has to be a `String`.")
+            .property::<String>("string");
 
-    fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
-        let mut picture_guard = self.pictures.guard();
-        match msg {
-            AppMsg::AddImage(p) => {
-                picture_guard.push_back(p);
-            }
-        }
-    }
-}
+        dbg!(&file_path);
 
-fn main() {
-    let app = RelmApp::new("relm4.example.gridFactory");
-    let mut images =
-        vec![PathBuf::from("/Users/malcolm/Projects/decimator-relm4/picture.jpg",); 100];
-    images.insert(0, PathBuf::from("./image.png"));
+        let buffer = Pixbuf::from_file(&file_path)
+            .expect("Image not found")
+            .apply_embedded_orientation()
+            .expect("Unable to apply image orientation.");
 
-    app.run::<AppModel>(images)
+        detail_image.set_pixbuf(Some(&buffer))
+        // let buffer = Texture::for_pixbuf(&buffer);
+
+        // image_buffer.clone_from(&Some(buffer.into()));
+    }));
+
+    let scrolled_window = ScrolledWindow::builder()
+        // Disable horizontal scrolling
+        .hscrollbar_policy(PolicyType::Never)
+        .min_content_width(300)
+        .child(&list_view)
+        .build();
+
+    let image_row = Box::new(Orientation::Horizontal, 10);
+    image_row.append(&scrolled_window);
+    image_row.append(&detail_image);
+
+    let window = ApplicationWindow::builder()
+        .application(app)
+        .title("Decimator")
+        .default_width(600)
+        .default_height(300)
+        .child(&image_row)
+        .build();
+
+    window.present();
 }
