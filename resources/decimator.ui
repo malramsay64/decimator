@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<interface>
+  <template class="DecimatorWindow" parent="GtkApplicationWindow">
+    <property name="title">Decimator</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">horizontal</property>
+        <child>
+          <object class="GtkPicture" id="preview">
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow">
+            <property name="focus-on-click">true</property>
+            <property name="min-content-width">320</property>
+            <child>
+              <object class="GtkListView" id="thumbnail_list">
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

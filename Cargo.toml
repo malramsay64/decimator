@@ -17,6 +17,8 @@ once_cell = "*"
 image = "0.24.5"
 log = "0.4.17"
 glib = "0.16.3"
+gio = "0.16.3"
+adw = { version = "0.2.1", package = "libadwaita" }
 
 [build-dependencies]
 glib-build-tools = "0.16.3"
