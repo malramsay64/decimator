@@ -1,8 +1,8 @@
+use adw::prelude::*;
+use adw::subclass::prelude::*;
 use glib::Object;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::glib;
-use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 
 glib::wrapper! {
     pub struct PictureObject(ObjectSubclass<imp::PictureObject>);
@@ -23,7 +23,21 @@ pub struct PictureData {
     pub thumbnail: Option<Pixbuf>,
 }
 
+impl std::fmt::Debug for PictureData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let loaded = match &self.thumbnail {
+            Some(_) => true,
+            None => false,
+        };
+        f.debug_struct("PictureData")
+            .field("path", &self.path)
+            .field("thumbnail", &loaded)
+            .finish()
+    }
+}
+
 impl PictureData {
+    #[tracing::instrument(name = "Loading thumbnail from file")]
     fn update_thumbnail(&mut self) {
         let thumbnail = Pixbuf::from_file_at_scale(&self.path, 320, 320, true)
             .expect("Image not found")
@@ -38,12 +52,12 @@ mod imp {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    use adw::prelude::*;
+    use adw::subclass::prelude::*;
     use glib::ParamSpecObject;
     use glib::{ParamSpec, ParamSpecString, Value};
     use gtk::gdk_pixbuf::Pixbuf;
     use gtk::glib;
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
     use once_cell::sync::Lazy;
 
     #[derive(Default)]

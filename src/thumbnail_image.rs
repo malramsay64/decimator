@@ -1,11 +1,11 @@
+use adw::prelude::*;
+use adw::subclass::prelude::*;
 use gio::File;
 use glib::BindingFlags;
 use glib::Object;
 use gtk::gdk::Texture;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::glib;
-use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 
 use crate::picture_object::PictureObject;
 
@@ -20,6 +20,7 @@ impl ThumbnailPicture {
         Object::builder().build()
     }
 
+    #[tracing::instrument(name = "Binding thumbnail to widget.")]
     pub fn bind(&self, picture_object: &PictureObject) {
         let thumbnail_picture = self.imp().thumbnail_picture.get();
         let thumbnail_label = self.imp().thumbnail_label.get();
@@ -39,6 +40,7 @@ impl ThumbnailPicture {
         bindings.push(buffer_binding);
     }
 
+    #[tracing::instrument(name = "Unbinding thumbnail from widget.")]
     pub fn unbind(&self) {
         for binding in self.imp().bindings.borrow_mut().drain(..) {
             binding.unbind();

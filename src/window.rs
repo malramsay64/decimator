@@ -1,12 +1,15 @@
 use std::path::Path;
 
+use adw::prelude::*;
+use adw::subclass::prelude::*;
+use adw::Application;
 use gio::ListStore;
 use glib::{clone, Object};
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::subclass::prelude::*;
-use gtk::{glib, Application, Picture, SingleSelection, StringList, StringObject};
-use gtk::{prelude::*, SignalListItemFactory};
+use gtk::SignalListItemFactory;
+use gtk::{glib, Picture, SingleSelection, StringList, StringObject};
 use log::trace;
+use tracing::info_span;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::picture_object::PictureObject;
@@ -36,7 +39,8 @@ impl Window {
         self.imp().thumbnails.borrow().clone()
     }
 
-    pub fn set_path(&self, path: impl AsRef<Path>) {
+    #[tracing::instrument(name = "Updating window display path")]
+    pub fn set_path<P: AsRef<Path> + std::fmt::Debug>(&self, path: P) {
         let mut model = ListStore::new(PictureObject::static_type());
         model.extend(
             WalkDir::new(path)
@@ -53,6 +57,7 @@ impl Window {
         self.init_selection_model();
     }
 
+    #[tracing::instrument(name = "Setting preview image.")]
     fn set_preview(&self, path: String) {
         let buffer = Pixbuf::from_file(&path)
             .expect("Image not found")
@@ -65,7 +70,6 @@ impl Window {
     fn init_selection_model(&self) {
         let selection_model = SingleSelection::builder()
             .model(&self.thumbnails().expect("Thumbnails not set yet"))
-            .autoselect(true)
             .build();
 
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
@@ -123,10 +127,10 @@ impl Window {
 mod imp {
     use std::cell::RefCell;
 
+    use adw::prelude::*;
+    use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
     use gtk::{gio, glib, CompositeTemplate, ListView, Picture, StringList};
 
     #[derive(CompositeTemplate, Default)]
@@ -163,10 +167,7 @@ mod imp {
             // Setup
             let obj = self.obj();
 
-            obj.set_path(String::from("/home/malcolm/Pictures/2022/2022-04-14"));
             obj.init_factory();
-            obj.init_selection_model();
-            // obj.setup_callbacks();
         }
     }
 

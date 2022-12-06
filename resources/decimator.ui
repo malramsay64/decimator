@@ -17,6 +17,7 @@
             <property name="min-content-width">320</property>
             <child>
               <object class="GtkListView" id="thumbnail_list">
+                <property name="show-separators">true</property>
               </object>
             </child>
           </object>
