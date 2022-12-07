@@ -1,12 +1,14 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gio::File;
 use glib::BindingFlags;
+use glib::Bytes;
 use glib::Object;
 use gtk::gdk::Texture;
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::glib;
+use gtk::{gio, glib};
+use rayon::spawn_fifo;
 
+use crate::picture_object::PictureData;
 use crate::picture_object::PictureObject;
 
 glib::wrapper! {
@@ -35,9 +37,23 @@ impl ThumbnailPicture {
         let buffer_binding = picture_object
             .bind_property("thumbnail", &thumbnail_picture, "paintable")
             .flags(BindingFlags::SYNC_CREATE)
-            .transform_to(|_, thumbnail: Option<Pixbuf>| thumbnail.map(|t| Texture::for_pixbuf(&t)))
             .build();
         bindings.push(buffer_binding);
+
+        match picture_object.property::<Option<Texture>>("thumbnail") {
+            Some(_) => {}
+            None => {
+                let filepath: String = picture_object.property("path");
+                let local_picture = picture_object.clone();
+                spawn_fifo(move || {
+                    let thumbnail = PictureData::get_thumbnail(&filepath);
+                    // By using set_property we also trigger the signal telling
+                    // GTK the thumbnail has been updated and the Picture
+                    // should subsequently be updated.
+                    local_picture.set_property("thumbnail", thumbnail);
+                });
+            }
+        }
     }
 
     #[tracing::instrument(name = "Unbinding thumbnail from widget.")]
@@ -52,9 +68,10 @@ mod imp {
     use std::cell::RefCell;
 
     use glib::Binding;
+    use gtk::glib;
+    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::{glib, CompositeTemplate, Picture};
-    use gtk::{prelude::*, Label};
+    use gtk::{CompositeTemplate, Label, Picture};
 
     #[derive(Default, CompositeTemplate)]
     #[template(resource = "/resources/thumbnail_image.ui")]

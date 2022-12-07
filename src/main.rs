@@ -1,16 +1,10 @@
-use std::path::{Path, PathBuf};
-
-use adw::Application;
 use anyhow::Result;
-use glib::clone;
-use gtk::gdk_pixbuf::Pixbuf;
-use gtk::{prelude::*, StringList};
-use gtk::{
-    ApplicationWindow, Box, ListView, Orientation, Picture, PolicyType, ScrolledWindow,
-    SignalListItemFactory, SingleSelection, StringObject,
-};
-use log::trace;
-use walkdir::{DirEntry, WalkDir};
+
+use adw::prelude::*;
+use adw::Application;
+use gio::resources_register_include;
+use gtk::{gio, glib};
+
 use window::Window;
 
 mod picture_object;
@@ -26,7 +20,7 @@ fn main() -> Result<()> {
     let subscriber = get_subscriber(APP_ID.into(), "trace".into(), std::io::stdout);
     init_subscriber(subscriber);
 
-    gio::resources_register_include!("decimator.gresource").expect("Failed to register resources.");
+    resources_register_include!("decimator.gresource").expect("Failed to register resources.");
     let app = Application::builder().application_id(APP_ID).build();
 
     app.connect_activate(build_ui);

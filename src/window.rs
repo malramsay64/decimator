@@ -7,9 +7,8 @@ use gio::ListStore;
 use glib::{clone, Object};
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::SignalListItemFactory;
-use gtk::{glib, Picture, SingleSelection, StringList, StringObject};
-use log::trace;
-use tracing::info_span;
+use gtk::SingleSelection;
+use gtk::{gio, glib};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::picture_object::PictureObject;
@@ -24,8 +23,8 @@ glib::wrapper! {
 
 fn is_image(entry: &DirEntry) -> bool {
     match entry.path().extension().map(|s| s.to_str()).flatten() {
-        Some("jpg" | "JPG" | "heic") => true,
-        Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "arw" | "ARW") => false,
+        Some("jpg" | "JPG") => true,
+        Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "heic" | "arw" | "ARW") => false,
         _ => false,
     }
 }
@@ -80,7 +79,6 @@ impl Window {
                 .expect("The item has to be a `String`.")
                 .property::<String>("path");
 
-            dbg!(&file_path);
             window.set_preview(file_path)
         }));
 
@@ -127,11 +125,12 @@ impl Window {
 mod imp {
     use std::cell::RefCell;
 
-    use adw::prelude::*;
-    use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
-    use gtk::{gio, glib, CompositeTemplate, ListView, Picture, StringList};
+    use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
+    use gtk::{gio, glib};
+    use gtk::{CompositeTemplate, ListView, Picture, StringList};
 
     #[derive(CompositeTemplate, Default)]
     #[template(resource = "/resources/decimator.ui")]

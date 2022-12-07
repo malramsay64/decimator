@@ -9,16 +9,14 @@ publish = false
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-gtk = {package="gtk4", version="*", features = []}
+gtk = {package="gtk4", version="*", features = ['v4_6']}
 walkdir = "2.3.2"
 anyhow = "1.0.65"
 rayon = "1.5.3"
 once_cell = "*"
 image = "0.24.5"
 log = "0.4.17"
-glib = "0.16.3"
-gio = "0.16.3"
-adw = { version = "0.2.1", package = "libadwaita" }
+adw = { version = "0.2.1", package = "libadwaita", features = ["gtk_v4_6"] }
 tracing-bunyan-formatter = "0.3.4"
 tracing-log = "0.1.3"
 
