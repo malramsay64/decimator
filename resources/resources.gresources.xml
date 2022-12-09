@@ -1,7 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <gresources>
   <gresource prefix="/resources">
     <file compressed="true" preprocess="xml-stripblanks">decimator.ui</file>
-    <file compressed="true" preprocess="xml-stripblanks">thumbnail_image.ui</file>
+    <file
+      compressed="true"
+      preprocess="xml-stripblanks"
+    >thumbnail_image.ui</file>
   </gresource>
 </gresources>

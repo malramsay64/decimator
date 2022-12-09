@@ -16,7 +16,7 @@ use crate::thumbnail_image::ThumbnailPicture;
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
-        @extends gtk::ApplicationWindow, gtk::Window, gtk::Widget,
+        @extends adw::ApplicationWindow, gtk::ApplicationWindow, gtk::Window, gtk::Widget,
         @implements gio::ActionGroup, gio::ActionMap, gtk::Accessible, gtk::Buildable,
             gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
 }
@@ -125,10 +125,10 @@ impl Window {
 mod imp {
     use std::cell::RefCell;
 
+    use adw::prelude::*;
+    use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
     use gtk::{gio, glib};
     use gtk::{CompositeTemplate, ListView, Picture, StringList};
 
@@ -146,7 +146,7 @@ mod imp {
     impl ObjectSubclass for Window {
         const NAME: &'static str = "DecimatorWindow";
         type Type = super::Window;
-        type ParentType = gtk::ApplicationWindow;
+        type ParentType = adw::ApplicationWindow;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -178,4 +178,6 @@ mod imp {
 
     // Trait shared by all application windows
     impl ApplicationWindowImpl for Window {}
+
+    impl AdwApplicationWindowImpl for Window {}
 }
