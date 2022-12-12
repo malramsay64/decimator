@@ -1,14 +1,12 @@
+use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gdk::Texture;
-use glib::{Bytes, Object};
+use glib::Object;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, glib};
-use image::imageops::FilterType::Nearest;
-use image::io::Reader as ImageReader;
-use image::{imageops, ImageOutputFormat};
 
 glib::wrapper! {
     pub struct PictureObject(ObjectSubclass<imp::PictureObject>);
@@ -21,11 +19,32 @@ impl PictureObject {
             .property::<Option<Texture>>("thumbnail", None)
             .build()
     }
+
+    pub fn to_picture_data(&self) -> PictureData {
+        let path = self
+            .imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutex lock is poisoned")
+            .path
+            .clone();
+
+        PictureData {
+            path,
+            thumbnail: None,
+        }
+    }
+
+    pub fn from_picture_data(picture_data: PictureData) -> Self {
+        Self::new(picture_data.path)
+    }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct PictureData {
     pub path: String,
+    #[serde(skip)]
     pub thumbnail: Option<Texture>,
 }
 
@@ -43,7 +62,10 @@ impl std::fmt::Debug for PictureData {
 }
 
 impl PictureData {
-    #[tracing::instrument(name = "Loading thumbnail from file using ImageReader")]
+    #[tracing::instrument(
+        name = "Loading thumbnail from file using ImageReader",
+        level = "trace"
+    )]
     pub fn get_thumbnail(path: &str) -> Texture {
         let image = Pixbuf::from_file_at_scale(path, 320, 320, true)
             .expect("Image not found.")

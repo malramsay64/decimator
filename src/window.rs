@@ -6,9 +6,17 @@ use adw::Application;
 use gio::ListStore;
 use glib::{clone, Object};
 use gtk::gdk_pixbuf::Pixbuf;
+use gtk::Align;
+use gtk::Label;
+use gtk::Widget;
+
+use gtk::pango::Alignment;
+use gtk::pango::EllipsizeMode;
 use gtk::SignalListItemFactory;
 use gtk::SingleSelection;
+use gtk::StringObject;
 use gtk::{gio, glib};
+
 use walkdir::{DirEntry, WalkDir};
 
 use crate::picture_object::PictureObject;
@@ -34,8 +42,20 @@ impl Window {
         Object::builder().property("application", app).build()
     }
 
-    fn thumbnails(&self) -> Option<ListStore> {
-        self.imp().thumbnails.borrow().clone()
+    fn thumbnails(&self) -> ListStore {
+        self.imp()
+            .thumbnails
+            .borrow()
+            .clone()
+            .expect("`thumbnails` should be set up in setup_path")
+    }
+
+    fn directories(&self) -> ListStore {
+        self.imp()
+            .directories
+            .borrow()
+            .clone()
+            .expect("`directories` should be set up in setup_path")
     }
 
     #[tracing::instrument(name = "Updating window display path")]
@@ -66,10 +86,9 @@ impl Window {
         self.imp().preview.set_pixbuf(Some(&buffer))
     }
 
+    #[tracing::instrument(name = "Initialising selection model.")]
     fn init_selection_model(&self) {
-        let selection_model = SingleSelection::builder()
-            .model(&self.thumbnails().expect("Thumbnails not set yet"))
-            .build();
+        let selection_model = SingleSelection::builder().model(&self.thumbnails()).build();
 
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
             let file_path = item
@@ -85,6 +104,7 @@ impl Window {
         self.imp().thumbnail_list.set_model(Some(&selection_model));
     }
 
+    #[tracing::instrument(name = "Initialising thumbnail factory.")]
     fn init_factory(&self) {
         let factory = SignalListItemFactory::new();
         factory.connect_setup(move |_, list_item| {
@@ -120,17 +140,81 @@ impl Window {
 
         self.imp().thumbnail_list.set_factory(Some(&factory));
     }
+
+    #[tracing::instrument(name = "Initialising directory tree.")]
+    fn init_tree(&self) {
+        let path = "/home/malcolm/Pictures/";
+        let dirs: Vec<_> = WalkDir::new(path)
+            .into_iter()
+            // Ignore any directories we don't have permissions for
+            .filter_map(|e| e.ok())
+            // This removes the directories from the listing, only giving the images
+            .filter(|d| d.file_type().is_dir())
+            .map(|p| p.path().to_str().expect("Invalid UTF8 path").to_owned())
+            .collect();
+
+        dbg!(&dirs);
+        let mut list_model = ListStore::new(StringObject::static_type());
+        list_model.extend(dirs.into_iter().map(|s| StringObject::new(&s)));
+
+        self.imp().directories.replace(Some(list_model));
+        self.init_tree_selection_model();
+    }
+
+    #[tracing::instrument(name = "Initialising directory tree Model.")]
+    fn init_tree_model(&self) {
+        let factory = SignalListItemFactory::new();
+        factory.connect_setup(move |_, list_item| {
+            let label = Label::builder()
+                .ellipsize(EllipsizeMode::Start)
+                .lines(1)
+                .halign(Align::Start)
+                .width_request(280)
+                .build();
+            list_item.set_child(Some(&label));
+
+            list_item
+                .property_expression("item")
+                .chain_property::<StringObject>("string")
+                .bind(&label, "label", Widget::NONE);
+        });
+
+        self.imp().filetree.set_factory(Some(&factory));
+    }
+
+    fn init_tree_selection_model(&self) {
+        let selection_model = SingleSelection::builder()
+            .model(&self.directories())
+            .build();
+
+        selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
+            let file_path = item
+                .selected_item()
+                .expect("No items selected")
+                .downcast::<StringObject>()
+                .expect("The item has to be a `String`.")
+                .property::<String>("string");
+
+            window.set_path(file_path)
+        }));
+
+        self.imp().filetree.set_model(Some(&selection_model));
+    }
 }
 
 mod imp {
     use std::cell::RefCell;
+    use std::fs::File;
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
     use gtk::{gio, glib};
-    use gtk::{CompositeTemplate, ListView, Picture, StringList};
+    use gtk::{CompositeTemplate, ListView, Picture};
+
+    use crate::picture_object::{PictureData, PictureObject};
+    use crate::APP_ID;
 
     #[derive(CompositeTemplate, Default)]
     #[template(resource = "/resources/decimator.ui")]
@@ -139,7 +223,10 @@ mod imp {
         pub preview: TemplateChild<Picture>,
         #[template_child]
         pub thumbnail_list: TemplateChild<ListView>,
+        #[template_child]
+        pub filetree: TemplateChild<ListView>,
         pub thumbnails: RefCell<Option<ListStore>>,
+        pub directories: RefCell<Option<ListStore>>,
     }
 
     #[glib::object_subclass]
@@ -167,6 +254,8 @@ mod imp {
             let obj = self.obj();
 
             obj.init_factory();
+            obj.init_tree();
+            obj.init_tree_model();
         }
     }
 

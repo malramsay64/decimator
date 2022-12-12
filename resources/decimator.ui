@@ -22,9 +22,22 @@
                     <property name="title">Directory</property>
                   </object>
                 </property>
-                </object>
+              </object>
             </child>
             <property name="width-request">320</property>
+            <child>
+              <object class="GtkScrolledWindow">
+              <property name="vexpand">true</property>
+                <child>
+                  <object class="GtkListView" id="filetree">
+                    <child>
+                      <object class="GtkLabel">
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
           </object>
         </property>
         <property name="separator">
@@ -55,7 +68,8 @@
                       translatable="yes"
                     >Main Menu</property>
                   </object>
-                </child>              </object>
+                </child>              
+              </object>
           </child>
 
           <child>

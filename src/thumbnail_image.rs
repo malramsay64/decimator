@@ -22,7 +22,7 @@ impl ThumbnailPicture {
         Object::builder().build()
     }
 
-    #[tracing::instrument(name = "Binding thumbnail to widget.")]
+    #[tracing::instrument(name = "Binding thumbnail to widget.", level = "trace")]
     pub fn bind(&self, picture_object: &PictureObject) {
         let thumbnail_picture = self.imp().thumbnail_picture.get();
         let thumbnail_label = self.imp().thumbnail_label.get();
@@ -56,7 +56,7 @@ impl ThumbnailPicture {
         }
     }
 
-    #[tracing::instrument(name = "Unbinding thumbnail from widget.")]
+    #[tracing::instrument(name = "Unbinding thumbnail from widget.", level = "trace")]
     pub fn unbind(&self) {
         for binding in self.imp().bindings.borrow_mut().drain(..) {
             binding.unbind();

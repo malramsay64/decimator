@@ -17,7 +17,7 @@ use telemetry::{get_subscriber, init_subscriber};
 const APP_ID: &str = "com.malramsay.Decimator";
 
 fn main() -> Result<()> {
-    let subscriber = get_subscriber(APP_ID.into(), "trace".into(), std::io::stdout);
+    let subscriber = get_subscriber(APP_ID.into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
 
     resources_register_include!("decimator.gresource").expect("Failed to register resources.");
@@ -31,9 +31,6 @@ fn main() -> Result<()> {
 
 fn build_ui(app: &Application) {
     let window = Window::new(app);
-
-    let path = String::from("/home/malcolm/Pictures/2022");
-    window.set_path(path);
 
     window.present();
 }
