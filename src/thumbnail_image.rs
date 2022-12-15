@@ -1,11 +1,11 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use glib::BindingFlags;
-use glib::Bytes;
+
 use glib::Object;
 use gtk::gdk::Texture;
-use gtk::gdk_pixbuf::Pixbuf;
-use gtk::{gio, glib};
+
+use gtk::{glib};
 use rayon::spawn_fifo;
 
 use crate::picture_object::PictureData;

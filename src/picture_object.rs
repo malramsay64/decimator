@@ -1,5 +1,5 @@
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
@@ -7,45 +7,83 @@ use gdk::Texture;
 use glib::Object;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, glib};
+use sqlx::sqlite::SqliteRow;
+use sqlx::{FromRow, Row};
+use uuid::Uuid;
 
 glib::wrapper! {
     pub struct PictureObject(ObjectSubclass<imp::PictureObject>);
 }
 
 impl PictureObject {
-    pub fn new(path: String) -> Self {
-        Object::builder()
-            .property("path", path)
-            .property::<Option<Texture>>("thumbnail", None)
-            .build()
-    }
-
-    pub fn to_picture_data(&self) -> PictureData {
-        let path = self
-            .imp()
+    fn get_filepath(&self) -> Utf8PathBuf {
+        self.imp()
             .data
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .path
-            .clone();
-
-        PictureData {
-            path,
-            thumbnail: None,
-        }
+            .filepath
+            .clone()
+            .into()
     }
-
-    pub fn from_picture_data(picture_data: PictureData) -> Self {
-        Self::new(picture_data.path)
+    fn get_id(&self) -> Uuid {
+        self.imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutex lock is poisoned")
+            .id
+            .into()
     }
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct PictureData {
-    pub path: String,
+    pub id: Uuid,
+    pub filepath: Utf8PathBuf,
     #[serde(skip)]
     pub thumbnail: Option<Texture>,
+}
+
+impl PictureData {
+    fn path(&self) -> String {
+        self.filepath.clone().into()
+    }
+}
+
+impl From<PictureData> for PictureObject {
+    fn from(pic: PictureData) -> Self {
+        Object::builder()
+            .property("id", pic.id.to_string())
+            .property("path", pic.path())
+            .property::<Option<Texture>>("thumbnail", None)
+            .build()
+    }
+}
+
+impl<T: AsRef<PictureObject>> From<T> for PictureData {
+    fn from(p: T) -> Self {
+        let p = p.as_ref();
+        Self {
+            id: p.get_id(),
+            filepath: p.get_filepath(),
+            thumbnail: None,
+        }
+    }
+}
+
+impl FromRow<'_, SqliteRow> for PictureData {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let id = row.try_get("id")?;
+        let directory: &str = row.try_get("directory")?;
+        let filename: &str = row.try_get("filename")?;
+        let filepath = Utf8Path::new(directory).join(filename);
+        Ok(Self {
+            id,
+            filepath,
+            thumbnail: None,
+        })
+    }
 }
 
 impl std::fmt::Debug for PictureData {
@@ -55,7 +93,8 @@ impl std::fmt::Debug for PictureData {
             None => false,
         };
         f.debug_struct("PictureData")
-            .field("path", &self.path)
+            .field("id", &self.id)
+            .field("path", &self.filepath)
             .field("thumbnail", &loaded)
             .finish()
     }
@@ -72,16 +111,6 @@ impl PictureData {
             .apply_embedded_orientation()
             .expect("Unable to apply orientation.");
         Texture::for_pixbuf(&image)
-        // let image = ImageReader::open(path)
-        //     .expect("Error opening file")
-        //     .decode()
-        //     .expect("Error decoding file");
-        // let mut buffer = Cursor::new(Vec::new());
-        // imageops::resize(&image, 320, 320, Nearest)
-        //     .write_to(&mut buffer, ImageOutputFormat::Png)
-        //     .expect("Writing to in memory file failed.");
-        // Texture::from_bytes(&Bytes::from(buffer.get_ref()))
-        //     .expect("Error parsing bytes to texture.")
     }
 }
 
@@ -96,6 +125,7 @@ mod imp {
     use gtk::subclass::prelude::*;
     use gtk::{gdk, glib};
     use once_cell::sync::Lazy;
+    use uuid::Uuid;
 
     use super::PictureData;
 
@@ -115,6 +145,7 @@ mod imp {
         fn properties() -> &'static [ParamSpec] {
             static PROPERTIES: Lazy<Vec<ParamSpec>> = Lazy::new(|| {
                 vec![
+                    ParamSpecString::builder("id").build(),
                     ParamSpecString::builder("path").build(),
                     ParamSpecObject::builder::<Option<Texture>>("thumbnail").build(),
                 ]
@@ -125,13 +156,20 @@ mod imp {
         fn set_property(&self, _id: usize, value: &Value, pspec: &ParamSpec) {
             match pspec.name() {
                 "path" => {
-                    let input_value = value
+                    let input_value: String = value
                         .get()
                         .expect("The value needs to be of type `String`.");
                     let mut data = self.data.lock().expect("Mutex is Poisoned.");
-                    data.path = input_value;
+                    data.filepath = input_value.into();
                     // Reset the thumbnail when the path changes
                     data.thumbnail = None;
+                }
+                "id" => {
+                    let input_value: String = value
+                        .get()
+                        .expect("The value needs to be of type `String`.");
+                    let mut data = self.data.lock().expect("Mutex is Poisoned.");
+                    data.id = Uuid::try_parse(&input_value).expect("Unable to parse uuid");
                 }
                 "thumbnail" => {
                     let input_value: Option<Texture> = value.get().expect("Needs a texture.");
@@ -147,7 +185,8 @@ mod imp {
                     .data
                     .lock()
                     .expect("Mutex is poisoned.")
-                    .path
+                    .filepath
+                    .to_string()
                     .to_value(),
                 "thumbnail" => self
                     .data

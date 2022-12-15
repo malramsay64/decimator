@@ -1,24 +1,36 @@
-use std::path::Path;
+use camino::Utf8Path;
+use gtk::PolicyType;
+use gtk::ScrollType;
+use gtk::ScrolledWindow;
+use tokio::sync::oneshot;
+use uuid::Uuid;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
+use camino::Utf8PathBuf;
 use gio::ListStore;
 use glib::{clone, Object};
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::Align;
+use gtk::FileChooserAction;
+use gtk::FileChooserDialog;
 use gtk::Label;
+use gtk::ResponseType;
 use gtk::Widget;
 
-use gtk::pango::Alignment;
 use gtk::pango::EllipsizeMode;
 use gtk::SignalListItemFactory;
 use gtk::SingleSelection;
 use gtk::StringObject;
 use gtk::{gio, glib};
 
-use walkdir::{DirEntry, WalkDir};
+use sqlx::QueryBuilder;
+use sqlx::{FromRow, Sqlite};
+use walkdir::DirEntry;
+use walkdir::WalkDir;
 
+use crate::picture_object::PictureData;
 use crate::picture_object::PictureObject;
 use crate::thumbnail_image::ThumbnailPicture;
 
@@ -30,10 +42,20 @@ glib::wrapper! {
 }
 
 fn is_image(entry: &DirEntry) -> bool {
-    match entry.path().extension().map(|s| s.to_str()).flatten() {
+    match entry.path().extension().and_then(|s| s.to_str()) {
         Some("jpg" | "JPG") => true,
         Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "heic" | "arw" | "ARW") => false,
         _ => false,
+    }
+}
+
+struct DirectoryData {
+    directory: String,
+}
+
+impl Into<String> for DirectoryData {
+    fn into(self) -> String {
+        self.directory
     }
 }
 
@@ -58,25 +80,34 @@ impl Window {
             .expect("`directories` should be set up in setup_path")
     }
 
-    #[tracing::instrument(name = "Updating window display path")]
-    pub fn set_path<P: AsRef<Path> + std::fmt::Debug>(&self, path: P) {
+    #[tracing::instrument(name = "Updating window display path", skip(self))]
+    pub fn set_path(&self, path: String) {
+        let runtime = self.imp().runtime.clone();
+        let db = self.imp().database.clone();
+        let (tx, mut rx) = oneshot::channel();
+        runtime.as_ref().block_on(async move {
+            let results: Vec<PictureData> = sqlx::query_as(
+                r#"
+                        SELECT id, directory, filename
+                        FROM picture
+                        WHERE directory == $1
+                    "#,
+            )
+            .bind(path)
+            .fetch_all(db.as_ref())
+            .await
+            .unwrap();
+            tx.send(results).unwrap();
+        });
+        let directories: Vec<PictureData> = rx.try_recv().unwrap();
         let mut model = ListStore::new(PictureObject::static_type());
-        model.extend(
-            WalkDir::new(path)
-                .into_iter()
-                // Ignore any directories we don't have permissions for
-                .filter_map(|e| e.ok())
-                // This removes the directories from the listing, only giving the images
-                .filter(is_image)
-                .map(|p| p.path().to_str().expect("Invalid UTF8 path.").to_owned())
-                .map(PictureObject::new),
-        );
+        model.extend(directories.into_iter().map(PictureObject::from));
 
         self.imp().thumbnails.replace(Some(model));
         self.init_selection_model();
     }
 
-    #[tracing::instrument(name = "Setting preview image.")]
+    #[tracing::instrument(name = "Setting preview image.", skip(self))]
     fn set_preview(&self, path: String) {
         let buffer = Pixbuf::from_file(&path)
             .expect("Image not found")
@@ -86,7 +117,7 @@ impl Window {
         self.imp().preview.set_pixbuf(Some(&buffer))
     }
 
-    #[tracing::instrument(name = "Initialising selection model.")]
+    #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
         let selection_model = SingleSelection::builder().model(&self.thumbnails()).build();
 
@@ -104,7 +135,78 @@ impl Window {
         self.imp().thumbnail_list.set_model(Some(&selection_model));
     }
 
-    #[tracing::instrument(name = "Initialising thumbnail factory.")]
+    #[tracing::instrument(name = "Adding pictures from directory", skip(self))]
+    fn add_pictures_from(&self, directory: &Utf8Path) {
+        let images = WalkDir::new(directory)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(is_image)
+            .map(|p: DirEntry| Utf8PathBuf::try_from(p.into_path()).expect("Invalid UTF-8 path."));
+
+        let runtime = self.imp().runtime.clone();
+        let db = self.imp().database.clone();
+        // let (tx, rx) = channel();
+
+        let mut query_builder: QueryBuilder<Sqlite> =
+            QueryBuilder::new("INSERT INTO picture(id, directory, filename)");
+
+        query_builder.push_values(images, |mut b, picture| {
+            dbg!(&picture);
+            let parent = picture
+                .parent()
+                .expect("Invalid parent")
+                .as_str()
+                .to_owned();
+            let file_name = picture.file_name().expect("No valid filename.").to_owned();
+
+            b.push_bind(Uuid::new_v4())
+                .push_bind(parent)
+                .push_bind(file_name);
+        });
+
+        let query = query_builder.build();
+        runtime.as_ref().block_on(async move {
+            query.execute(db.as_ref()).await.unwrap();
+        });
+    }
+
+    #[tracing::instrument(name = "Selecting new directory dialog.", skip(self))]
+    fn new_directory(&self) {
+        let dialog = FileChooserDialog::new(
+            Some("Choose Directory"),
+            Some(self),
+            FileChooserAction::SelectFolder,
+            &[
+                ("Cancel", ResponseType::Cancel),
+                ("Select", ResponseType::Accept),
+            ],
+        );
+        dialog.connect_response(clone!(@weak self as window => move |dialog, response| {
+            let directory: Utf8PathBuf;
+            if response != ResponseType::Accept {
+                dialog.destroy();
+                return;
+            } else {
+                directory = dialog.file().expect("No folder selected").path().expect("Unable to convert to path").try_into().expect("Unable to convert to UTF-8 string.");
+                dialog.destroy();
+            }
+            //
+            window.add_pictures_from(&directory);
+        }));
+        dialog.present();
+    }
+
+    #[tracing::instrument(name = "Setting up Actions.", skip(self))]
+    fn setup_actions(&self) {
+        // Create action to create new collection and add to action group "win"
+        let action_new_directory = gio::SimpleAction::new("new-directory", None);
+        action_new_directory.connect_activate(clone!(@weak self as window => move |_, _| {
+            window.new_directory();
+        }));
+        self.add_action(&action_new_directory);
+    }
+
+    #[tracing::instrument(name = "Initialising thumbnail factory.", skip(self))]
     fn init_factory(&self) {
         let factory = SignalListItemFactory::new();
         factory.connect_setup(move |_, list_item| {
@@ -141,27 +243,56 @@ impl Window {
         self.imp().thumbnail_list.set_factory(Some(&factory));
     }
 
-    #[tracing::instrument(name = "Initialising directory tree.")]
+    #[tracing::instrument(name = "Initialising directory tree.", skip(self))]
     fn init_tree(&self) {
-        let path = "/home/malcolm/Pictures/";
-        let dirs: Vec<_> = WalkDir::new(path)
+        let runtime = self.imp().runtime.clone();
+        let db = self.imp().database.clone();
+        let (tx, mut rx) = oneshot::channel();
+        runtime.as_ref().block_on(async move {
+            let results: Vec<String> = sqlx::query_as!(
+                DirectoryData,
+                r#"
+                    SELECT DISTINCT directory
+                    FROM picture
+                    ORDER BY directory
+                "#
+            )
+            .fetch_all(db.as_ref())
+            .await
+            .unwrap()
             .into_iter()
-            // Ignore any directories we don't have permissions for
-            .filter_map(|e| e.ok())
-            // This removes the directories from the listing, only giving the images
-            .filter(|d| d.file_type().is_dir())
-            .map(|p| p.path().to_str().expect("Invalid UTF8 path").to_owned())
+            .map(DirectoryData::into)
             .collect();
+            tx.send(results).unwrap();
+        });
+        let directories: Vec<String> = rx.try_recv().unwrap();
 
-        dbg!(&dirs);
+        dbg!(&directories);
         let mut list_model = ListStore::new(StringObject::static_type());
-        list_model.extend(dirs.into_iter().map(|s| StringObject::new(&s)));
+        list_model.extend(directories.into_iter().map(|s| StringObject::new(&s)));
 
         self.imp().directories.replace(Some(list_model));
         self.init_tree_selection_model();
     }
 
-    #[tracing::instrument(name = "Initialising directory tree Model.")]
+    #[tracing::instrument(name = "Initialising Scrolling", skip(self))]
+    fn init_scroll(&self) {
+        let scroll = ScrolledWindow::builder()
+            .focus_on_click(true)
+            .overlay_scrolling(false)
+            .has_frame(true)
+            .vscrollbar_policy(PolicyType::Never)
+            .hscrollbar_policy(PolicyType::Always)
+            .propagate_natural_height(true)
+            .build();
+        scroll.emit_scroll_child(ScrollType::StepForward, true);
+
+        self.imp()
+            .thumbnail_scroll
+            .emit_scroll_child(ScrollType::End, true);
+    }
+
+    #[tracing::instrument(name = "Initialising directory tree Model.", skip(self))]
     fn init_tree_model(&self) {
         let factory = SignalListItemFactory::new();
         factory.connect_setup(move |_, list_item| {
@@ -182,6 +313,7 @@ impl Window {
         self.imp().filetree.set_factory(Some(&factory));
     }
 
+    #[tracing::instrument(name = "Initialising filetree selection", skip(self))]
     fn init_tree_selection_model(&self) {
         let selection_model = SingleSelection::builder()
             .model(&self.directories())
@@ -203,22 +335,28 @@ impl Window {
 }
 
 mod imp {
+
+    use sqlx::SqlitePool;
     use std::cell::RefCell;
     use std::fs::File;
+    use std::sync::Arc;
+    use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
+    use tokio::sync::oneshot;
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
-    use gtk::{gio, glib};
+    use gtk::{gio, glib, ScrolledWindow};
     use gtk::{CompositeTemplate, ListView, Picture};
 
     use crate::picture_object::{PictureData, PictureObject};
-    use crate::APP_ID;
 
-    #[derive(CompositeTemplate, Default)]
+    #[derive(CompositeTemplate)]
     #[template(resource = "/resources/decimator.ui")]
     pub struct Window {
+        #[template_child]
+        pub thumbnail_scroll: TemplateChild<ScrolledWindow>,
         #[template_child]
         pub preview: TemplateChild<Picture>,
         #[template_child]
@@ -227,6 +365,44 @@ mod imp {
         pub filetree: TemplateChild<ListView>,
         pub thumbnails: RefCell<Option<ListStore>>,
         pub directories: RefCell<Option<ListStore>>,
+        pub runtime: Arc<Runtime>,
+        pub database: Arc<SqlitePool>,
+    }
+
+    impl Default for Window {
+        fn default() -> Self {
+            let runtime: Arc<Runtime> = Arc::new(
+                RuntimeBuilder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Unable to initialise tokio runtime."),
+            );
+            let mut path = glib::user_data_dir();
+            path.push(crate::APP_ID);
+            std::fs::create_dir_all(&path).expect("Could not create directory.");
+            // We use rwc to create the file if it doesn't alrPool
+            let database_path = format!("sqlite://{}/database.db?mode=rwc", path.display());
+            let (tx, mut rx) = oneshot::channel();
+
+            runtime.as_ref().block_on(async move {
+                let pool = SqlitePool::connect(&database_path)
+                    .await
+                    .expect("Unable to initialise sqlite database");
+                tx.send(pool).unwrap();
+            });
+            let database = Arc::new(rx.try_recv().unwrap());
+
+            Self {
+                thumbnail_scroll: Default::default(),
+                preview: Default::default(),
+                thumbnail_list: Default::default(),
+                filetree: Default::default(),
+                thumbnails: Default::default(),
+                directories: Default::default(),
+                runtime,
+                database,
+            }
+        }
     }
 
     #[glib::object_subclass]
@@ -253,9 +429,11 @@ mod imp {
             // Setup
             let obj = self.obj();
 
+            obj.init_scroll();
             obj.init_factory();
             obj.init_tree();
             obj.init_tree_model();
+            obj.setup_actions();
         }
     }
 
@@ -263,7 +441,28 @@ mod imp {
     impl WidgetImpl for Window {}
 
     // Trait shared by all windows
-    impl WindowImpl for Window {}
+    impl WindowImpl for Window {
+        fn close_request(&self) -> glib::signal::Inhibit {
+            let backup_data: Vec<PictureData> = self
+                .obj()
+                .thumbnails()
+                .snapshot()
+                .iter()
+                .filter_map(Cast::downcast_ref::<PictureObject>)
+                .map(PictureData::from)
+                .collect();
+
+            let mut path = glib::user_data_dir();
+            path.push(crate::APP_ID);
+            std::fs::create_dir_all(&path).expect("Could not create directory.");
+            path.push("data.json");
+
+            let file = File::create(path).expect("Could not create json file.");
+            serde_json::to_writer(file, &backup_data).expect("Could not write data to json file");
+
+            self.parent_close_request()
+        }
+    }
 
     // Trait shared by all application windows
     impl ApplicationWindowImpl for Window {}
