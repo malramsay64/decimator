@@ -88,7 +88,7 @@ impl Window {
         runtime.as_ref().block_on(async move {
             let results: Vec<PictureData> = sqlx::query_as(
                 r#"
-                        SELECT id, directory, filename
+                        SELECT id, directory, filename, picked, rating, flag, hidden
                         FROM picture
                         WHERE directory == $1
                     "#,
@@ -119,8 +119,21 @@ impl Window {
 
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
-        let selection_model = SingleSelection::builder().model(&self.thumbnails()).build();
+        let selection_model = SingleSelection::builder()
+            .autoselect(true)
+            .model(&self.thumbnails())
+            .build();
 
+        selection_model.connect_autoselect_notify(clone!(@weak self as window => move |item| {
+            let file_path = item
+                .selected_item()
+                .expect("No items selected")
+                .downcast::<PictureObject>()
+                .expect("The item has to be a `String`.")
+                .property::<String>("path");
+
+            window.set_preview(file_path)
+        }));
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
             let file_path = item
                 .selected_item()
@@ -133,6 +146,14 @@ impl Window {
         }));
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
+        self.set_preview(
+            selection_model
+                .selected_item()
+                .unwrap()
+                .downcast::<PictureObject>()
+                .unwrap()
+                .property::<String>("path"),
+        );
     }
 
     #[tracing::instrument(name = "Adding pictures from directory", skip(self))]
@@ -151,7 +172,6 @@ impl Window {
             QueryBuilder::new("INSERT INTO picture(id, directory, filename)");
 
         query_builder.push_values(images, |mut b, picture| {
-            dbg!(&picture);
             let parent = picture
                 .parent()
                 .expect("Invalid parent")
@@ -267,7 +287,6 @@ impl Window {
         });
         let directories: Vec<String> = rx.try_recv().unwrap();
 
-        dbg!(&directories);
         let mut list_model = ListStore::new(StringObject::static_type());
         list_model.extend(directories.into_iter().map(|s| StringObject::new(&s)));
 
