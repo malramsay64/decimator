@@ -71,14 +71,10 @@
                 </object>
             </child>
           <child>
-            <object class="GtkBox">
-              <property name="orientation">vertical</property>
-              <child>
-                <object class="GtkPicture" id="preview">
-                  <property name="hexpand">true</property>
-                  <property name="vexpand">true</property>
-                </object>
-              </child>
+            <object class="GtkFrame" id="preview">
+              <property name="hexpand">true</property>
+            </object>
+          </child>
         <child>
           <object class="GtkScrolledWindow" id="thumbnail_scroll">
             <property name="focus-on-click">true</property>
@@ -96,9 +92,7 @@
           </object>
         </child>
       </object>
-            </child>
-</object>
-      </property>
+    </property>
       </object>
     </child>
   </template>

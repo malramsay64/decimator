@@ -88,10 +88,10 @@ impl Window {
         runtime.as_ref().block_on(async move {
             let results: Vec<PictureData> = sqlx::query_as(
                 r#"
-                        SELECT id, directory, filename, picked, rating, flag, hidden
-                        FROM picture
-                        WHERE directory == $1
-                    "#,
+                    SELECT id, directory, filename, picked, rating, flag, hidden
+                    FROM picture
+                    WHERE directory == $1
+                "#,
             )
             .bind(path)
             .fetch_all(db.as_ref())
@@ -108,13 +108,8 @@ impl Window {
     }
 
     #[tracing::instrument(name = "Setting preview image.", skip(self))]
-    fn set_preview(&self, path: String) {
-        let buffer = Pixbuf::from_file(&path)
-            .expect("Image not found")
-            .apply_embedded_orientation()
-            .expect("Unable to apply image orientation.");
-
-        self.imp().preview.set_pixbuf(Some(&buffer))
+    fn set_preview(&self, picture: PictureObject) {
+        self.imp().selected_image.replace(Some(picture));
     }
 
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
@@ -124,25 +119,8 @@ impl Window {
             .model(&self.thumbnails())
             .build();
 
-        selection_model.connect_autoselect_notify(clone!(@weak self as window => move |item| {
-            let file_path = item
-                .selected_item()
-                .expect("No items selected")
-                .downcast::<PictureObject>()
-                .expect("The item has to be a `String`.")
-                .property::<String>("path");
-
-            window.set_preview(file_path)
-        }));
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
-            let file_path = item
-                .selected_item()
-                .expect("No items selected")
-                .downcast::<PictureObject>()
-                .expect("The item has to be a `String`.")
-                .property::<String>("path");
-
-            window.set_preview(file_path)
+            window.set_preview(item.selected_item().expect("No items selected").downcast::<PictureObject>().expect("Object must be a `PictureObject`"));
         }));
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
@@ -151,8 +129,7 @@ impl Window {
                 .selected_item()
                 .unwrap()
                 .downcast::<PictureObject>()
-                .unwrap()
-                .property::<String>("path"),
+                .unwrap(),
         );
     }
 
@@ -370,6 +347,7 @@ mod imp {
     use gtk::{CompositeTemplate, ListView, Picture};
 
     use crate::picture_object::{PictureData, PictureObject};
+    use crate::preview::PicturePreview;
 
     #[derive(CompositeTemplate)]
     #[template(resource = "/resources/decimator.ui")]
@@ -377,7 +355,7 @@ mod imp {
         #[template_child]
         pub thumbnail_scroll: TemplateChild<ScrolledWindow>,
         #[template_child]
-        pub preview: TemplateChild<Picture>,
+        pub preview: TemplateChild<gtk::Frame>,
         #[template_child]
         pub thumbnail_list: TemplateChild<ListView>,
         #[template_child]
@@ -386,6 +364,7 @@ mod imp {
         pub directories: RefCell<Option<ListStore>>,
         pub runtime: Arc<Runtime>,
         pub database: Arc<SqlitePool>,
+        pub selected_image: RefCell<Option<PictureObject>>,
     }
 
     impl Default for Window {
@@ -418,6 +397,7 @@ mod imp {
                 filetree: Default::default(),
                 thumbnails: Default::default(),
                 directories: Default::default(),
+                selected_image: Default::default(),
                 runtime,
                 database,
             }

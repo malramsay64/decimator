@@ -1,23 +1,18 @@
 use anyhow::Result;
 
-
-
-
 use adw::prelude::*;
 use adw::Application;
 use gio::resources_register_include;
-use gtk::{gio};
-
+use gtk::gio;
 
 use window::Window;
 
 mod data;
 mod picture_object;
+mod preview;
 mod telemetry;
 mod thumbnail_image;
 mod window;
-
-
 
 use telemetry::{get_subscriber, init_subscriber};
 
