@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+  <template class="PicturePreview" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkPicture" id="preview">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="rating"></object>
+    </child>
+  </template>
+</interface>

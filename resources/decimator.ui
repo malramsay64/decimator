@@ -4,16 +4,17 @@
     <property name="title">Decimator</property>
     <child>
       <object class="AdwFlap">
-      <property name="fold-policy">auto</property>
-      <property
-          name="reveal-flap"
-          bind-source="toggle_pane_button"
-          bind-property="active"
-          bind-flags="sync-create|bidirectional"
-        />        
+        <property name="fold-policy">auto</property>
+        <property
+            name="reveal-flap"
+            bind-source="toggle_pane_button"
+            bind-property="active"
+            bind-flags="sync-create|bidirectional"
+          />        
         <property name="flap">
           <object class="GtkBox">
             <property name="orientation">vertical</property>
+            <property name="width-request">320</property>
             <child>
               <object class="AdwHeaderBar" id="directory-header">
                 <property name="show-end-title-buttons">false</property>
@@ -29,10 +30,9 @@
                 </child>
               </object>
             </child>
-            <property name="width-request">320</property>
             <child>
               <object class="GtkScrolledWindow">
-              <property name="vexpand">true</property>
+                <property name="vexpand">true</property>
                 <child>
                   <object class="GtkListView" id="filetree">
                     <child>
@@ -48,57 +48,49 @@
         <property name="separator">
           <object class="GtkSeparator" />
         </property>
-      <property name="content">
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
-          <child>
+        <property name="content">
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <child>
               <object class="AdwHeaderBar">
-              <child type="start">
+                <child type="start">
                   <object class="GtkToggleButton" id="toggle_pane_button">
-                   <property name="icon-name">sidebar-show-symbolic</property>
-                   <property name="active">true</property>
+                    <property name="icon-name">sidebar-show-symbolic</property>
+                    <property name="active">true</property>
                   </object>
                 </child>
                 <child type="end">
-                    <object class="GtkMenuButton">
-                      <property name="icon-name">open-menu-symbolic</property>
-                      <property
-                        name="tooltip-text"
-                        translatable="yes"
-                      >Main Menu</property>
-                    </object>
-                  </child>              
-                </object>
+                  <object class="GtkMenuButton">
+                    <property name="icon-name">open-menu-symbolic</property>
+                    <property
+                      name="tooltip-text"
+                      translatable="yes"
+                    >Main Menu</property>
+                  </object>
+                </child>              
+              </object>
             </child>
-          <child>
-            <object class="GtkBox">
-              <property name="orientation">vertical</property>
-              <child>
-                <object class="GtkPicture" id="preview">
-                  <property name="hexpand">true</property>
-                  <property name="vexpand">true</property>
-                </object>
-              </child>
-        <child>
-          <object class="GtkScrolledWindow" id="thumbnail_scroll">
-            <property name="focus-on-click">true</property>
-            <property name="vscrollbar-policy">never</property>
-            <property name="hscrollbar-policy">always</property>
-            <property name="overlay-scrolling">false</property>
-            <property name="propagate-natural-height">true</property>
-            <property name="has-frame">true</property>
             <child>
-              <object class="GtkListView" id="thumbnail_list">
-                <property name="orientation">horizontal</property>
-                <property name="show-separators">true</property>
+              <object class="PicturePreview" id="preview"></object>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow" id="thumbnail_scroll">
+                <property name="focus-on-click">true</property>
+                <property name="vscrollbar-policy">never</property>
+                <property name="hscrollbar-policy">always</property>
+                <property name="overlay-scrolling">false</property>
+                <property name="propagate-natural-height">true</property>
+                <property name="has-frame">true</property>
+                <child>
+                  <object class="GtkListView" id="thumbnail_list">
+                    <property name="orientation">horizontal</property>
+                    <property name="show-separators">true</property>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
-        </child>
-      </object>
-            </child>
-</object>
-      </property>
+        </property>
       </object>
     </child>
   </template>

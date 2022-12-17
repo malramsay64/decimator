@@ -105,16 +105,6 @@ impl Window {
         self.init_selection_model();
     }
 
-    #[tracing::instrument(name = "Setting preview image.", skip(self))]
-    fn set_preview(&self, path: String) {
-        let buffer = Pixbuf::from_file(&path)
-            .expect("Image not found")
-            .apply_embedded_orientation()
-            .expect("Unable to apply image orientation.");
-
-        self.imp().preview.set_pixbuf(Some(&buffer))
-    }
-
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
         let selection_model = SingleSelection::builder()
@@ -123,34 +113,29 @@ impl Window {
             .build();
 
         selection_model.connect_autoselect_notify(clone!(@weak self as window => move |item| {
-            let file_path = item
+            let picture = item
                 .selected_item()
                 .expect("No items selected")
-                .downcast::<PictureObject>()
-                .expect("The item has to be a `String`.")
-                .property::<String>("path");
+                .downcast::<PictureObject>().expect("Require a `PictureObject`");
 
-            window.set_preview(file_path)
+            window.imp().preview.bind(&picture);
         }));
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
-            let file_path = item
+            let picture = item
                 .selected_item()
                 .expect("No items selected")
-                .downcast::<PictureObject>()
-                .expect("The item has to be a `String`.")
-                .property::<String>("path");
+                .downcast::<PictureObject>().expect("Require a `PictureObject`");
 
-            window.set_preview(file_path)
+            window.imp().preview.bind(&picture);
         }));
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
-        self.set_preview(
-            selection_model
+        self.imp().preview.bind(
+            &selection_model
                 .selected_item()
                 .unwrap()
                 .downcast::<PictureObject>()
-                .unwrap()
-                .property::<String>("path"),
+                .unwrap(),
         );
     }
 
@@ -367,7 +352,7 @@ mod imp {
     use gtk::{gio, glib, ScrolledWindow};
     use gtk::{CompositeTemplate, ListView, Picture};
 
-    use crate::picture::{PictureData, PictureObject};
+    use crate::picture::{PictureData, PictureObject, PicturePreview};
 
     #[derive(CompositeTemplate)]
     #[template(resource = "/resources/decimator.ui")]
@@ -375,7 +360,7 @@ mod imp {
         #[template_child]
         pub thumbnail_scroll: TemplateChild<ScrolledWindow>,
         #[template_child]
-        pub preview: TemplateChild<Picture>,
+        pub preview: TemplateChild<PicturePreview>,
         #[template_child]
         pub thumbnail_list: TemplateChild<ListView>,
         #[template_child]
