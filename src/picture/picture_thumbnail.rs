@@ -1,23 +1,22 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gdk::Texture;
 use glib::BindingFlags;
-
 use glib::Object;
-use gtk::gdk::Texture;
 
-use gtk::{glib};
+use gtk::{gdk, glib};
 use rayon::spawn_fifo;
 
-use crate::picture_object::PictureData;
-use crate::picture_object::PictureObject;
+use super::PictureData;
+use super::PictureObject;
 
 glib::wrapper! {
-    pub struct ThumbnailPicture(ObjectSubclass<imp::ThumbnailPicture>)
+    pub struct PictureThumbnail(ObjectSubclass<imp::PictureThumbnail>)
     @extends gtk::Box, gtk::Widget,
     @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
-impl ThumbnailPicture {
+impl PictureThumbnail {
     pub fn new() -> Self {
         Object::builder().build()
     }
@@ -64,6 +63,12 @@ impl ThumbnailPicture {
     }
 }
 
+impl Default for PictureThumbnail {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 mod imp {
     use std::cell::RefCell;
 
@@ -74,8 +79,8 @@ mod imp {
     use gtk::{CompositeTemplate, Label, Picture};
 
     #[derive(Default, CompositeTemplate)]
-    #[template(resource = "/resources/thumbnail_image.ui")]
-    pub struct ThumbnailPicture {
+    #[template(resource = "/resources/picture_thumbnail.ui")]
+    pub struct PictureThumbnail {
         #[template_child]
         pub thumbnail_picture: TemplateChild<Picture>,
         #[template_child]
@@ -84,9 +89,9 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for ThumbnailPicture {
-        const NAME: &'static str = "ThumbnailPicture";
-        type Type = super::ThumbnailPicture;
+    impl ObjectSubclass for PictureThumbnail {
+        const NAME: &'static str = "PictureThumbnail";
+        type Type = super::PictureThumbnail;
         type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
@@ -99,11 +104,11 @@ mod imp {
     }
 
     // Trait shared by all GObjects
-    impl ObjectImpl for ThumbnailPicture {}
+    impl ObjectImpl for PictureThumbnail {}
 
     // Trait shared by all widgets
-    impl WidgetImpl for ThumbnailPicture {}
+    impl WidgetImpl for PictureThumbnail {}
 
     // Trait shared by all boxes
-    impl BoxImpl for ThumbnailPicture {}
+    impl BoxImpl for PictureThumbnail {}
 }

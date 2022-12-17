@@ -30,9 +30,7 @@ use sqlx::{FromRow, Sqlite};
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
-use crate::picture_object::PictureData;
-use crate::picture_object::PictureObject;
-use crate::thumbnail_image::ThumbnailPicture;
+use crate::picture::{PictureData, PictureObject, PictureThumbnail};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -230,7 +228,7 @@ impl Window {
     fn init_factory(&self) {
         let factory = SignalListItemFactory::new();
         factory.connect_setup(move |_, list_item| {
-            let thumbnail = ThumbnailPicture::new();
+            let thumbnail = PictureThumbnail::new();
             list_item.set_child(Some(&thumbnail));
         });
 
@@ -244,8 +242,8 @@ impl Window {
             let image_thumbnail = list_item
                 .child()
                 .expect("The child has to exist.")
-                .downcast::<ThumbnailPicture>()
-                .expect("The child has to be a `ThumbnailPicture`.");
+                .downcast::<PictureThumbnail>()
+                .expect("The child has to be a `PictureThumbnail`.");
 
             image_thumbnail.bind(&picture_object);
         });
@@ -254,8 +252,8 @@ impl Window {
             let image_thumbnail = list_item
                 .child()
                 .expect("The child has to exist.")
-                .downcast::<ThumbnailPicture>()
-                .expect("The child has to be a `ThumbnailPicture`.");
+                .downcast::<PictureThumbnail>()
+                .expect("The child has to be a `PictureThumbnail`.");
 
             image_thumbnail.unbind();
         });
@@ -369,7 +367,7 @@ mod imp {
     use gtk::{gio, glib, ScrolledWindow};
     use gtk::{CompositeTemplate, ListView, Picture};
 
-    use crate::picture_object::{PictureData, PictureObject};
+    use crate::picture::{PictureData, PictureObject};
 
     #[derive(CompositeTemplate)]
     #[template(resource = "/resources/decimator.ui")]

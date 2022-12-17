@@ -5,6 +5,6 @@
     <file
       compressed="true"
       preprocess="xml-stripblanks"
-    >thumbnail_image.ui</file>
+    >picture_thumbnail.ui</file>
   </gresource>
 </gresources>

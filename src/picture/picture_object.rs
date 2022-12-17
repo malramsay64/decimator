@@ -24,7 +24,7 @@ glib::wrapper! {
 }
 
 impl PictureObject {
-    fn get_filepath(&self) -> Utf8PathBuf {
+    pub fn get_filepath(&self) -> Utf8PathBuf {
         self.imp()
             .data
             .as_ref()
@@ -32,16 +32,14 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .filepath
             .clone()
-            .into()
     }
-    fn get_id(&self) -> Uuid {
+    pub fn get_id(&self) -> Uuid {
         self.imp()
             .data
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
             .id
-            .into()
     }
     fn get_picked(&self) -> Option<bool> {
         self.imp()
@@ -50,8 +48,6 @@ impl PictureObject {
             .lock()
             .expect("Mutex lock is poisoned")
             .picked
-            .clone()
-            .into()
     }
     fn get_rating(&self) -> Option<Rating> {
         self.imp()
@@ -60,7 +56,6 @@ impl PictureObject {
             .lock()
             .expect("Mutex lock is poisoned")
             .rating
-            .into()
     }
     fn get_flag(&self) -> Option<Flag> {
         self.imp()
@@ -69,7 +64,6 @@ impl PictureObject {
             .lock()
             .expect("Mutex lock is poisoned")
             .flag
-            .into()
     }
     fn get_hidden(&self) -> Option<bool> {
         self.imp()
@@ -78,7 +72,6 @@ impl PictureObject {
             .lock()
             .expect("Mutex lock is poisoned")
             .hidden
-            .into()
     }
 }
 
@@ -230,6 +223,8 @@ pub struct PictureData {
     pub hidden: Option<bool>,
     #[serde(skip)]
     pub thumbnail: Option<Texture>,
+    #[serde(skip)]
+    pub preview: Option<Texture>,
 }
 
 impl PictureData {
@@ -259,6 +254,7 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
             flag: p.get_flag(),
             hidden: p.get_hidden(),
             thumbnail: None,
+            preview: None,
         }
     }
 }
@@ -283,20 +279,18 @@ impl FromRow<'_, SqliteRow> for PictureData {
             flag,
             hidden,
             thumbnail: None,
+            preview: None,
         })
     }
 }
 
 impl std::fmt::Debug for PictureData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let loaded = match &self.thumbnail {
-            Some(_) => true,
-            None => false,
-        };
         f.debug_struct("PictureData")
             .field("id", &self.id)
             .field("path", &self.filepath)
-            .field("thumbnail", &loaded)
+            .field("thumbnail", &self.thumbnail.is_some())
+            .field("preview", &self.preview.is_some())
             .finish()
     }
 }
@@ -308,6 +302,15 @@ impl PictureData {
     )]
     pub fn get_thumbnail(path: &str) -> Texture {
         let image = Pixbuf::from_file_at_scale(path, 320, 320, true)
+            .expect("Image not found.")
+            .apply_embedded_orientation()
+            .expect("Unable to apply orientation.");
+        Texture::for_pixbuf(&image)
+    }
+
+    #[tracing::instrument(name = "Loading preview from file using ImageReader", level = "trace")]
+    pub fn get_preview(path: &str) -> Texture {
+        let image = Pixbuf::from_file(path)
             .expect("Image not found.")
             .apply_embedded_orientation()
             .expect("Unable to apply orientation.");
@@ -344,7 +347,6 @@ mod imp {
                 .expect("Mutex lock is poisoned")
                 .filepath
                 .clone()
-                .into()
         }
         fn get_id(&self) -> Uuid {
             self.data
@@ -352,7 +354,6 @@ mod imp {
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .id
-                .into()
         }
         fn get_picked(&self) -> Option<bool> {
             self.data
@@ -360,8 +361,6 @@ mod imp {
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .picked
-                .clone()
-                .into()
         }
         fn get_rating(&self) -> Option<Rating> {
             self.data
@@ -369,7 +368,6 @@ mod imp {
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .rating
-                .into()
         }
         fn get_flag(&self) -> Option<Flag> {
             self.data
@@ -377,7 +375,6 @@ mod imp {
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .flag
-                .into()
         }
         fn get_hidden(&self) -> Option<bool> {
             self.data
@@ -385,7 +382,6 @@ mod imp {
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .hidden
-                .into()
         }
     }
 
@@ -407,6 +403,7 @@ mod imp {
                     ParamSpecString::builder("flag").build(),
                     ParamSpecString::builder("hidden").build(),
                     ParamSpecObject::builder::<Option<Texture>>("thumbnail").build(),
+                    ParamSpecObject::builder::<Option<Texture>>("preview").build(),
                 ]
             });
             PROPERTIES.as_ref()
@@ -422,6 +419,7 @@ mod imp {
                     data.filepath = input_value.into();
                     // Reset the thumbnail when the path changes
                     data.thumbnail = None;
+                    data.preview = None;
                 }
                 "id" => {
                     let input_value: String = value
@@ -433,6 +431,10 @@ mod imp {
                 "thumbnail" => {
                     let input_value: Option<Texture> = value.get().expect("Needs a texture.");
                     self.data.lock().expect("Mutex is poisoned.").thumbnail = input_value;
+                }
+                "preview" => {
+                    let input_value: Option<Texture> = value.get().expect("Needs a texture.");
+                    self.data.lock().expect("Mutex is poisoned.").preview = input_value;
                 }
                 _ => unimplemented!(),
             }
@@ -454,6 +456,14 @@ mod imp {
                     .lock()
                     .expect("Mutex lock is poisoned")
                     .thumbnail
+                    .as_ref()
+                    .to_value(),
+                "preview" => self
+                    .data
+                    .as_ref()
+                    .lock()
+                    .expect("Mutex lock is poisoned")
+                    .preview
                     .as_ref()
                     .to_value(),
                 _ => unimplemented!(),

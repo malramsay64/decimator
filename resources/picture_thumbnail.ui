@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <interface>
-  <template class="ThumbnailPicture" parent="GtkBox">
+  <template class="PictureThumbnail" parent="GtkBox">
     <property name="margin-top">5</property>
     <property name="margin-bottom">5</property>
     <property name="margin-start">5</property>
