@@ -29,7 +29,8 @@ impl PicturePreview {
         let mut bindings = self.imp().bindings.borrow_mut();
 
         let rating_binding = picture_object
-            .bind_property("rating", &rating, "label")
+            // TODO Bind rating, using path because it is always set
+            .bind_property("path", &rating, "label")
             .flags(BindingFlags::SYNC_CREATE)
             .build();
         bindings.push(rating_binding);

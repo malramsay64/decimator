@@ -2,6 +2,8 @@
 <interface>
   <template class="DecimatorWindow" parent="AdwApplicationWindow">
     <property name="title">Decimator</property>
+    <property name="width-request">960</property>
+    <property name="height-request">540</property>
     <child>
       <object class="AdwFlap">
         <property name="fold-policy">auto</property>

@@ -86,10 +86,10 @@ impl Window {
         runtime.as_ref().block_on(async move {
             let results: Vec<PictureData> = sqlx::query_as(
                 r#"
-                        SELECT id, directory, filename, picked, rating, flag, hidden
-                        FROM picture
-                        WHERE directory == $1
-                    "#,
+                    SELECT id, directory, filename, picked, rating, flag, hidden
+                    FROM picture
+                    WHERE directory == $1
+                "#,
             )
             .bind(path)
             .fetch_all(db.as_ref())

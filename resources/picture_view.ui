@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+  <template class="PictureView" parent="GtkBox">
+    <object class="GtkBox">
+      <property name="orientation">vertical</property>
+      <child>
+        <object class="GtkPicture" id="preview">
+          <property name="hexpand">true</property>
+          <property name="vexpand">true</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkScrolledWindow" id="thumbnail_scroll">
+          <property name="focus-on-click">true</property>
+          <property name="vscrollbar-policy">never</property>
+          <property name="hscrollbar-policy">always</property>
+          <property name="overlay-scrolling">false</property>
+          <property name="propagate-natural-height">true</property>
+          <property name="has-frame">true</property>
+          <child>
+            <object class="GtkListView" id="thumbnail_list">
+              <property name="orientation">horizontal</property>
+              <property name="show-separators">true</property>
+            </object>
+          </child>
+        </object>
+      </child>
+    </object>
+  </template>
+</interface>

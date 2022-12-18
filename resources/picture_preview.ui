@@ -9,7 +9,13 @@
       </object>
     </child>
     <child>
-      <object class="GtkLabel" id="rating"></object>
+      <object class="GtkLabel" id="rating">
+        <property name="ellipsize">start</property>
+        <property name="width-request">240</property>
+        <property name="margin-start">10</property>
+        <property name="margin-end">10</property>
+        <property name="lines">1</property>
+      </object>
     </child>
   </template>
 </interface>
