@@ -334,13 +334,6 @@ mod imp {
                 .filepath
                 .clone()
         }
-        fn get_id(&self) -> Uuid {
-            self.data
-                .as_ref()
-                .lock()
-                .expect("Mutex lock is poisoned")
-                .id
-        }
         fn get_picked(&self) -> Option<bool> {
             self.data
                 .as_ref()

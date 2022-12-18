@@ -6,9 +6,7 @@ use glib::Object;
 
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, glib};
-use rayon::spawn_fifo;
 
-use super::PictureData;
 use super::PictureObject;
 
 glib::wrapper! {

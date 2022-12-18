@@ -11,7 +11,7 @@ use adw::Application;
 use camino::Utf8PathBuf;
 use gio::ListStore;
 use glib::{clone, Object};
-use gtk::gdk_pixbuf::Pixbuf;
+
 use gtk::Align;
 use gtk::FileChooserAction;
 use gtk::FileChooserDialog;
@@ -26,7 +26,7 @@ use gtk::StringObject;
 use gtk::{gio, glib};
 
 use sqlx::QueryBuilder;
-use sqlx::{FromRow, Sqlite};
+use sqlx::{Sqlite};
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
@@ -51,9 +51,9 @@ struct DirectoryData {
     directory: String,
 }
 
-impl Into<String> for DirectoryData {
-    fn into(self) -> String {
-        self.directory
+impl From<DirectoryData> for String {
+    fn from(d: DirectoryData) -> Self {
+        d.directory
     }
 }
 
@@ -112,14 +112,6 @@ impl Window {
             .model(&self.thumbnails())
             .build();
 
-        selection_model.connect_autoselect_notify(clone!(@weak self as window => move |item| {
-            let picture = item
-                .selected_item()
-                .expect("No items selected")
-                .downcast::<PictureObject>().expect("Require a `PictureObject`");
-
-            window.imp().preview.bind(&picture);
-        }));
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
             let picture = item
                 .selected_item()
@@ -130,6 +122,11 @@ impl Window {
         }));
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
+
+        // Select the first item in the list when we initialise so there will
+        // always be something selected.
+        selection_model.select_item(0, true);
+
         self.imp().preview.bind(
             &selection_model
                 .selected_item()
@@ -350,7 +347,7 @@ mod imp {
     use gio::ListStore;
     use glib::subclass::InitializingObject;
     use gtk::{gio, glib, ScrolledWindow};
-    use gtk::{CompositeTemplate, ListView, Picture};
+    use gtk::{CompositeTemplate, ListView};
 
     use crate::picture::{PictureData, PictureObject, PicturePreview};
 
