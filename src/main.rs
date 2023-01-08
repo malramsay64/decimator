@@ -1,13 +1,12 @@
-use anyhow::Result;
-
 use adw::prelude::*;
 use adw::Application;
+use anyhow::Result;
 use gio::resources_register_include;
 use gtk::gio;
-
 use window::Window;
 
 mod data;
+mod directory;
 mod picture;
 mod telemetry;
 mod window;

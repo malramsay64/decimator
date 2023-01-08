@@ -1,9 +1,7 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gdk::Texture;
-use glib::BindingFlags;
-use glib::Object;
-
+use glib::{BindingFlags, Object};
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, glib};
 
@@ -67,10 +65,9 @@ mod imp {
     use std::cell::RefCell;
 
     use glib::Binding;
-    use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::{CompositeTemplate, Label, Picture};
+    use gtk::{glib, CompositeTemplate, Label, Picture};
 
     #[derive(Default, CompositeTemplate)]
     #[template(resource = "/resources/picture_preview.ui")]

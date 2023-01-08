@@ -1,36 +1,23 @@
-use camino::Utf8Path;
-use gtk::PolicyType;
-use gtk::ScrollType;
-use gtk::ScrolledWindow;
-use tokio::sync::oneshot;
-use uuid::Uuid;
+use std::collections::HashSet;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use gio::ListStore;
 use glib::{clone, Object};
-
-use gtk::Align;
-use gtk::FileChooserAction;
-use gtk::FileChooserDialog;
-use gtk::Label;
-use gtk::ResponseType;
-use gtk::Widget;
-
 use gtk::pango::EllipsizeMode;
-use gtk::SignalListItemFactory;
-use gtk::SingleSelection;
-use gtk::StringObject;
-use gtk::{gio, glib};
+use gtk::{
+    gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
+    ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject, Widget,
+};
+use sqlx::{QueryBuilder, Sqlite};
+use tokio::sync::oneshot;
+use uuid::Uuid;
+use walkdir::{DirEntry, WalkDir};
 
-use sqlx::QueryBuilder;
-use sqlx::{Sqlite};
-use walkdir::DirEntry;
-use walkdir::WalkDir;
-
-use crate::picture::{PictureData, PictureObject, PictureThumbnail};
+use crate::data::{query_directory_pictures, query_existing_pictures, query_unique_directories};
+use crate::picture::{PictureData, PictureObject, PicturePath, PictureThumbnail};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -44,16 +31,6 @@ fn is_image(entry: &DirEntry) -> bool {
         Some("jpg" | "JPG") => true,
         Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "heic" | "arw" | "ARW") => false,
         _ => false,
-    }
-}
-
-struct DirectoryData {
-    directory: String,
-}
-
-impl From<DirectoryData> for String {
-    fn from(d: DirectoryData) -> Self {
-        d.directory
     }
 }
 
@@ -84,17 +61,7 @@ impl Window {
         let db = self.imp().database.clone();
         let (tx, mut rx) = oneshot::channel();
         runtime.as_ref().block_on(async move {
-            let results: Vec<PictureData> = sqlx::query_as(
-                r#"
-                    SELECT id, directory, filename, picked, rating, flag, hidden
-                    FROM picture
-                    WHERE directory == $1
-                "#,
-            )
-            .bind(path)
-            .fetch_all(db.as_ref())
-            .await
-            .unwrap();
+            let results = query_directory_pictures(db.as_ref(), path).await.unwrap();
             tx.send(results).unwrap();
         });
         let directories: Vec<PictureData> = rx.try_recv().unwrap();
@@ -136,38 +103,71 @@ impl Window {
         );
     }
 
+    #[tracing::instrument(name = "Retrieving existing pictures within the database", skip(self))]
+    fn get_existing_paths(&self, directory: &Utf8Path) -> HashSet<PicturePath> {
+        let runtime = self.imp().runtime.clone();
+        let db = self.imp().database.clone();
+        let (tx, mut rx) = oneshot::channel();
+
+        runtime.as_ref().block_on(async move {
+            let existing_pictures = query_existing_pictures(db.as_ref(), directory.to_string())
+                .await
+                .unwrap();
+
+            tx.send(existing_pictures).unwrap();
+        });
+
+        let pictures: Vec<PicturePath> = rx.try_recv().unwrap();
+
+        HashSet::from_iter(pictures.into_iter())
+    }
+
     #[tracing::instrument(name = "Adding pictures from directory", skip(self))]
     fn add_pictures_from(&self, directory: &Utf8Path) {
-        let images = WalkDir::new(directory)
+        let existing_pictures = self.get_existing_paths(directory);
+
+        tracing::info!(
+            "Found {} existing files within directory",
+            existing_pictures.len()
+        );
+
+        let images: Vec<_> = WalkDir::new(directory)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(is_image)
-            .map(|p: DirEntry| Utf8PathBuf::try_from(p.into_path()).expect("Invalid UTF-8 path."));
+            .map(|p: DirEntry| Utf8PathBuf::try_from(p.into_path()).expect("Invalid UTF-8 path."))
+            .map(PicturePath::from)
+            .filter(|p| !existing_pictures.contains(p))
+            .collect();
 
-        let runtime = self.imp().runtime.clone();
-        let db = self.imp().database.clone();
-        // let (tx, rx) = channel();
+        if images.is_empty() {
+            tracing::info!("No new images found in directory {directory}");
+            return;
+        } else {
+            tracing::info!("Adding {} new images to the database.", images.len());
+        }
 
         let mut query_builder: QueryBuilder<Sqlite> =
             QueryBuilder::new("INSERT INTO picture(id, directory, filename)");
 
         query_builder.push_values(images, |mut b, picture| {
-            let parent = picture
-                .parent()
-                .expect("Invalid parent")
-                .as_str()
-                .to_owned();
-            let file_name = picture.file_name().expect("No valid filename.").to_owned();
-
             b.push_bind(Uuid::new_v4())
-                .push_bind(parent)
-                .push_bind(file_name);
+                .push_bind(picture.directory)
+                .push_bind(picture.filename);
         });
 
+        // Run the database query to update all the files
+        let runtime = self.imp().runtime.clone();
+        let db = self.imp().database.clone();
         let query = query_builder.build();
+
         runtime.as_ref().block_on(async move {
             query.execute(db.as_ref()).await.unwrap();
         });
+
+        // We need to update the list of directories
+        self.init_tree();
+        self.init_tree_model();
     }
 
     #[tracing::instrument(name = "Selecting new directory dialog.", skip(self))]
@@ -249,29 +249,19 @@ impl Window {
         let db = self.imp().database.clone();
         let (tx, mut rx) = oneshot::channel();
         runtime.as_ref().block_on(async move {
-            let results: Vec<String> = sqlx::query_as!(
-                DirectoryData,
-                r#"
-                    SELECT DISTINCT directory
-                    FROM picture
-                    ORDER BY directory
-                "#
-            )
-            .fetch_all(db.as_ref())
-            .await
-            .unwrap()
-            .into_iter()
-            .map(DirectoryData::into)
-            .collect();
+            let results = query_unique_directories(db.as_ref()).await.unwrap();
             tx.send(results).unwrap();
         });
         let directories: Vec<String> = rx.try_recv().unwrap();
 
         let mut list_model = ListStore::new(StringObject::static_type());
-        list_model.extend(directories.into_iter().map(|s| StringObject::new(&s)));
+        list_model.extend(
+            directories
+                .into_iter()
+                .map(|s: String| StringObject::new(&s)),
+        );
 
         self.imp().directories.replace(Some(list_model));
-        self.init_tree_selection_model();
     }
 
     #[tracing::instrument(name = "Initialising Scrolling", skip(self))]
@@ -335,19 +325,18 @@ impl Window {
 
 mod imp {
 
-    use sqlx::SqlitePool;
     use std::cell::RefCell;
     use std::fs::File;
     use std::sync::Arc;
-    use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
-    use tokio::sync::oneshot;
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
-    use gtk::{gio, glib, ScrolledWindow};
-    use gtk::{CompositeTemplate, ListView};
+    use gtk::{gio, glib, CompositeTemplate, ListView, ScrolledWindow};
+    use sqlx::SqlitePool;
+    use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
+    use tokio::sync::oneshot;
 
     use crate::picture::{PictureData, PictureObject, PicturePreview};
 
@@ -431,6 +420,7 @@ mod imp {
             obj.init_scroll();
             obj.init_factory();
             obj.init_tree();
+            obj.init_tree_selection_model();
             obj.init_tree_model();
             obj.setup_actions();
         }

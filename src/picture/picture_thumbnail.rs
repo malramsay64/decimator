@@ -1,14 +1,11 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gdk::Texture;
-use glib::BindingFlags;
-use glib::Object;
-
+use glib::{BindingFlags, Object};
 use gtk::{gdk, glib};
 use rayon::spawn_fifo;
 
-use super::PictureData;
-use super::PictureObject;
+use super::{PictureData, PictureObject};
 
 glib::wrapper! {
     pub struct PictureThumbnail(ObjectSubclass<imp::PictureThumbnail>)
@@ -73,10 +70,9 @@ mod imp {
     use std::cell::RefCell;
 
     use glib::Binding;
-    use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::{CompositeTemplate, Label, Picture};
+    use gtk::{glib, CompositeTemplate, Label, Picture};
 
     #[derive(Default, CompositeTemplate)]
     #[template(resource = "/resources/picture_thumbnail.ui")]

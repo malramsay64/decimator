@@ -1,23 +1,17 @@
-use std::fmt::Display;
 use std::str::FromStr;
 
-use camino::{Utf8Path, Utf8PathBuf};
-use gtk::glib::value::{
-    FromValue, GenericValueTypeOrNoneChecker, ToValueOptional, ValueType, ValueTypeOptional,
-};
-use gtk::glib::Value;
-use serde::{Deserialize, Serialize};
-
-use adw::prelude::*;
 use adw::subclass::prelude::*;
-use anyhow::{anyhow, Error, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use gdk::Texture;
 use glib::Object;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, glib};
+use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
+
+use crate::picture::{Flag, Rating};
 
 glib::wrapper! {
     pub struct PictureObject(ObjectSubclass<imp::PictureObject>);
@@ -72,144 +66,6 @@ impl PictureObject {
             .lock()
             .expect("Mutex lock is poisoned")
             .hidden
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Rating {
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
-}
-
-impl FromStr for Rating {
-    type Err = Error;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        match input {
-            "one" | "One" => Ok(Rating::One),
-            "two" | "Two" => Ok(Rating::Two),
-            "three" | "Three" => Ok(Rating::Three),
-            "four" | "Four" => Ok(Rating::Four),
-            "five" | "Five" => Ok(Rating::Five),
-            _ => Err(anyhow!("Invalid value for rating.")),
-        }
-    }
-}
-
-impl Display for Rating {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            Rating::One => "One",
-            Rating::Two => "Two",
-            Rating::Three => "Three",
-            Rating::Four => "Four",
-            Rating::Five => "Five",
-        };
-        write!(f, "{}", text)
-    }
-}
-
-impl ToValue for Rating {
-    fn to_value(&self) -> glib::Value {
-        <str>::to_value(&self.to_string())
-    }
-
-    fn value_type(&self) -> glib::Type {
-        String::static_type()
-    }
-}
-
-impl ValueType for Rating {
-    type Type = String;
-}
-unsafe impl<'a> FromValue<'a> for Rating {
-    type Checker = GenericValueTypeOrNoneChecker<Self>;
-    unsafe fn from_value(value: &'a Value) -> Self {
-        Rating::from_str(<&str>::from_value(value)).unwrap()
-    }
-}
-impl ValueTypeOptional for Rating {}
-impl StaticType for Rating {
-    fn static_type() -> glib::Type {
-        String::static_type()
-    }
-}
-impl ToValueOptional for Rating {
-    fn to_value_optional(s: Option<&Self>) -> glib::Value {
-        let value = s.map(Rating::to_string);
-        <String>::to_value_optional(value.as_ref())
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Flag {
-    Red,
-    Green,
-    Blue,
-    Yellow,
-    Purple,
-}
-
-impl FromStr for Flag {
-    type Err = Error;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        match input {
-            "red" | "Red" => Ok(Flag::Red),
-            "green" | "Green" => Ok(Flag::Green),
-            "blue" | "Blue" => Ok(Flag::Blue),
-            "yellow" | "Yellow" => Ok(Flag::Yellow),
-            "purple" | "Purple" => Ok(Flag::Purple),
-            _ => Err(anyhow!("Invalid value for Flags.")),
-        }
-    }
-}
-
-impl Display for Flag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            Flag::Red => "Red",
-            Flag::Green => "Green",
-            Flag::Blue => "Blue",
-            Flag::Yellow => "Yellow",
-            Flag::Purple => "Purple",
-        };
-        write!(f, "{}", text)
-    }
-}
-
-impl ToValue for Flag {
-    fn to_value(&self) -> glib::Value {
-        <str>::to_value(&self.to_string())
-    }
-
-    fn value_type(&self) -> glib::Type {
-        String::static_type()
-    }
-}
-
-impl ValueType for Flag {
-    type Type = String;
-}
-unsafe impl<'a> FromValue<'a> for Flag {
-    type Checker = GenericValueTypeOrNoneChecker<Self>;
-    unsafe fn from_value(value: &'a Value) -> Self {
-        Flag::from_str(<&str>::from_value(value)).unwrap()
-    }
-}
-impl StaticType for Flag {
-    fn static_type() -> glib::Type {
-        String::static_type()
-    }
-}
-impl ValueTypeOptional for Flag {}
-impl ToValueOptional for Flag {
-    fn to_value_optional(s: Option<&Self>) -> glib::Value {
-        let value = s.map(Flag::to_string);
-        <String>::to_value_optional(value.as_ref())
     }
 }
 
@@ -309,9 +165,7 @@ mod imp {
 
     use camino::Utf8PathBuf;
     use gdk::Texture;
-    use glib::ParamSpecObject;
-    use glib::{ParamSpec, ParamSpecString, Value};
-
+    use glib::{ParamSpec, ParamSpecObject, ParamSpecString, Value};
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gdk, glib};
