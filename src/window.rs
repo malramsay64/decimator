@@ -166,8 +166,7 @@ impl Window {
         });
 
         // We need to update the list of directories
-        self.init_tree();
-        self.init_tree_model();
+        self.update_directory_list();
     }
 
     #[tracing::instrument(name = "Selecting new directory dialog.", skip(self))]
@@ -243,8 +242,8 @@ impl Window {
         self.imp().thumbnail_list.set_factory(Some(&factory));
     }
 
-    #[tracing::instrument(name = "Initialising directory tree.", skip(self))]
-    fn init_tree(&self) {
+    #[tracing::instrument(name = "Updating directory list Model", skip(self))]
+    fn update_directory_list(&self) {
         let runtime = self.imp().runtime.clone();
         let db = self.imp().database.clone();
         let (tx, mut rx) = oneshot::channel();
@@ -262,6 +261,9 @@ impl Window {
         );
 
         self.imp().directories.replace(Some(list_model));
+        // This adds the new directories to the user interface, allowing
+        // them to be selected.
+        self.init_tree_selection_model();
     }
 
     #[tracing::instrument(name = "Initialising Scrolling", skip(self))]
@@ -419,7 +421,7 @@ mod imp {
 
             obj.init_scroll();
             obj.init_factory();
-            obj.init_tree();
+            obj.update_directory_list();
             obj.init_tree_selection_model();
             obj.init_tree_model();
             obj.setup_actions();
