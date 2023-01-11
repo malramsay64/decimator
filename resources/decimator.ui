@@ -81,7 +81,6 @@
                 <property name="vscrollbar-policy">never</property>
                 <property name="hscrollbar-policy">always</property>
                 <property name="overlay-scrolling">false</property>
-                <property name="propagate-natural-height">true</property>
                 <property name="has-frame">true</property>
                 <child>
                   <object class="GtkListView" id="thumbnail_list">

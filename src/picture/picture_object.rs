@@ -151,8 +151,8 @@ impl PictureData {
         name = "Loading thumbnail from file using ImageReader",
         level = "trace"
     )]
-    pub fn get_thumbnail(path: &str) -> Texture {
-        let image = Pixbuf::from_file_at_scale(path, 240, 240, true)
+    pub fn get_thumbnail(path: &str, (scale_x, scale_y): (i32, i32)) -> Texture {
+        let image = Pixbuf::from_file_at_scale(path, scale_x, scale_y, true)
             .expect("Image not found.")
             .apply_embedded_orientation()
             .expect("Unable to apply orientation.");

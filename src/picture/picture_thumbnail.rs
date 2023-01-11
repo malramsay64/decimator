@@ -41,8 +41,16 @@ impl PictureThumbnail {
             None => {
                 let filepath: String = picture_object.property("path");
                 let local_picture = picture_object.clone();
+                let scale_factor = self.scale_factor();
+                dbg!(&scale_factor);
+                let (scale_x, scale_y) = self.size_request();
+                let scale = (
+                    scale_factor * i32::max(scale_x, 240),
+                    scale_factor * i32::max(scale_y, 240),
+                );
+                dbg!(&scale);
                 spawn_fifo(move || {
-                    let thumbnail = PictureData::get_thumbnail(&filepath);
+                    let thumbnail = PictureData::get_thumbnail(&filepath, scale);
                     // By using set_property we also trigger the signal telling
                     // GTK the thumbnail has been updated and the Picture
                     // should subsequently be updated.
