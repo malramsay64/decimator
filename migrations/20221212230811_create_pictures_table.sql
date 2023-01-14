@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS picture (
     rating TEXT,
     flag TEXT,
     hidden INTEGER,
-    picked INTEGER
+    picked TEXT
 );
 
 CREATE INDEX IF NOT EXISTS index_pictures_id ON picture(id);

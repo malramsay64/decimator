@@ -4,8 +4,10 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
-use gio::ListStore;
-use glib::{clone, Object};
+use gio::{ListStore, SimpleAction};
+use glib::{clone, BindingFlags, Object};
+use gtk::gdk::Texture;
+use gtk::gdk_pixbuf::Pixbuf;
 use gtk::pango::EllipsizeMode;
 use gtk::{
     gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
@@ -13,6 +15,7 @@ use gtk::{
 };
 use sqlx::{QueryBuilder, Sqlite};
 use tokio::sync::oneshot;
+use tracing::Level;
 use uuid::Uuid;
 use walkdir::{DirEntry, WalkDir};
 
@@ -79,13 +82,20 @@ impl Window {
             .model(&self.thumbnails())
             .build();
 
+        // Provide the updating of a picture in a single location.
+        fn update_picture(window: &Window, picture: PictureObject) {
+            window.imp().preview.bind(&picture);
+            window.imp().preview_image.replace(Some(picture));
+        }
+
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
             let picture = item
                 .selected_item()
                 .expect("No items selected")
                 .downcast::<PictureObject>().expect("Require a `PictureObject`");
 
-            window.imp().preview.bind(&picture);
+            update_picture(&window, picture);
+
         }));
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
@@ -93,14 +103,14 @@ impl Window {
         // Select the first item in the list when we initialise so there will
         // always be something selected.
         selection_model.select_item(0, true);
+        tracing::debug!("Model has been selected");
 
-        self.imp().preview.bind(
-            &selection_model
-                .selected_item()
-                .unwrap()
-                .downcast::<PictureObject>()
-                .unwrap(),
-        );
+        let picture = selection_model
+            .selected_item()
+            .expect("No items selected")
+            .downcast::<PictureObject>()
+            .expect("Require a `PictureObject`");
+        update_picture(&self, picture);
     }
 
     #[tracing::instrument(name = "Retrieving existing pictures within the database", skip(self))]
@@ -198,11 +208,30 @@ impl Window {
     #[tracing::instrument(name = "Setting up Actions.", skip(self))]
     fn setup_actions(&self) {
         // Create action to create new collection and add to action group "win"
-        let action_new_directory = gio::SimpleAction::new("new-directory", None);
+        let action_new_directory = SimpleAction::new("new-directory", None);
         action_new_directory.connect_activate(clone!(@weak self as window => move |_, _| {
             window.new_directory();
         }));
         self.add_action(&action_new_directory);
+
+        let action_pick = SimpleAction::new("image-pick", None);
+        action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
+            let _span = tracing::span!(Level::INFO, "Picking image").entered();
+            window.imp().preview_image.borrow().as_ref().unwrap().pick();
+        }));
+        self.add_action(&action_pick);
+
+        let action_reject = SimpleAction::new("image-reject", None);
+        action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
+            window.imp().preview_image.borrow().as_ref().unwrap().reject();
+        }));
+
+        self.add_action(&action_reject);
+        let action_deselect = SimpleAction::new("image-deselect", None);
+        action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
+            window.imp().preview_image.borrow().as_ref().unwrap().deselect();
+        }));
+        self.add_action(&action_deselect);
     }
 
     #[tracing::instrument(name = "Initialising thumbnail factory.", skip(self))]
@@ -322,6 +351,17 @@ impl Window {
         }));
 
         self.imp().filetree.set_model(Some(&selection_model));
+
+        selection_model.select_item(0, true);
+        tracing::debug!("Path has been selected");
+        self.set_path(
+            selection_model
+                .selected_item()
+                .unwrap()
+                .downcast::<StringObject>()
+                .unwrap()
+                .property::<String>("string"),
+        );
     }
 }
 
@@ -349,6 +389,7 @@ mod imp {
         pub thumbnail_scroll: TemplateChild<ScrolledWindow>,
         #[template_child]
         pub preview: TemplateChild<PicturePreview>,
+        pub preview_image: RefCell<Option<PictureObject>>,
         #[template_child]
         pub thumbnail_list: TemplateChild<ListView>,
         #[template_child]
@@ -385,6 +426,7 @@ mod imp {
             Self {
                 thumbnail_scroll: Default::default(),
                 preview: Default::default(),
+                preview_image: Default::default(),
                 thumbnail_list: Default::default(),
                 filetree: Default::default(),
                 thumbnails: Default::default(),

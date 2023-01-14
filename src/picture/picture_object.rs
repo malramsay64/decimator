@@ -11,7 +11,7 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
 
-use crate::picture::{Flag, Rating};
+use crate::picture::{Flag, Rating, Selection};
 
 glib::wrapper! {
     pub struct PictureObject(ObjectSubclass<imp::PictureObject>);
@@ -35,7 +35,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .id
     }
-    fn get_picked(&self) -> Option<bool> {
+    fn get_picked(&self) -> Selection {
         self.imp()
             .data
             .as_ref()
@@ -67,13 +67,38 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .hidden
     }
+
+    pub fn pick(&self) {
+        self.imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutex lock is poisoned")
+            .picked = Selection::Picked
+    }
+    pub fn deselect(&self) {
+        self.imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutex lock is poisoned")
+            .picked = Selection::None
+    }
+    pub fn reject(&self) {
+        self.imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutex lock is poisoned")
+            .picked = Selection::Rejected
+    }
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
-    pub picked: Option<bool>,
+    pub picked: Selection,
     pub rating: Option<Rating>,
     pub flag: Option<Flag>,
     pub hidden: Option<bool>,
@@ -118,7 +143,9 @@ impl FromRow<'_, SqliteRow> for PictureData {
         let directory: &str = row.try_get("directory")?;
         let filename: &str = row.try_get("filename")?;
         let filepath = Utf8Path::new(directory).join(filename);
-        let picked: Option<bool> = row.try_get("picked")?;
+        let picked_string: Option<String> = row.try_get("picked")?;
+        let picked: Selection =
+            picked_string.map_or(Selection::None, |s| Selection::from_str(&s).unwrap());
         let rating_string: Option<String> = row.try_get("rating")?;
         let rating: Option<Rating> = rating_string.map(|s| Rating::from_str(&s).unwrap());
         let flag_string: Option<String> = row.try_get("flag")?;
@@ -172,6 +199,8 @@ mod imp {
     use once_cell::sync::Lazy;
     use uuid::Uuid;
 
+    use crate::picture::pick::Selection;
+
     use super::{Flag, PictureData, Rating};
 
     #[derive(Default)]
@@ -188,7 +217,7 @@ mod imp {
                 .filepath
                 .clone()
         }
-        fn get_picked(&self) -> Option<bool> {
+        fn get_picked(&self) -> Selection {
             self.data
                 .as_ref()
                 .lock()
@@ -270,10 +299,7 @@ mod imp {
         fn property(&self, _id: usize, pspec: &ParamSpec) -> Value {
             match pspec.name() {
                 "path" => self.get_filepath().as_str().to_value(),
-                "picked" => self
-                    .get_picked()
-                    .map_or(String::from("None"), |b| b.to_string())
-                    .to_value(),
+                "picked" => self.get_picked().to_value(),
                 "rating" => self.get_rating().to_value(),
                 "flag" => self.get_flag().to_value(),
                 "hidden" => self.get_hidden().unwrap_or(false).to_value(),

@@ -17,5 +17,11 @@
         <property name="lines">1</property>
       </object>
     </child>
+    <child>
+      <object class="GtkButton" id="picked">
+        <property name="label">Pick</property>
+        <property name="action-name">win.image-pick</property>
+      </object>
+    </child>
   </template>
 </interface>

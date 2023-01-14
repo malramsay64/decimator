@@ -65,9 +65,9 @@ mod imp {
     use std::cell::RefCell;
 
     use glib::Binding;
-    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{glib, CompositeTemplate, Label, Picture};
+    use gtk::{prelude::*};
 
     #[derive(Default, CompositeTemplate)]
     #[template(resource = "/resources/picture_preview.ui")]
