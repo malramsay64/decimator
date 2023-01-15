@@ -27,7 +27,7 @@ impl PictureObject {
             .filepath
             .clone()
     }
-    pub fn get_id(&self) -> Uuid {
+    pub fn id(&self) -> Uuid {
         self.imp()
             .data
             .as_ref()
@@ -43,7 +43,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .picked
     }
-    fn get_rating(&self) -> Option<Rating> {
+    fn get_rating(&self) -> Rating {
         self.imp()
             .data
             .as_ref()
@@ -51,7 +51,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .rating
     }
-    fn get_flag(&self) -> Option<Flag> {
+    fn get_flag(&self) -> Flag {
         self.imp()
             .data
             .as_ref()
@@ -74,23 +74,23 @@ impl PictureObject {
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked = Selection::Picked
+            .picked = Selection::Pick
     }
-    pub fn deselect(&self) {
+    pub fn ordinary(&self) {
         self.imp()
             .data
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked = Selection::None
+            .picked = Selection::Ordinary
     }
-    pub fn reject(&self) {
+    pub fn ignore(&self) {
         self.imp()
             .data
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked = Selection::Rejected
+            .picked = Selection::Ignore
     }
 }
 
@@ -99,8 +99,8 @@ pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
     pub picked: Selection,
-    pub rating: Option<Rating>,
-    pub flag: Option<Flag>,
+    pub rating: Rating,
+    pub flag: Flag,
     pub hidden: Option<bool>,
     #[serde(skip)]
     pub thumbnail: Option<Texture>,
@@ -109,6 +109,30 @@ pub struct PictureData {
 impl PictureData {
     fn path(&self) -> String {
         self.filepath.clone().into()
+    }
+
+    pub fn directory(&self) -> String {
+        self.filepath
+            .parent()
+            .expect("Invalid parent directory")
+            .as_str()
+            .to_owned()
+    }
+
+    pub fn filename(&self) -> String {
+        self.filepath
+            .file_name()
+            .expect("No valid filename.")
+            .to_owned()
+    }
+}
+
+impl From<Utf8PathBuf> for PictureData {
+    fn from(path: Utf8PathBuf) -> Self {
+        Self {
+            filepath: path,
+            ..Default::default()
+        }
     }
 }
 
@@ -126,7 +150,7 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
     fn from(p: T) -> Self {
         let p = p.as_ref();
         Self {
-            id: p.get_id(),
+            id: p.id(),
             filepath: p.get_filepath(),
             picked: p.get_picked(),
             rating: p.get_rating(),
@@ -143,13 +167,11 @@ impl FromRow<'_, SqliteRow> for PictureData {
         let directory: &str = row.try_get("directory")?;
         let filename: &str = row.try_get("filename")?;
         let filepath = Utf8Path::new(directory).join(filename);
-        let picked_string: Option<String> = row.try_get("picked")?;
-        let picked: Selection =
-            picked_string.map_or(Selection::None, |s| Selection::from_str(&s).unwrap());
-        let rating_string: Option<String> = row.try_get("rating")?;
-        let rating: Option<Rating> = rating_string.map(|s| Rating::from_str(&s).unwrap());
-        let flag_string: Option<String> = row.try_get("flag")?;
-        let flag: Option<Flag> = flag_string.map(|s| Flag::from_str(&s).unwrap());
+        let picked: Selection = Selection::from_str(row.try_get("selection")?).unwrap_or_default();
+        let rating_string: String = row.try_get("rating")?;
+        let rating: Rating = Rating::from_str(row.try_get("rating")?).unwrap_or_default();
+        let flag_string: String = row.try_get("flag")?;
+        let flag: Flag = Flag::from_str(row.try_get("flag")?).unwrap_or_default();
         let hidden: Option<bool> = row.try_get("hidden")?;
         Ok(Self {
             id,
@@ -199,9 +221,8 @@ mod imp {
     use once_cell::sync::Lazy;
     use uuid::Uuid;
 
-    use crate::picture::pick::Selection;
-
     use super::{Flag, PictureData, Rating};
+    use crate::picture::pick::Selection;
 
     #[derive(Default)]
     pub struct PictureObject {
@@ -224,14 +245,14 @@ mod imp {
                 .expect("Mutex lock is poisoned")
                 .picked
         }
-        fn get_rating(&self) -> Option<Rating> {
+        fn get_rating(&self) -> Rating {
             self.data
                 .as_ref()
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .rating
         }
-        fn get_flag(&self) -> Option<Flag> {
+        fn get_flag(&self) -> Flag {
             self.data
                 .as_ref()
                 .lock()

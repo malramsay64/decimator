@@ -21,6 +21,7 @@ fn main() -> Result<()> {
     resources_register_include!("decimator.gresource").expect("Failed to register resources.");
     let app = Application::builder().application_id(APP_ID).build();
 
+    app.connect_startup(build_shortcuts);
     app.connect_activate(build_ui);
 
     app.run();
@@ -31,4 +32,11 @@ fn build_ui(app: &Application) {
     let window = Window::new(app);
 
     window.present();
+}
+
+#[tracing::instrument(name = "Initialising keyboard shortcuts.", skip(app))]
+fn build_shortcuts(app: &Application) {
+    app.set_accels_for_action("win.image-pick", &["p"]);
+    app.set_accels_for_action("win.image-ordinary", &["o"]);
+    app.set_accels_for_action("win.image-ignore", &["i"]);
 }

@@ -11,10 +11,10 @@ CREATE TABLE IF NOT EXISTS picture (
     short_hash BLOB,
     full_hash BLOB,
     capture_time DATETIME,
-    rating TEXT,
+    rating TEXT NOT NULL,
     flag TEXT,
     hidden INTEGER,
-    picked TEXT
+    selection TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS index_pictures_id ON picture(id);

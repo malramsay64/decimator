@@ -12,11 +12,6 @@ impl From<Utf8PathBuf> for PicturePath {
     fn from(path: Utf8PathBuf) -> Self {
         let directory = path.parent().expect("Invalid parent").as_str().to_owned();
         let filename = path.file_name().expect("No valid filename.").to_owned();
-
-        Self {
-            directory,
-            filename,
-        }
     }
 }
 

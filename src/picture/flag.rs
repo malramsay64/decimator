@@ -10,8 +10,10 @@ use glib::Value;
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum Flag {
+    #[default]
+    None,
     Red,
     Green,
     Blue,
@@ -24,6 +26,7 @@ impl FromStr for Flag {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
+            "none" | "None" => Ok(Flag::None),
             "red" | "Red" => Ok(Flag::Red),
             "green" | "Green" => Ok(Flag::Green),
             "blue" | "Blue" => Ok(Flag::Blue),
@@ -37,6 +40,7 @@ impl FromStr for Flag {
 impl Display for Flag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
+            Flag::None => "None",
             Flag::Red => "Red",
             Flag::Green => "Green",
             Flag::Blue => "Blue",
@@ -60,21 +64,16 @@ impl ToValue for Flag {
 impl ValueType for Flag {
     type Type = String;
 }
+
 unsafe impl<'a> FromValue<'a> for Flag {
     type Checker = GenericValueTypeOrNoneChecker<Self>;
     unsafe fn from_value(value: &'a Value) -> Self {
         Flag::from_str(<&str>::from_value(value)).unwrap()
     }
 }
+
 impl StaticType for Flag {
     fn static_type() -> glib::Type {
         String::static_type()
-    }
-}
-impl ValueTypeOptional for Flag {}
-impl ToValueOptional for Flag {
-    fn to_value_optional(s: Option<&Self>) -> glib::Value {
-        let value = s.map(Flag::to_string);
-        <String>::to_value_optional(value.as_ref())
     }
 }

@@ -1,6 +1,7 @@
 //! Modelling the picking of a picture
 
 use std::fmt::Display;
+use std::str::FromStr;
 
 use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
@@ -9,18 +10,16 @@ use glib::value::{
 };
 use glib::Value;
 use gtk::glib;
-use std::str::FromStr;
-
 use serde::{Deserialize, Serialize};
 
 // Collection of options for picking an image,
 // it can either be Rejected, Hidden or Selected.
 #[derive(Copy, Clone, Serialize, Deserialize, Debug, Default)]
 pub enum Selection {
-    Rejected,
+    Ignore,
     #[default]
-    None,
-    Picked,
+    Ordinary,
+    Pick,
 }
 
 impl FromStr for Selection {
@@ -28,10 +27,10 @@ impl FromStr for Selection {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
-            "rejected" | "Rejected" => Ok(Selection::Rejected),
-            "none" | "None" => Ok(Selection::None),
-            "selected" | "Selected" => Ok(Selection::Picked),
-            _ => Err(anyhow!("Invalid value for Picked.")),
+            "Ignore" => Ok(Selection::Ignore),
+            "Ordinary" => Ok(Selection::Ordinary),
+            "Pick" => Ok(Selection::Pick),
+            _ => Err(anyhow!("Invalid value for Selection.")),
         }
     }
 }
@@ -39,9 +38,9 @@ impl FromStr for Selection {
 impl Display for Selection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
-            Selection::Rejected => "Rejected",
-            Selection::None => "None",
-            Selection::Picked => "Selected",
+            Selection::Ignore => "Ignore",
+            Selection::Ordinary => "Ordinary",
+            Selection::Pick => "Pick",
         };
         write!(f, "{text}")
     }

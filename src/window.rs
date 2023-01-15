@@ -1,26 +1,32 @@
+use std::cell::RefCell;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
+use gdk::Texture;
 use gio::{ListStore, SimpleAction};
 use glib::{clone, BindingFlags, Object};
-use gtk::gdk::Texture;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::pango::EllipsizeMode;
 use gtk::{
-    gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
+    gdk, gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
     ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject, Widget,
 };
-use sqlx::{QueryBuilder, Sqlite};
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
+use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tracing::Level;
 use uuid::Uuid;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::data::{query_directory_pictures, query_existing_pictures, query_unique_directories};
-use crate::picture::{PictureData, PictureObject, PicturePath, PictureThumbnail};
+use crate::data::{
+    query_directory_pictures, query_existing_pictures, query_unique_directories,
+    update_selection_state,
+};
+use crate::picture::{PictureData, PictureObject, PictureThumbnail, Selection};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -43,19 +49,11 @@ impl Window {
     }
 
     fn thumbnails(&self) -> ListStore {
-        self.imp()
-            .thumbnails
-            .borrow()
-            .clone()
-            .expect("`thumbnails` should be set up in setup_path")
+        self.imp().thumbnails.borrow().clone()
     }
 
     fn directories(&self) -> ListStore {
-        self.imp()
-            .directories
-            .borrow()
-            .clone()
-            .expect("`directories` should be set up in setup_path")
+        self.imp().directories.borrow().clone()
     }
 
     #[tracing::instrument(name = "Updating window display path", skip(self))]
@@ -71,18 +69,17 @@ impl Window {
         let mut model = ListStore::new(PictureObject::static_type());
         model.extend(directories.into_iter().map(PictureObject::from));
 
-        self.imp().thumbnails.replace(Some(model));
+        self.imp().thumbnails.replace(model);
         self.init_selection_model();
     }
 
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
-        let selection_model = SingleSelection::builder()
-            .autoselect(true)
-            .model(&self.thumbnails())
-            .build();
+        // TODO: Bind model to the thumbnails
+        let selection_model = SingleSelection::builder().model(&self.thumbnails()).build();
 
         // Provide the updating of a picture in a single location.
+        // TODO: Find a way to link these two properties together
         fn update_picture(window: &Window, picture: PictureObject) {
             window.imp().preview.bind(&picture);
             window.imp().preview_image.replace(Some(picture));
@@ -113,21 +110,28 @@ impl Window {
         update_picture(&self, picture);
     }
 
+    fn runtime(&self) -> Arc<Runtime> {
+        self.imp().runtime.clone()
+    }
+
+    fn database(&self) -> Arc<SqlitePool> {
+        self.imp().database.clone()
+    }
+
     #[tracing::instrument(name = "Retrieving existing pictures within the database", skip(self))]
-    fn get_existing_paths(&self, directory: &Utf8Path) -> HashSet<PicturePath> {
-        let runtime = self.imp().runtime.clone();
-        let db = self.imp().database.clone();
+    fn get_existing_paths(&self, directory: &Utf8Path) -> HashSet<Utf8PathBuf> {
         let (tx, mut rx) = oneshot::channel();
 
-        runtime.as_ref().block_on(async move {
-            let existing_pictures = query_existing_pictures(db.as_ref(), directory.to_string())
-                .await
-                .unwrap();
+        self.runtime().block_on(async move {
+            let existing_pictures =
+                query_existing_pictures(self.database().as_ref(), directory.to_string())
+                    .await
+                    .unwrap();
 
             tx.send(existing_pictures).unwrap();
         });
 
-        let pictures: Vec<PicturePath> = rx.try_recv().unwrap();
+        let pictures = rx.try_recv().unwrap();
 
         HashSet::from_iter(pictures.into_iter())
     }
@@ -146,8 +150,8 @@ impl Window {
             .filter_map(|e| e.ok())
             .filter(is_image)
             .map(|p: DirEntry| Utf8PathBuf::try_from(p.into_path()).expect("Invalid UTF-8 path."))
-            .map(PicturePath::from)
-            .filter(|p| !existing_pictures.contains(p))
+            .map(PictureData::from)
+            .filter(|p| !existing_pictures.contains(&p.filepath))
             .collect();
 
         if images.is_empty() {
@@ -162,17 +166,15 @@ impl Window {
 
         query_builder.push_values(images, |mut b, picture| {
             b.push_bind(Uuid::new_v4())
-                .push_bind(picture.directory)
-                .push_bind(picture.filename);
+                .push_bind(picture.directory())
+                .push_bind(picture.filename());
         });
 
         // Run the database query to update all the files
-        let runtime = self.imp().runtime.clone();
-        let db = self.imp().database.clone();
         let query = query_builder.build();
 
-        runtime.as_ref().block_on(async move {
-            query.execute(db.as_ref()).await.unwrap();
+        self.runtime().block_on(async move {
+            query.execute(self.database().as_ref()).await.unwrap();
         });
 
         // We need to update the list of directories
@@ -205,6 +207,28 @@ impl Window {
         dialog.present();
     }
 
+    fn init_callbacks(&self) {
+        // Setup callback when items of collections change
+        self.set_stack();
+        self.directories().connect_items_changed(
+            clone!(@weak self as window => move |_, _, _, _| {
+                window.set_stack();
+            }),
+        );
+    }
+
+    fn set_stack(&self) {
+        if self.directories().n_items() > 0 {
+            self.imp().stack.set_visible_child_name("main");
+        } else {
+            self.imp().stack.set_visible_child_name("placeholder");
+        }
+    }
+
+    fn preview_image(&self) -> PictureObject {
+        self.imp().preview_image.borrow().clone().unwrap()
+    }
+
     #[tracing::instrument(name = "Setting up Actions.", skip(self))]
     fn setup_actions(&self) {
         // Create action to create new collection and add to action group "win"
@@ -216,22 +240,36 @@ impl Window {
 
         let action_pick = SimpleAction::new("image-pick", None);
         action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
-            let _span = tracing::span!(Level::INFO, "Picking image").entered();
-            window.imp().preview_image.borrow().as_ref().unwrap().pick();
+            let _span = tracing::span!(Level::INFO, "Setting image to picked").entered();
+            let preview = window.preview_image();
+            preview.pick();
+            window.runtime().block_on(async move {
+                update_selection_state(window.database().as_ref(), preview.id(), Selection::Pick).await.unwrap();
+            });
         }));
         self.add_action(&action_pick);
 
-        let action_reject = SimpleAction::new("image-reject", None);
-        action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
-            window.imp().preview_image.borrow().as_ref().unwrap().reject();
+        let action_ignore = SimpleAction::new("image-ignore", None);
+        action_ignore.connect_activate(clone!(@weak self as window => move |_, _| {
+            let _span = tracing::span!(Level::INFO, "Setting image to ignored").entered();
+            let preview = window.preview_image();
+            preview.ignore();
+            window.runtime().block_on(async move {
+                update_selection_state(window.database().as_ref(), preview.id(), Selection::Pick).await.unwrap();
+            });
         }));
+        self.add_action(&action_ignore);
 
-        self.add_action(&action_reject);
-        let action_deselect = SimpleAction::new("image-deselect", None);
-        action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
-            window.imp().preview_image.borrow().as_ref().unwrap().deselect();
+        let action_ordinary = SimpleAction::new("image-ordinary", None);
+        action_ordinary.connect_activate(clone!(@weak self as window => move |_, _| {
+            let _span = tracing::span!(Level::INFO, "Setting image to ordinary").entered();
+            let preview = window.preview_image();
+            preview.ordinary();
+            window.runtime().block_on(async move {
+                update_selection_state(window.database().as_ref(), preview.id(), Selection::Pick).await.unwrap();
+            });
         }));
-        self.add_action(&action_deselect);
+        self.add_action(&action_ordinary);
     }
 
     #[tracing::instrument(name = "Initialising thumbnail factory.", skip(self))]
@@ -273,11 +311,11 @@ impl Window {
 
     #[tracing::instrument(name = "Updating directory list Model", skip(self))]
     fn update_directory_list(&self) {
-        let runtime = self.imp().runtime.clone();
-        let db = self.imp().database.clone();
         let (tx, mut rx) = oneshot::channel();
-        runtime.as_ref().block_on(async move {
-            let results = query_unique_directories(db.as_ref()).await.unwrap();
+        self.runtime().block_on(async move {
+            let results = query_unique_directories(self.database().as_ref())
+                .await
+                .unwrap();
             tx.send(results).unwrap();
         });
         let directories: Vec<String> = rx.try_recv().unwrap();
@@ -289,7 +327,7 @@ impl Window {
                 .map(|s: String| StringObject::new(&s)),
         );
 
-        self.imp().directories.replace(Some(list_model));
+        self.imp().directories.replace(list_model);
         // This adds the new directories to the user interface, allowing
         // them to be selected.
         self.init_tree_selection_model();
@@ -352,16 +390,18 @@ impl Window {
 
         self.imp().filetree.set_model(Some(&selection_model));
 
-        selection_model.select_item(0, true);
-        tracing::debug!("Path has been selected");
-        self.set_path(
-            selection_model
-                .selected_item()
-                .unwrap()
-                .downcast::<StringObject>()
-                .unwrap()
-                .property::<String>("string"),
-        );
+        if selection_model.n_items() > 0 {
+            selection_model.select_item(0, true);
+            tracing::debug!("Path has been selected");
+            self.set_path(
+                selection_model
+                    .selected_item()
+                    .unwrap()
+                    .downcast::<StringObject>()
+                    .unwrap()
+                    .property::<String>("string"),
+            );
+        }
     }
 }
 
@@ -375,7 +415,7 @@ mod imp {
     use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
-    use gtk::{gio, glib, CompositeTemplate, ListView, ScrolledWindow};
+    use gtk::{gio, glib, CompositeTemplate, ListView, ScrolledWindow, Stack};
     use sqlx::SqlitePool;
     use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
     use tokio::sync::oneshot;
@@ -394,8 +434,10 @@ mod imp {
         pub thumbnail_list: TemplateChild<ListView>,
         #[template_child]
         pub filetree: TemplateChild<ListView>,
-        pub thumbnails: RefCell<Option<ListStore>>,
-        pub directories: RefCell<Option<ListStore>>,
+        #[template_child]
+        pub stack: TemplateChild<Stack>,
+        pub thumbnails: RefCell<ListStore>,
+        pub directories: RefCell<ListStore>,
         pub runtime: Arc<Runtime>,
         pub database: Arc<SqlitePool>,
     }
@@ -431,6 +473,7 @@ mod imp {
                 filetree: Default::default(),
                 thumbnails: Default::default(),
                 directories: Default::default(),
+                stack: Default::default(),
                 runtime,
                 database,
             }
@@ -467,6 +510,7 @@ mod imp {
             obj.init_tree_selection_model();
             obj.init_tree_model();
             obj.setup_actions();
+            obj.init_callbacks();
         }
     }
 

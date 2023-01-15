@@ -5,10 +5,12 @@
 // the understanding and separation.
 
 use anyhow::Error;
+use camino::Utf8PathBuf;
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 use crate::directory::DirectoryData;
-use crate::picture::{PictureData, PicturePath};
+use crate::picture::{PictureData, Selection};
 
 pub(crate) async fn query_directory_pictures(
     db: &sqlx::SqlitePool,
@@ -16,7 +18,7 @@ pub(crate) async fn query_directory_pictures(
 ) -> Result<Vec<PictureData>, Error> {
     Ok(sqlx::query_as(
         r#"
-            SELECT id, directory, filename, picked, rating, flag, hidden
+            SELECT id, directory, filename, selection, rating, flag, hidden
             FROM picture
             WHERE directory == $1
             ORDER BY capture_time DESC, filename DESC
@@ -30,7 +32,7 @@ pub(crate) async fn query_directory_pictures(
 pub(crate) async fn query_existing_pictures(
     db: &SqlitePool,
     directory: String,
-) -> Result<Vec<PicturePath>, Error> {
+) -> Result<Vec<Utf8PathBuf>, Error> {
     Ok(sqlx::query_as(
         r#"
             SELECT directory, filename
@@ -45,8 +47,16 @@ pub(crate) async fn query_existing_pictures(
     // perform a recursive search when adding new directories.
     .bind(format!("{directory}/%"))
     .fetch_all(db)
-    .await?)
+    .await?
+    .into_iter()
+    .map(|(a, b): (String, String)| {
+        let mut path = Utf8PathBuf::from(&a);
+        path.push(b);
+        path
+    })
+    .collect::<Vec<Utf8PathBuf>>())
 }
+
 pub(crate) async fn query_unique_directories(db: &SqlitePool) -> Result<Vec<String>, Error> {
     Ok(sqlx::query_as(
         r#"
@@ -60,4 +70,24 @@ pub(crate) async fn query_unique_directories(db: &SqlitePool) -> Result<Vec<Stri
     .into_iter()
     .map(DirectoryData::into)
     .collect())
+}
+
+pub(crate) async fn update_selection_state(
+    db: &SqlitePool,
+    id: Uuid,
+    state: Selection,
+) -> Result<(), Error> {
+    let state = state.to_string();
+    sqlx::query!(
+        r#"
+            UPDATE picture
+            SET selection = $1
+            WHERE id = $2
+        "#,
+        state,
+        id
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }

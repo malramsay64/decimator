@@ -10,8 +10,10 @@ use glib::Value;
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum Rating {
+    #[default]
+    None,
     One,
     Two,
     Three,
@@ -24,6 +26,7 @@ impl FromStr for Rating {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
+            "none" | "None" => Ok(Rating::None),
             "one" | "One" => Ok(Rating::One),
             "two" | "Two" => Ok(Rating::Two),
             "three" | "Three" => Ok(Rating::Three),
@@ -37,6 +40,7 @@ impl FromStr for Rating {
 impl Display for Rating {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
+            Rating::None => "None",
             Rating::One => "One",
             Rating::Two => "Two",
             Rating::Three => "Three",
@@ -66,15 +70,8 @@ unsafe impl<'a> FromValue<'a> for Rating {
         Rating::from_str(<&str>::from_value(value)).unwrap()
     }
 }
-impl ValueTypeOptional for Rating {}
 impl StaticType for Rating {
     fn static_type() -> glib::Type {
         String::static_type()
-    }
-}
-impl ToValueOptional for Rating {
-    fn to_value_optional(s: Option<&Self>) -> glib::Value {
-        let value = s.map(Rating::to_string);
-        <String>::to_value_optional(value.as_ref())
     }
 }

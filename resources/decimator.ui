@@ -5,93 +5,142 @@
     <property name="width-request">960</property>
     <property name="height-request">540</property>
     <child>
-      <object class="AdwFlap">
-        <property name="fold-policy">auto</property>
-        <property
-            name="reveal-flap"
-            bind-source="toggle_pane_button"
-            bind-property="active"
-            bind-flags="sync-create|bidirectional"
-          />        
-        <property name="flap">
-          <object class="GtkBox">
-            <property name="orientation">vertical</property>
-            <property name="width-request">320</property>
-            <child>
-              <object class="AdwHeaderBar" id="directory-header">
-                <property name="show-end-title-buttons">false</property>
-                <property name="title-widget">
-                  <object class="AdwWindowTitle" />
-                </property>
-                <child type="end">
-                  <object class="GtkButton" id="directory-add">
-                    <property name="tooltip-text" translatable="yes">Add new directory</property>
-                    <property name="icon-name">list-add-symbolic</property>
-                    <property name="action-name">win.new-directory</property>
-                  </object>
-                </child>
+      <object class="GtkStack" id="stack">
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">empty</property>
+            <property name="child">
+            <object class="GtkBox">
+              <property name="orientation">vertical</property>
+              <child>
+                <object class="GtkHeaderBar">
+                  <style>
+                    <class name="flat" />
+                  </style>
+                </object>
+              </child>
+              <child>
+                <object class="GtkWindowHandle">
+                  <property name="vexpand">True</property>
+                  <property name="child">
+                    <object class="AdwStatusPage">
+                      <property name="icon-name">image-x-generic</property>
+                      <property name="title" translatable="yes">No Images</property>
+                      <property name="description" translatable="yes">Add some images to start using the app!</property>
+                      <property name="child">
+                        <object class="GtkButton">
+                          <property name="label" translatable="yes">Add Directory</property>
+                          <property name="halign">center</property>
+                          <property name="action-name">win.new-directory</property>
+                          <style>
+                            <class name="pill" />
+                            <class name="suggested-action" />
+                          </style>
+                        </object>
+                      </property>
+                    </object>
+                  </property>
+                </object>
+              </child>
               </object>
-            </child>
-            <child>
-              <object class="GtkScrolledWindow">
-                <property name="vexpand">true</property>
-                <child>
-                  <object class="GtkListView" id="filetree">
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">main</property>
+            <property name="child">
+              <object class="AdwFlap">
+                <property name="fold-policy">auto</property>
+                <property
+                    name="reveal-flap"
+                    bind-source="toggle_pane_button"
+                    bind-property="active"
+                    bind-flags="sync-create|bidirectional"
+                  />        
+                <property name="flap">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="width-request">320</property>
                     <child>
-                      <object class="GtkLabel">
+                      <object class="AdwHeaderBar" id="directory-header">
+                        <property name="show-end-title-buttons">false</property>
+                        <property name="title-widget">
+                          <object class="AdwWindowTitle" />
+                        </property>
+                        <child type="end">
+                          <object class="GtkButton" id="directory-add">
+                            <property name="tooltip-text" translatable="yes">Add new directory</property>
+                            <property name="icon-name">list-add-symbolic</property>
+                            <property name="action-name">win.new-directory</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="vexpand">true</property>
+                        <child>
+                          <object class="GtkListView" id="filetree">
+                            <child>
+                              <object class="GtkLabel">
+                              </object>
+                            </child>
+                          </object>
+                        </child>
                       </object>
                     </child>
                   </object>
-                </child>
+                </property>
+                <property name="separator">
+                  <object class="GtkSeparator" />
+                </property>
+                <property name="content">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <child>
+                      <object class="AdwHeaderBar">
+                        <child type="start">
+                          <object class="GtkToggleButton" id="toggle_pane_button">
+                            <property name="icon-name">sidebar-show-symbolic</property>
+                            <property name="active">true</property>
+                          </object>
+                        </child>
+                        <child type="end">
+                          <object class="GtkMenuButton">
+                            <property name="icon-name">open-menu-symbolic</property>
+                            <property
+                              name="tooltip-text"
+                              translatable="yes"
+                            >Main Menu</property>
+                          </object>
+                        </child>              
+                      </object>
+                    </child>
+                    <child>
+                      <object class="PicturePreview" id="preview"></object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow" id="thumbnail_scroll">
+                        <property name="focus-on-click">true</property>
+                        <property name="vscrollbar-policy">never</property>
+                        <property name="hscrollbar-policy">always</property>
+                        <property name="overlay-scrolling">false</property>
+                        <property name="has-frame">true</property>
+                        <child>
+                          <object class="GtkListView" id="thumbnail_list">
+                            <property name="orientation">horizontal</property>
+                            <property name="show-separators">true</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
               </object>
-            </child>
+            </property>
           </object>
-        </property>
-        <property name="separator">
-          <object class="GtkSeparator" />
-        </property>
-        <property name="content">
-          <object class="GtkBox">
-            <property name="orientation">vertical</property>
-            <child>
-              <object class="AdwHeaderBar">
-                <child type="start">
-                  <object class="GtkToggleButton" id="toggle_pane_button">
-                    <property name="icon-name">sidebar-show-symbolic</property>
-                    <property name="active">true</property>
-                  </object>
-                </child>
-                <child type="end">
-                  <object class="GtkMenuButton">
-                    <property name="icon-name">open-menu-symbolic</property>
-                    <property
-                      name="tooltip-text"
-                      translatable="yes"
-                    >Main Menu</property>
-                  </object>
-                </child>              
-              </object>
-            </child>
-            <child>
-              <object class="PicturePreview" id="preview"></object>
-            </child>
-            <child>
-              <object class="GtkScrolledWindow" id="thumbnail_scroll">
-                <property name="focus-on-click">true</property>
-                <property name="vscrollbar-policy">never</property>
-                <property name="hscrollbar-policy">always</property>
-                <property name="overlay-scrolling">false</property>
-                <property name="has-frame">true</property>
-                <child>
-                  <object class="GtkListView" id="thumbnail_list">
-                    <property name="orientation">horizontal</property>
-                    <property name="show-separators">true</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
-        </property>
+        </child>
       </object>
     </child>
   </template>
