@@ -1,7 +1,7 @@
-use std::str::FromStr;
+
 
 use adw::subclass::prelude::*;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use gdk::Texture;
 use glib::Object;
 use gtk::gdk_pixbuf::Pixbuf;
@@ -9,16 +9,17 @@ use gtk::{gdk, glib};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
+use time::PrimitiveDateTime;
 use uuid::Uuid;
 
-use crate::picture::{Flag, Rating, Selection};
+use crate::picture::{DateTime, Flag, Rating, Selection};
 
 glib::wrapper! {
     pub struct PictureObject(ObjectSubclass<imp::PictureObject>);
 }
 
 impl PictureObject {
-    pub fn get_filepath(&self) -> Utf8PathBuf {
+    pub fn filepath(&self) -> Utf8PathBuf {
         self.imp()
             .data
             .as_ref()
@@ -35,15 +36,25 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .id
     }
-    fn get_picked(&self) -> Selection {
+
+    fn capture_time(&self) -> Option<DateTime> {
+        self.imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutext lock is poisoned")
+            .capture_time
+    }
+
+    fn selection(&self) -> Selection {
         self.imp()
             .data
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked
+            .selection
     }
-    fn get_rating(&self) -> Rating {
+    fn rating(&self) -> Rating {
         self.imp()
             .data
             .as_ref()
@@ -51,7 +62,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .rating
     }
-    fn get_flag(&self) -> Flag {
+    fn flag(&self) -> Flag {
         self.imp()
             .data
             .as_ref()
@@ -59,7 +70,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .flag
     }
-    fn get_hidden(&self) -> Option<bool> {
+    fn hidden(&self) -> Option<bool> {
         self.imp()
             .data
             .as_ref()
@@ -74,7 +85,7 @@ impl PictureObject {
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked = Selection::Pick
+            .selection = Selection::Pick
     }
     pub fn ordinary(&self) {
         self.imp()
@@ -82,7 +93,7 @@ impl PictureObject {
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked = Selection::Ordinary
+            .selection = Selection::Ordinary
     }
     pub fn ignore(&self) {
         self.imp()
@@ -90,7 +101,7 @@ impl PictureObject {
             .as_ref()
             .lock()
             .expect("Mutex lock is poisoned")
-            .picked = Selection::Ignore
+            .selection = Selection::Ignore
     }
 }
 
@@ -98,7 +109,8 @@ impl PictureObject {
 pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
-    pub picked: Selection,
+    pub capture_time: Option<DateTime>,
+    pub selection: Selection,
     pub rating: Rating,
     pub flag: Flag,
     pub hidden: Option<bool>,
@@ -141,6 +153,8 @@ impl From<PictureData> for PictureObject {
         Object::builder()
             .property("id", pic.id.to_string())
             .property("path", pic.path())
+            .property("selection", pic.selection.to_string())
+            .property("capture-time", pic.capture_time.map(|c| c.to_string()))
             .property::<Option<Texture>>("thumbnail", None)
             .build()
     }
@@ -151,11 +165,12 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
         let p = p.as_ref();
         Self {
             id: p.id(),
-            filepath: p.get_filepath(),
-            picked: p.get_picked(),
-            rating: p.get_rating(),
-            flag: p.get_flag(),
-            hidden: p.get_hidden(),
+            filepath: p.filepath(),
+            capture_time: p.capture_time(),
+            selection: p.selection(),
+            rating: p.rating(),
+            flag: p.flag(),
+            hidden: p.hidden(),
             thumbnail: None,
         }
     }
@@ -163,23 +178,31 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
 
 impl FromRow<'_, SqliteRow> for PictureData {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
-        let id = row.try_get("id")?;
         let directory: &str = row.try_get("directory")?;
         let filename: &str = row.try_get("filename")?;
-        let filepath = Utf8Path::new(directory).join(filename);
-        let picked: Selection = Selection::from_str(row.try_get("selection")?).unwrap_or_default();
-        let rating_string: String = row.try_get("rating")?;
-        let rating: Rating = Rating::from_str(row.try_get("rating")?).unwrap_or_default();
-        let flag_string: String = row.try_get("flag")?;
-        let flag: Flag = Flag::from_str(row.try_get("flag")?).unwrap_or_default();
-        let hidden: Option<bool> = row.try_get("hidden")?;
+        let filepath: Utf8PathBuf = [directory, filename].iter().collect();
+        let capture_time: Option<DateTime> = row
+            // We need to ensure we get the Option.
+            .try_get::<Option<PrimitiveDateTime>, _>("capture_time")?
+            .map(|t| t.into());
+
         Ok(Self {
-            id,
+            id: row.try_get("id")?,
             filepath,
-            picked,
-            rating,
-            flag,
-            hidden,
+            capture_time,
+            selection: row
+                .try_get::<&str, _>("selection")?
+                .try_into()
+                .unwrap_or_default(),
+            rating: row
+                .try_get::<&str, _>("rating")?
+                .try_into()
+                .unwrap_or_default(),
+            flag: row
+                .try_get::<&str, _>("flag")?
+                .try_into()
+                .unwrap_or_default(),
+            hidden: row.try_get("hidden")?,
             thumbnail: None,
         })
     }
@@ -200,7 +223,7 @@ impl PictureData {
         name = "Loading thumbnail from file using ImageReader",
         level = "trace"
     )]
-    pub fn get_thumbnail(path: &str, (scale_x, scale_y): (i32, i32)) -> Texture {
+    pub fn thumbnail(path: &str, (scale_x, scale_y): (i32, i32)) -> Texture {
         let image = Pixbuf::from_file_at_scale(path, scale_x, scale_y, true)
             .expect("Image not found.")
             .apply_embedded_orientation()
@@ -210,19 +233,22 @@ impl PictureData {
 }
 
 mod imp {
+    
     use std::sync::{Arc, Mutex};
 
     use camino::Utf8PathBuf;
     use gdk::Texture;
     use glib::{ParamSpec, ParamSpecObject, ParamSpecString, Value};
+    
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gdk, glib};
     use once_cell::sync::Lazy;
+    
     use uuid::Uuid;
 
     use super::{Flag, PictureData, Rating};
-    use crate::picture::pick::Selection;
+    use crate::picture::{DateTime, Selection};
 
     #[derive(Default)]
     pub struct PictureObject {
@@ -230,7 +256,15 @@ mod imp {
     }
 
     impl PictureObject {
-        fn get_filepath(&self) -> Utf8PathBuf {
+        fn id(&self) -> Uuid {
+            self.data
+                .as_ref()
+                .lock()
+                .expect("Mutex lock is poisoned")
+                .id
+        }
+
+        fn filepath(&self) -> Utf8PathBuf {
             self.data
                 .as_ref()
                 .lock()
@@ -238,28 +272,38 @@ mod imp {
                 .filepath
                 .clone()
         }
-        fn get_picked(&self) -> Selection {
+
+        fn capture_time(&self) -> Option<DateTime> {
             self.data
                 .as_ref()
                 .lock()
                 .expect("Mutex lock is poisoned")
-                .picked
+                .capture_time
         }
-        fn get_rating(&self) -> Rating {
+
+        fn selection(&self) -> Selection {
+            self.data
+                .as_ref()
+                .lock()
+                .expect("Mutex lock is poisoned")
+                .selection
+        }
+
+        fn rating(&self) -> Rating {
             self.data
                 .as_ref()
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .rating
         }
-        fn get_flag(&self) -> Flag {
+        fn flag(&self) -> Flag {
             self.data
                 .as_ref()
                 .lock()
                 .expect("Mutex lock is poisoned")
                 .flag
         }
-        fn get_hidden(&self) -> Option<bool> {
+        fn hidden(&self) -> Option<bool> {
             self.data
                 .as_ref()
                 .lock()
@@ -281,7 +325,8 @@ mod imp {
                 vec![
                     ParamSpecString::builder("id").build(),
                     ParamSpecString::builder("path").build(),
-                    ParamSpecString::builder("picked").build(),
+                    ParamSpecString::builder("capture-time").build(),
+                    ParamSpecString::builder("selection").build(),
                     ParamSpecString::builder("rating").build(),
                     ParamSpecString::builder("flag").build(),
                     ParamSpecString::builder("hidden").build(),
@@ -309,9 +354,17 @@ mod imp {
                     let mut data = self.data.lock().expect("Mutex is Poisoned.");
                     data.id = Uuid::try_parse(&input_value).expect("Unable to parse uuid");
                 }
+                "selection" => {
+                    let input_value: Selection = value.get().expect("Needs a `Selection`.");
+                    self.data.lock().expect("Mutex is poisoned.").selection = input_value;
+                }
                 "thumbnail" => {
                     let input_value: Option<Texture> = value.get().expect("Needs a texture.");
                     self.data.lock().expect("Mutex is poisoned.").thumbnail = input_value;
+                }
+                "capture-time" => {
+                    self.data.lock().expect("Mutex is Poisoned.").capture_time =
+                        value.get().expect("Needs a string.")
                 }
                 _ => unimplemented!(),
             }
@@ -319,11 +372,13 @@ mod imp {
 
         fn property(&self, _id: usize, pspec: &ParamSpec) -> Value {
             match pspec.name() {
-                "path" => self.get_filepath().as_str().to_value(),
-                "picked" => self.get_picked().to_value(),
-                "rating" => self.get_rating().to_value(),
-                "flag" => self.get_flag().to_value(),
-                "hidden" => self.get_hidden().unwrap_or(false).to_value(),
+                "id" => self.id().to_string().to_value(),
+                "path" => self.filepath().as_str().to_value(),
+                "capture-time" => self.capture_time().to_value(),
+                "selection" => self.selection().to_value(),
+                "rating" => self.rating().to_value(),
+                "flag" => self.flag().to_value(),
+                "hidden" => self.hidden().unwrap_or(false).to_value(),
                 "thumbnail" => self
                     .data
                     .as_ref()

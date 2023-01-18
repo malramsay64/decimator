@@ -1,13 +1,18 @@
-mod flag;
-mod pick;
 mod picture_object;
 mod picture_preview;
 mod picture_thumbnail;
-mod rating;
+mod property_types;
 
-pub use flag::Flag;
-pub use pick::Selection;
 pub use picture_object::*;
 pub use picture_preview::*;
 pub use picture_thumbnail::*;
-pub use rating::Rating;
+pub use property_types::*;
+use walkdir::DirEntry;
+
+pub fn is_image(entry: &DirEntry) -> bool {
+    match entry.path().extension().and_then(|s| s.to_str()) {
+        Some("jpg" | "JPG") => true,
+        Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "heic" | "arw" | "ARW") => false,
+        _ => false,
+    }
+}

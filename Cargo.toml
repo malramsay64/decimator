@@ -6,7 +6,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-gettext-rs = { version = "0.7", features = ["gettext-system"] }
+# gettext-rs = { version = "0.7", features = ["gettext-system"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 gtk = {package="gtk4", version="*", features = ['v4_6']}
@@ -25,6 +25,7 @@ tokio = { version = "1.23.0", features = ["tracing"] }
 uuid = { version = "1.2.2", features = ["v4", "serde"] }
 sqlx = {version = "0.6", features= ["runtime-tokio-rustls", "sqlite", "uuid", "time", "migrate", "macros"]}
 camino = { version = "1.1.1", features = ["serde1"] }
+time = {version = "0.3.17", features = ["serde"] }
 
 [build-dependencies]
 glib-build-tools = "0.16.3"

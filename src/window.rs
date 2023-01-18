@@ -1,18 +1,14 @@
-use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
-use gdk::Texture;
 use gio::{ListStore, SimpleAction};
-use glib::{clone, BindingFlags, Object};
-use gtk::gdk_pixbuf::Pixbuf;
+use glib::{clone, Object};
 use gtk::pango::EllipsizeMode;
 use gtk::{
-    gdk, gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
+    gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
     ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject, Widget,
 };
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
@@ -26,21 +22,13 @@ use crate::data::{
     query_directory_pictures, query_existing_pictures, query_unique_directories,
     update_selection_state,
 };
-use crate::picture::{PictureData, PictureObject, PictureThumbnail, Selection};
+use crate::picture::{is_image, PictureData, PictureObject, PictureThumbnail, Selection};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
         @extends adw::ApplicationWindow, gtk::ApplicationWindow, gtk::Window, gtk::Widget,
         @implements gio::ActionGroup, gio::ActionMap, gtk::Accessible, gtk::Buildable,
             gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
-}
-
-fn is_image(entry: &DirEntry) -> bool {
-    match entry.path().extension().and_then(|s| s.to_str()) {
-        Some("jpg" | "JPG") => true,
-        Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "heic" | "arw" | "ARW") => false,
-        _ => false,
-    }
 }
 
 impl Window {
@@ -58,11 +46,11 @@ impl Window {
 
     #[tracing::instrument(name = "Updating window display path", skip(self))]
     pub fn set_path(&self, path: String) {
-        let runtime = self.imp().runtime.clone();
-        let db = self.imp().database.clone();
         let (tx, mut rx) = oneshot::channel();
-        runtime.as_ref().block_on(async move {
-            let results = query_directory_pictures(db.as_ref(), path).await.unwrap();
+        self.runtime().block_on(async move {
+            let results = query_directory_pictures(self.database(), path)
+                .await
+                .unwrap();
             tx.send(results).unwrap();
         });
         let directories: Vec<PictureData> = rx.try_recv().unwrap();
@@ -107,15 +95,15 @@ impl Window {
             .expect("No items selected")
             .downcast::<PictureObject>()
             .expect("Require a `PictureObject`");
-        update_picture(&self, picture);
+        update_picture(self, picture);
     }
 
-    fn runtime(&self) -> Arc<Runtime> {
-        self.imp().runtime.clone()
+    fn runtime(&self) -> &Runtime {
+        self.imp().runtime.get().unwrap()
     }
 
-    fn database(&self) -> Arc<SqlitePool> {
-        self.imp().database.clone()
+    fn database(&self) -> &SqlitePool {
+        self.imp().database.get().unwrap()
     }
 
     #[tracing::instrument(name = "Retrieving existing pictures within the database", skip(self))]
@@ -123,10 +111,9 @@ impl Window {
         let (tx, mut rx) = oneshot::channel();
 
         self.runtime().block_on(async move {
-            let existing_pictures =
-                query_existing_pictures(self.database().as_ref(), directory.to_string())
-                    .await
-                    .unwrap();
+            let existing_pictures = query_existing_pictures(self.database(), directory.to_string())
+                .await
+                .unwrap();
 
             tx.send(existing_pictures).unwrap();
         });
@@ -174,7 +161,7 @@ impl Window {
         let query = query_builder.build();
 
         self.runtime().block_on(async move {
-            query.execute(self.database().as_ref()).await.unwrap();
+            query.execute(self.database()).await.unwrap();
         });
 
         // We need to update the list of directories
@@ -241,10 +228,17 @@ impl Window {
         let action_pick = SimpleAction::new("image-pick", None);
         action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
             let _span = tracing::span!(Level::INFO, "Setting image to picked").entered();
+            // We need to set these values to help the borrow checker with move
+            // in the closure. We are borrowing different items from window
+            // so this is fine, just need the finer control in this instance.
             let preview = window.preview_image();
+            let db = window.database();
+
+            // Set the value within the frontend
             preview.pick();
+            // Update the database with the new status
             window.runtime().block_on(async move {
-                update_selection_state(window.database().as_ref(), preview.id(), Selection::Pick).await.unwrap();
+                update_selection_state(db, preview.id(), Selection::Pick).await.unwrap();
             });
         }));
         self.add_action(&action_pick);
@@ -252,10 +246,17 @@ impl Window {
         let action_ignore = SimpleAction::new("image-ignore", None);
         action_ignore.connect_activate(clone!(@weak self as window => move |_, _| {
             let _span = tracing::span!(Level::INFO, "Setting image to ignored").entered();
+            // We need to set these values to help the borrow checker with move
+            // in the closure. We are borrowing different items from window
+            // so this is fine, just need the finer control in this instance.
             let preview = window.preview_image();
+            let db = window.database();
+
+            // Set the value within the frontend
             preview.ignore();
+            // Update the database with the new status
             window.runtime().block_on(async move {
-                update_selection_state(window.database().as_ref(), preview.id(), Selection::Pick).await.unwrap();
+                update_selection_state(db, preview.id(), Selection::Pick).await.unwrap();
             });
         }));
         self.add_action(&action_ignore);
@@ -263,10 +264,17 @@ impl Window {
         let action_ordinary = SimpleAction::new("image-ordinary", None);
         action_ordinary.connect_activate(clone!(@weak self as window => move |_, _| {
             let _span = tracing::span!(Level::INFO, "Setting image to ordinary").entered();
+            // We need to set these values to help the borrow checker with move
+            // in the closure. We are borrowing different items from window
+            // so this is fine, just need the finer control in this instance.
             let preview = window.preview_image();
+            let db = window.database();
+
+            // Set the value within the frontend
             preview.ordinary();
+            // Update the database with the new status
             window.runtime().block_on(async move {
-                update_selection_state(window.database().as_ref(), preview.id(), Selection::Pick).await.unwrap();
+                update_selection_state(db, preview.id(), Selection::Pick).await.unwrap();
             });
         }));
         self.add_action(&action_ordinary);
@@ -313,9 +321,7 @@ impl Window {
     fn update_directory_list(&self) {
         let (tx, mut rx) = oneshot::channel();
         self.runtime().block_on(async move {
-            let results = query_unique_directories(self.database().as_ref())
-                .await
-                .unwrap();
+            let results = query_unique_directories(self.database()).await.unwrap();
             tx.send(results).unwrap();
         });
         let directories: Vec<String> = rx.try_recv().unwrap();
@@ -409,13 +415,13 @@ mod imp {
 
     use std::cell::RefCell;
     use std::fs::File;
-    use std::sync::Arc;
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::subclass::InitializingObject;
     use gtk::{gio, glib, CompositeTemplate, ListView, ScrolledWindow, Stack};
+    use once_cell::sync::OnceCell;
     use sqlx::SqlitePool;
     use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
     use tokio::sync::oneshot;
@@ -438,13 +444,13 @@ mod imp {
         pub stack: TemplateChild<Stack>,
         pub thumbnails: RefCell<ListStore>,
         pub directories: RefCell<ListStore>,
-        pub runtime: Arc<Runtime>,
-        pub database: Arc<SqlitePool>,
+        pub runtime: OnceCell<Runtime>,
+        pub database: OnceCell<SqlitePool>,
     }
 
     impl Default for Window {
         fn default() -> Self {
-            let runtime: Arc<Runtime> = Arc::new(
+            let runtime = OnceCell::with_value(
                 RuntimeBuilder::new_multi_thread()
                     .enable_all()
                     .build()
@@ -457,13 +463,13 @@ mod imp {
             let database_path = format!("sqlite://{}/database.db?mode=rwc", path.display());
             let (tx, mut rx) = oneshot::channel();
 
-            runtime.as_ref().block_on(async move {
+            runtime.get().unwrap().block_on(async move {
                 let pool = SqlitePool::connect(&database_path)
                     .await
                     .expect("Unable to initialise sqlite database");
                 tx.send(pool).unwrap();
             });
-            let database = Arc::new(rx.try_recv().unwrap());
+            let database = OnceCell::with_value(rx.try_recv().unwrap());
 
             Self {
                 thumbnail_scroll: Default::default(),

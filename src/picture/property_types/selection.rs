@@ -5,11 +5,10 @@ use std::str::FromStr;
 
 use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
-use glib::value::{
-    FromValue, GenericValueTypeOrNoneChecker, ToValueOptional, ValueType, ValueTypeOptional,
-};
+use glib::value::{FromValue, ValueType};
 use glib::Value;
 use gtk::glib;
+use gtk::glib::value::GenericValueTypeChecker;
 use serde::{Deserialize, Serialize};
 
 // Collection of options for picking an image,
@@ -32,6 +31,14 @@ impl FromStr for Selection {
             "Pick" => Ok(Selection::Pick),
             _ => Err(anyhow!("Invalid value for Selection.")),
         }
+    }
+}
+
+impl TryFrom<&str> for Selection {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
     }
 }
 
@@ -61,7 +68,7 @@ impl ValueType for Selection {
 }
 
 unsafe impl<'a> FromValue<'a> for Selection {
-    type Checker = GenericValueTypeOrNoneChecker<Self>;
+    type Checker = GenericValueTypeChecker<Self>;
     unsafe fn from_value(value: &'a Value) -> Self {
         Selection::from_str(<&str>::from_value(value)).unwrap()
     }

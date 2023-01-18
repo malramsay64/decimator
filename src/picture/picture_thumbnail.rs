@@ -50,7 +50,7 @@ impl PictureThumbnail {
                 );
                 dbg!(&scale);
                 spawn_fifo(move || {
-                    let thumbnail = PictureData::get_thumbnail(&filepath, scale);
+                    let thumbnail = PictureData::thumbnail(&filepath, scale);
                     // By using set_property we also trigger the signal telling
                     // GTK the thumbnail has been updated and the Picture
                     // should subsequently be updated.

@@ -3,9 +3,7 @@ use std::str::FromStr;
 
 use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
-use glib::value::{
-    FromValue, GenericValueTypeOrNoneChecker, ToValueOptional, ValueType, ValueTypeOptional,
-};
+use glib::value::{FromValue, GenericValueTypeOrNoneChecker, ValueType};
 use glib::Value;
 use gtk::glib;
 use serde::{Deserialize, Serialize};
@@ -34,6 +32,14 @@ impl FromStr for Rating {
             "five" | "Five" => Ok(Rating::Five),
             _ => Err(anyhow!("Invalid value for rating.")),
         }
+    }
+}
+
+impl TryFrom<&str> for Rating {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
     }
 }
 

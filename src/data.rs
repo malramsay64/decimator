@@ -18,7 +18,7 @@ pub(crate) async fn query_directory_pictures(
 ) -> Result<Vec<PictureData>, Error> {
     Ok(sqlx::query_as(
         r#"
-            SELECT id, directory, filename, selection, rating, flag, hidden
+            SELECT id, directory, filename, capture_time, selection, rating, flag, hidden
             FROM picture
             WHERE directory == $1
             ORDER BY capture_time DESC, filename DESC
@@ -49,12 +49,8 @@ pub(crate) async fn query_existing_pictures(
     .fetch_all(db)
     .await?
     .into_iter()
-    .map(|(a, b): (String, String)| {
-        let mut path = Utf8PathBuf::from(&a);
-        path.push(b);
-        path
-    })
-    .collect::<Vec<Utf8PathBuf>>())
+    .map(|(a, b): (String, String)| [a, b].iter().collect::<Utf8PathBuf>())
+    .collect::<Vec<_>>())
 }
 
 pub(crate) async fn query_unique_directories(db: &SqlitePool) -> Result<Vec<String>, Error> {

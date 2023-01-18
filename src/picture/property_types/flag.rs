@@ -3,12 +3,11 @@ use std::str::FromStr;
 
 use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
-use glib::value::{
-    FromValue, GenericValueTypeOrNoneChecker, ToValueOptional, ValueType, ValueTypeOptional,
-};
+use glib::value::{FromValue, GenericValueTypeChecker, ValueType};
 use glib::Value;
 use gtk::glib;
 use serde::{Deserialize, Serialize};
+
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum Flag {
@@ -34,6 +33,14 @@ impl FromStr for Flag {
             "purple" | "Purple" => Ok(Flag::Purple),
             _ => Err(anyhow!("Invalid value for Flags.")),
         }
+    }
+}
+
+impl TryFrom<&str> for Flag {
+    type Error = Error;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        Self::from_str(value)
     }
 }
 
@@ -66,7 +73,7 @@ impl ValueType for Flag {
 }
 
 unsafe impl<'a> FromValue<'a> for Flag {
-    type Checker = GenericValueTypeOrNoneChecker<Self>;
+    type Checker = GenericValueTypeChecker<Self>;
     unsafe fn from_value(value: &'a Value) -> Self {
         Flag::from_str(<&str>::from_value(value)).unwrap()
     }
