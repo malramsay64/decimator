@@ -10,7 +10,7 @@ use gtk::glib::value::{ToValueOptional, ValueTypeOptional};
 use serde::{Deserialize, Serialize};
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::PrimitiveDateTime;
+use time::{Month, PrimitiveDateTime};
 
 // Define the format to send to the fontend. This is also used to update
 // the time from the frontend.
@@ -20,6 +20,20 @@ const DISPLAY_FORMAT: &[FormatItem<'_>] =
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct DateTime {
     datetime: PrimitiveDateTime,
+}
+
+impl DateTime {
+    pub fn year(&self) -> i32 {
+        self.datetime.year()
+    }
+
+    pub fn month(&self) -> Month {
+        self.datetime.month()
+    }
+
+    pub fn day(&self) -> u8 {
+        self.datetime.day()
+    }
 }
 
 impl From<PrimitiveDateTime> for DateTime {

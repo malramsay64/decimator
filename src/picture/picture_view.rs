@@ -1,23 +1,13 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-
 use glib::Object;
 use gtk::gdk::Texture;
-use gtk::PolicyType;
-use gtk::ScrollType;
-use gtk::ScrolledWindow;
-use gtk::SignalListItemFactory;
-use gtk::SingleSelection;
-
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::gio::ListModel;
-use gtk::gio::ListStore;
-use gtk::glib;
+use gtk::gio::{ListModel, ListStore};
 use gtk::glib::clone;
+use gtk::{glib, PolicyType, ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection};
 
-use super::PictureData;
-use super::PictureObject;
-use super::PictureThumbnail;
+use super::{PictureData, PictureObject, PictureThumbnail};
 
 glib::wrapper! {
     pub struct PictureView(ObjectSubclass<imp::PictureView>)
@@ -140,16 +130,14 @@ impl Default for PictureView {
 }
 
 mod imp {
-    use gtk::gdk::Texture;
-
     use std::cell::RefCell;
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use gio::ListStore;
     use glib::Binding;
-    use gtk::{gio, glib};
-    use gtk::{CompositeTemplate, ListView, Picture, ScrolledWindow};
+    use gtk::gdk::Texture;
+    use gtk::{gio, glib, CompositeTemplate, ListView, Picture, ScrolledWindow};
 
     use super::PictureObject;
 

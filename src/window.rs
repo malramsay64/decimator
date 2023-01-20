@@ -8,8 +8,9 @@ use gio::{ListStore, SimpleAction};
 use glib::{clone, Object};
 use gtk::pango::EllipsizeMode;
 use gtk::{
-    gio, glib, Align, FileChooserAction, FileChooserDialog, Label, PolicyType, ResponseType,
-    ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject, Widget,
+    gio, glib, Align, FileChooserAction, FileChooserDialog, Label, ListItem, PolicyType,
+    ResponseType, ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject,
+    Widget,
 };
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use tokio::runtime::Runtime;
@@ -285,17 +286,24 @@ impl Window {
         let factory = SignalListItemFactory::new();
         factory.connect_setup(move |_, list_item| {
             let thumbnail = PictureThumbnail::new();
-            list_item.set_child(Some(&thumbnail));
+            list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .set_child(Some(&thumbnail));
         });
 
         factory.connect_bind(move |_, list_item| {
             let picture_object = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
                 .item()
                 .expect("The item has to exist.")
                 .downcast::<PictureObject>()
                 .expect("The item has to be an `PictureObject`.");
 
             let image_thumbnail = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
                 .child()
                 .expect("The child has to exist.")
                 .downcast::<PictureThumbnail>()
@@ -306,6 +314,8 @@ impl Window {
 
         factory.connect_unbind(move |_, list_item| {
             let image_thumbnail = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
                 .child()
                 .expect("The child has to exist.")
                 .downcast::<PictureThumbnail>()
@@ -366,9 +376,15 @@ impl Window {
                 .halign(Align::Start)
                 .width_request(280)
                 .build();
-            list_item.set_child(Some(&label));
 
             list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .set_child(Some(&label));
+
+            list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
                 .property_expression("item")
                 .chain_property::<StringObject>("string")
                 .bind(&label, "label", Widget::NONE);

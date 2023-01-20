@@ -1,5 +1,3 @@
-
-
 use adw::subclass::prelude::*;
 use camino::Utf8PathBuf;
 use gdk::Texture;
@@ -12,6 +10,7 @@ use sqlx::{FromRow, Row};
 use time::PrimitiveDateTime;
 use uuid::Uuid;
 
+use super::PictureData;
 use crate::picture::{DateTime, Flag, Rating, Selection};
 
 glib::wrapper! {
@@ -104,62 +103,6 @@ impl PictureObject {
             .selection = Selection::Ignore
     }
 }
-
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct PictureData {
-    pub id: Uuid,
-    pub filepath: Utf8PathBuf,
-    pub capture_time: Option<DateTime>,
-    pub selection: Selection,
-    pub rating: Rating,
-    pub flag: Flag,
-    pub hidden: Option<bool>,
-    #[serde(skip)]
-    pub thumbnail: Option<Texture>,
-}
-
-impl PictureData {
-    fn path(&self) -> String {
-        self.filepath.clone().into()
-    }
-
-    pub fn directory(&self) -> String {
-        self.filepath
-            .parent()
-            .expect("Invalid parent directory")
-            .as_str()
-            .to_owned()
-    }
-
-    pub fn filename(&self) -> String {
-        self.filepath
-            .file_name()
-            .expect("No valid filename.")
-            .to_owned()
-    }
-}
-
-impl From<Utf8PathBuf> for PictureData {
-    fn from(path: Utf8PathBuf) -> Self {
-        Self {
-            filepath: path,
-            ..Default::default()
-        }
-    }
-}
-
-impl From<PictureData> for PictureObject {
-    fn from(pic: PictureData) -> Self {
-        Object::builder()
-            .property("id", pic.id.to_string())
-            .property("path", pic.path())
-            .property("selection", pic.selection.to_string())
-            .property("capture-time", pic.capture_time.map(|c| c.to_string()))
-            .property::<Option<Texture>>("thumbnail", None)
-            .build()
-    }
-}
-
 impl<T: AsRef<PictureObject>> From<T> for PictureData {
     fn from(p: T) -> Self {
         let p = p.as_ref();
@@ -176,79 +119,32 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
     }
 }
 
-impl FromRow<'_, SqliteRow> for PictureData {
-    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
-        let directory: &str = row.try_get("directory")?;
-        let filename: &str = row.try_get("filename")?;
-        let filepath: Utf8PathBuf = [directory, filename].iter().collect();
-        let capture_time: Option<DateTime> = row
-            // We need to ensure we get the Option.
-            .try_get::<Option<PrimitiveDateTime>, _>("capture_time")?
-            .map(|t| t.into());
-
-        Ok(Self {
-            id: row.try_get("id")?,
-            filepath,
-            capture_time,
-            selection: row
-                .try_get::<&str, _>("selection")?
-                .try_into()
-                .unwrap_or_default(),
-            rating: row
-                .try_get::<&str, _>("rating")?
-                .try_into()
-                .unwrap_or_default(),
-            flag: row
-                .try_get::<&str, _>("flag")?
-                .try_into()
-                .unwrap_or_default(),
-            hidden: row.try_get("hidden")?,
-            thumbnail: None,
-        })
-    }
-}
-
-impl std::fmt::Debug for PictureData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PictureData")
-            .field("id", &self.id)
-            .field("path", &self.filepath)
-            .field("thumbnail", &self.thumbnail.is_some())
-            .finish()
-    }
-}
-
-impl PictureData {
-    #[tracing::instrument(
-        name = "Loading thumbnail from file using ImageReader",
-        level = "trace"
-    )]
-    pub fn thumbnail(path: &str, (scale_x, scale_y): (i32, i32)) -> Texture {
-        let image = Pixbuf::from_file_at_scale(path, scale_x, scale_y, true)
-            .expect("Image not found.")
-            .apply_embedded_orientation()
-            .expect("Unable to apply orientation.");
-        Texture::for_pixbuf(&image)
+impl From<PictureData> for PictureObject {
+    fn from(pic: PictureData) -> Self {
+        Object::builder()
+            .property("id", pic.id.to_string())
+            .property("path", pic.path())
+            .property("selection", pic.selection.to_string())
+            .property("capture-time", pic.capture_time.map(|c| c.to_string()))
+            .property::<Option<Texture>>("thumbnail", None)
+            .build()
     }
 }
 
 mod imp {
-    
+
     use std::sync::{Arc, Mutex};
 
     use camino::Utf8PathBuf;
     use gdk::Texture;
     use glib::{ParamSpec, ParamSpecObject, ParamSpecString, Value};
-    
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gdk, glib};
     use once_cell::sync::Lazy;
-    
     use uuid::Uuid;
 
-    use super::{Flag, PictureData, Rating};
-    use crate::picture::{DateTime, Selection};
+    use crate::picture::{DateTime, Flag, PictureData, Rating, Selection};
 
     #[derive(Default)]
     pub struct PictureObject {

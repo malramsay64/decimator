@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
 use glib::{user_special_dir, UserDirectory};
 use gtk::glib;
@@ -8,7 +9,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::data::{query_directory_pictures};
+use crate::data::query_directory_pictures;
 use crate::picture::{is_image, PictureData};
 
 #[derive(Clone, Debug)]
@@ -31,7 +32,7 @@ impl Default for ImportStructure {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) {
+fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
     // Load all pictures
     let (tx, mut rx) = oneshot::channel();
     runtime.block_on(async move {
@@ -61,17 +62,37 @@ fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) {
         .filter(is_image)
         .map(|p: DirEntry| p.into_path().try_into().expect("Invalid UTF-8 path."))
         .map(Utf8PathBuf::into)
+        .map(|mut p: PictureData| {
+            p.update_from_exif().unwrap();
+            p
+        })
         // TODO: Improve this filter beyond being very basic
-        .filter(|p: &PictureData| !hash_map.contains_key(&p.filename()))
+        .filter(|p| !hash_map.contains_key(&p.filename()))
         .collect();
 
     // Parallel map -> Will need to be careful about the directory creation
     // Spawn async tasks to do the copying?
     for image in new_images.into_iter() {
-        dbg!(image);
+        dbg!(&image);
         // Create the directory structure
+        let structure = ImportStructure::default();
+
+        let capture_time = image.capture_time.unwrap();
+        // Get the image capture date
+        let filename = format!(
+            "{year}/{year}-{month}-{day}/{filename}",
+            year = capture_time.year(),
+            month = capture_time.month(),
+            day = capture_time.day(),
+            filename = image.filename()
+        );
+
+        let mut new_path = structure.base_directory.clone();
+        new_path.push(filename);
 
         // Copy to new location
+        std::fs::create_dir_all(&new_path)?;
+        std::fs::copy(image.filepath, new_path)?;
 
         // Create entry in the database / import
     }
@@ -88,4 +109,5 @@ fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) {
     //     should already be computed.
     // 3. Check the files are equal
     //     Now we also need to read in the old file to check.
+    Ok(())
 }
