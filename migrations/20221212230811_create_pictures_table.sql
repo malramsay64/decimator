@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS picture (
     id BLOB NOT NULL PRIMARY KEY,
     directory TEXT NOT NULL,
     filename TEXT NOT NULL,
-    raw_filename TEXT,
+    raw_extension TEXT,
     short_hash BLOB,
     full_hash BLOB,
     capture_time DATETIME,

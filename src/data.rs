@@ -6,7 +6,7 @@
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use sqlx::SqlitePool;
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use uuid::Uuid;
 
 use crate::directory::DirectoryData;
@@ -51,6 +51,29 @@ pub(crate) async fn query_existing_pictures(
     .into_iter()
     .map(|(a, b): (String, String)| [a, b].iter().collect::<Utf8PathBuf>())
     .collect::<Vec<_>>())
+}
+
+pub(crate) async fn add_new_images(db: &SqlitePool, images: Vec<PictureData>) -> Result<(), Error> {
+    let mut query_builder: QueryBuilder<Sqlite> =
+        QueryBuilder::new("INSERT INTO picture(id, directory, filename, raw_extension, capture_time, rating, flag, hidden, selection)");
+
+    query_builder.push_values(images, |mut b, picture| {
+        b.push_bind(Uuid::new_v4())
+            .push_bind(picture.directory())
+            .push_bind(picture.filename())
+            .push_bind(picture.raw_extension)
+            .push_bind(picture.capture_time.map(|d| d.datetime()))
+            .push_bind(picture.rating.to_string())
+            .push_bind(picture.flag.to_string())
+            .push_bind(picture.hidden)
+            .push_bind(picture.selection.to_string());
+    });
+
+    // Run the database query to update all the files
+    let query = query_builder.build();
+    query.execute(db).await?;
+
+    Ok(())
 }
 
 pub(crate) async fn query_unique_directories(db: &SqlitePool) -> Result<Vec<String>, Error> {

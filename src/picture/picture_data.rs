@@ -17,6 +17,7 @@ use crate::picture::{DateTime, Flag, Rating, Selection};
 pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
+    pub raw_extension: Option<String>,
     pub capture_time: Option<DateTime>,
     pub selection: Selection,
     pub rating: Rating,
@@ -55,8 +56,13 @@ impl PictureData {
         let exif = exifreader.read_from_container(&mut bufreader)?;
 
         let capture_datetime = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY);
-        dbg!(capture_datetime);
-        // self.capture_time =
+
+        self.capture_time = if let Some(f) = capture_datetime {
+            let v = f.value.display_as(exif::Tag::DateTimeOriginal).to_string();
+            Some(v.try_into().expect("Unable to parse datetime"))
+        } else {
+            None
+        };
 
         Ok(())
     }
@@ -65,6 +71,7 @@ impl PictureData {
 impl From<Utf8PathBuf> for PictureData {
     fn from(path: Utf8PathBuf) -> Self {
         Self {
+            id: Uuid::new_v4(),
             filepath: path,
             ..Default::default()
         }
@@ -84,6 +91,7 @@ impl FromRow<'_, SqliteRow> for PictureData {
         Ok(Self {
             id: row.try_get("id")?,
             filepath,
+            raw_extension: None,
             capture_time,
             selection: row
                 .try_get::<&str, _>("selection")?

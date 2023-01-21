@@ -9,13 +9,30 @@ use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::data::query_directory_pictures;
+use crate::data::{add_new_images, query_directory_pictures};
 use crate::picture::{is_image, PictureData};
 
 #[derive(Clone, Debug)]
 struct ImportStructure {
     base_directory: Utf8PathBuf,
     expansion: String,
+}
+
+impl ImportStructure {
+    fn build_filename(&self, image: &PictureData) -> Result<Utf8PathBuf, Error> {
+        let capture_time = image.capture_time.unwrap();
+        // Get the image capture date
+        Ok(format!(
+            // TODO: Get this from self
+            "{base}/{year:04}/{year:04}-{month:02}-{day:02}/{filename}",
+            base = self.base_directory,
+            year = capture_time.year(),
+            month = capture_time.month(),
+            day = capture_time.day(),
+            filename = image.filename()
+        )
+        .try_into()?)
+    }
 }
 
 impl Default for ImportStructure {
@@ -32,7 +49,7 @@ impl Default for ImportStructure {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
+pub fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
     // Load all pictures
     let (tx, mut rx) = oneshot::channel();
     runtime.block_on(async move {
@@ -44,19 +61,19 @@ fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<()
 
     let pictures: Vec<PictureData> = rx.try_recv().unwrap();
 
-    let mut hash_map: HashMap<String, Vec<PictureData>> = HashMap::new();
+    let mut hash_existing: HashMap<String, Vec<PictureData>> = HashMap::new();
 
     for picture in pictures.into_iter() {
-        if let Some(f) = hash_map.get_mut(&picture.filename()) {
+        if let Some(f) = hash_existing.get_mut(&picture.filename()) {
             f.push(picture);
         } else {
-            hash_map.insert(picture.filename(), vec![picture]);
+            hash_existing.insert(picture.filename(), vec![picture]);
         }
     }
 
     // Quick method
 
-    let new_images: Vec<_> = WalkDir::new(directory)
+    let mut new_images: Vec<_> = WalkDir::new(directory)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(is_image)
@@ -67,34 +84,30 @@ fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<()
             p
         })
         // TODO: Improve this filter beyond being very basic
-        .filter(|p| !hash_map.contains_key(&p.filename()))
+        .filter(|p| !hash_existing.contains_key(&p.filename()))
         .collect();
 
     // Parallel map -> Will need to be careful about the directory creation
     // Spawn async tasks to do the copying?
-    for image in new_images.into_iter() {
-        dbg!(&image);
+    for mut image in new_images.into_iter() {
+        tracing::debug!("{:?}", &image);
         // Create the directory structure
         let structure = ImportStructure::default();
 
-        let capture_time = image.capture_time.unwrap();
-        // Get the image capture date
-        let filename = format!(
-            "{year}/{year}-{month}-{day}/{filename}",
-            year = capture_time.year(),
-            month = capture_time.month(),
-            day = capture_time.day(),
-            filename = image.filename()
-        );
+        let new_path = structure.build_filename(&image)?;
 
-        let mut new_path = structure.base_directory.clone();
-        new_path.push(filename);
+        let parent = new_path.parent();
+        tracing::debug!("Importing {} into {}", image.filepath, &new_path);
+        dbg!(&parent);
 
         // Copy to new location
-        std::fs::create_dir_all(&new_path)?;
-        std::fs::copy(image.filepath, new_path)?;
+        std::fs::create_dir_all(parent.unwrap())?;
+        std::fs::copy(&image.filepath, &new_path).expect("Unable to copy file");
+
+        image.filepath = new_path;
 
         // Create entry in the database / import
+        runtime.block_on(async move { add_new_images(db, vec![image]).await.unwrap() });
     }
     // Check the filename
     // Check the capture time

@@ -27,18 +27,30 @@ impl DateTime {
         self.datetime.year()
     }
 
-    pub fn month(&self) -> Month {
-        self.datetime.month()
+    pub fn month(&self) -> u8 {
+        self.datetime.month().into()
     }
 
     pub fn day(&self) -> u8 {
         self.datetime.day()
+    }
+
+    pub fn datetime(&self) -> PrimitiveDateTime {
+        self.datetime
     }
 }
 
 impl From<PrimitiveDateTime> for DateTime {
     fn from(value: PrimitiveDateTime) -> Self {
         Self { datetime: value }
+    }
+}
+
+impl TryFrom<String> for DateTime {
+    type Error = Error;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        Self::from_str(&value)
     }
 }
 

@@ -20,9 +20,10 @@ use uuid::Uuid;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::data::{
-    query_directory_pictures, query_existing_pictures, query_unique_directories,
+    add_new_images, query_directory_pictures, query_existing_pictures, query_unique_directories,
     update_selection_state,
 };
+use crate::import::import;
 use crate::picture::{is_image, PictureData, PictureObject, PictureThumbnail, Selection};
 
 glib::wrapper! {
@@ -149,24 +150,44 @@ impl Window {
             tracing::info!("Adding {} new images to the database.", images.len());
         }
 
-        let mut query_builder: QueryBuilder<Sqlite> =
-            QueryBuilder::new("INSERT INTO picture(id, directory, filename)");
-
-        query_builder.push_values(images, |mut b, picture| {
-            b.push_bind(Uuid::new_v4())
-                .push_bind(picture.directory())
-                .push_bind(picture.filename());
-        });
-
-        // Run the database query to update all the files
-        let query = query_builder.build();
-
-        self.runtime().block_on(async move {
-            query.execute(self.database()).await.unwrap();
-        });
+        self.runtime()
+            .block_on(async move { add_new_images(self.database(), images).await.unwrap() });
 
         // We need to update the list of directories
         self.update_directory_list();
+    }
+
+    #[tracing::instrument(name = "Creating Import dialog", skip(self))]
+    fn import_dialog(&self) {
+        let dialog = FileChooserDialog::new(
+            Some("Choose Directory for Import"),
+            Some(self),
+            FileChooserAction::SelectFolder,
+            &[
+                ("Cancel", ResponseType::Cancel),
+                ("Import", ResponseType::Accept),
+            ],
+        );
+
+        dialog.connect_response(clone!(@weak self as window => move |dialog, response| {
+            let directory: Utf8PathBuf;
+            if response != ResponseType::Accept {
+                dialog.destroy();
+                return;
+            } else {
+                directory = dialog.file().expect("No folder selected").path().expect("Unable to convert to path").try_into().expect("Unable to convert to UTF-8 string.");
+                dialog.destroy();
+            }
+            //
+            window.import_new_files(&directory);
+        } ));
+
+        dialog.present();
+    }
+
+    #[tracing::instrument(name = "Importing pictures from directory", skip(self))]
+    fn import_new_files(&self, directory: &Utf8Path) {
+        import(self.runtime(), self.database(), directory).unwrap()
     }
 
     #[tracing::instrument(name = "Selecting new directory dialog.", skip(self))]
@@ -223,8 +244,17 @@ impl Window {
         let action_new_directory = SimpleAction::new("new-directory", None);
         action_new_directory.connect_activate(clone!(@weak self as window => move |_, _| {
             window.new_directory();
+            // We have potentially added a new directory, so we need to update
+            // the list of all the directories.
+            window.update_directory_list();
         }));
         self.add_action(&action_new_directory);
+
+        let action_import = SimpleAction::new("import-directory", None);
+        action_import.connect_activate(clone!(@weak self as window => move |_, _| {
+            window.import_dialog();
+        }));
+        self.add_action(&action_import);
 
         let action_pick = SimpleAction::new("image-pick", None);
         action_pick.connect_activate(clone!(@weak self as window => move |_, _| {

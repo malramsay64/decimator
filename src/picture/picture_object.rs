@@ -27,6 +27,7 @@ impl PictureObject {
             .filepath
             .clone()
     }
+
     pub fn id(&self) -> Uuid {
         self.imp()
             .data
@@ -109,6 +110,7 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
         Self {
             id: p.id(),
             filepath: p.filepath(),
+            raw_extension: None,
             capture_time: p.capture_time(),
             selection: p.selection(),
             rating: p.rating(),

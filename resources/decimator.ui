@@ -75,6 +75,13 @@
                             <property name="action-name">win.new-directory</property>
                           </object>
                         </child>
+                        <child>
+                          <object class="GtkButton" id="import-add">
+                            <property name="tooltip-text" translatable="yes">Add new directory</property>
+                            <property name="label">Import</property>
+                            <property name="action-name">win.import-directory</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>
