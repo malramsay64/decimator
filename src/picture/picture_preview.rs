@@ -2,10 +2,11 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gdk::Texture;
 use glib::{BindingFlags, Object};
+use gtk::builders::ToggleButtonBuilder;
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::{gdk, glib};
+use gtk::{gdk, glib, ToggleButton};
 
-use super::PictureObject;
+use super::{PictureObject, Selection};
 
 glib::wrapper! {
     pub struct PicturePreview(ObjectSubclass<imp::PicturePreview>)
@@ -22,6 +23,7 @@ impl PicturePreview {
     pub fn bind(&self, picture_object: &PictureObject) {
         let picture = self.imp().preview.get();
         let rating = self.imp().rating.get();
+        let selection = self.imp().selection.get();
         let mut bindings = self.imp().bindings.borrow_mut();
 
         let rating_binding = picture_object
@@ -53,6 +55,31 @@ impl PicturePreview {
             binding.unbind();
         }
     }
+
+    #[tracing::instrument(name = "Initialising toggles", level = "trace")]
+    pub fn init_toggles(&self) {
+        let selection = self.imp().selection.get();
+        let ignore = ToggleButtonBuilder::new()
+            .label("I")
+            .action_name("win.image-select")
+            .action_target(&Selection::Ignore.to_variant())
+            .build();
+        let ordinary = ToggleButtonBuilder::new()
+            .label("O")
+            .group(&ignore)
+            .action_name("win.image-select")
+            .action_target(&Selection::Ordinary.to_variant())
+            .build();
+        let pick = ToggleButtonBuilder::new()
+            .label("P")
+            .group(&ignore)
+            .action_name("win.image-select")
+            .action_target(&Selection::Pick.to_variant())
+            .build();
+        selection.append(&ignore);
+        selection.append(&ordinary);
+        selection.append(&pick);
+    }
 }
 
 impl Default for PicturePreview {
@@ -67,7 +94,7 @@ mod imp {
     use glib::Binding;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::{glib, CompositeTemplate, Label, Picture};
+    use gtk::{glib, Box, CompositeTemplate, Label, Picture};
 
     #[derive(Default, CompositeTemplate)]
     #[template(resource = "/resources/picture_preview.ui")]
@@ -76,6 +103,8 @@ mod imp {
         pub preview: TemplateChild<Picture>,
         #[template_child]
         pub rating: TemplateChild<Label>,
+        #[template_child]
+        pub selection: TemplateChild<Box>,
         pub bindings: RefCell<Vec<Binding>>,
     }
 
@@ -95,7 +124,17 @@ mod imp {
     }
 
     // Trait shared by all GObjects
-    impl ObjectImpl for PicturePreview {}
+    impl ObjectImpl for PicturePreview {
+        fn constructed(&self) {
+            // Call "constructed" on parent
+            self.parent_constructed();
+
+            // Setup
+            let obj = self.obj();
+
+            obj.init_toggles();
+        }
+    }
 
     // Trait shared by all widgets
     impl WidgetImpl for PicturePreview {}

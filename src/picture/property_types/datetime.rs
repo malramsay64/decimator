@@ -10,7 +10,7 @@ use gtk::glib::value::{ToValueOptional, ValueTypeOptional};
 use serde::{Deserialize, Serialize};
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::{Month, PrimitiveDateTime};
+use time::{PrimitiveDateTime};
 
 // Define the format to send to the fontend. This is also used to update
 // the time from the frontend.

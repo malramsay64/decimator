@@ -42,7 +42,7 @@ impl Default for ImportStructure {
                 .unwrap()
                 .try_into()
                 .unwrap(),
-            expansion: "{year}/{year}-{month}-{day}/{filename}".into(),
+            expansion: "{base_directory}/{year:04}/{year:04}-{month:02}-{day:02}/{filename}".into(),
         }
     }
 }

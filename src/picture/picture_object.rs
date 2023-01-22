@@ -2,12 +2,8 @@ use adw::subclass::prelude::*;
 use camino::Utf8PathBuf;
 use gdk::Texture;
 use glib::Object;
-use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, glib};
-use serde::{Deserialize, Serialize};
-use sqlx::sqlite::SqliteRow;
-use sqlx::{FromRow, Row};
-use time::PrimitiveDateTime;
+use sqlx::Row;
 use uuid::Uuid;
 
 use super::PictureData;
@@ -77,6 +73,15 @@ impl PictureObject {
             .lock()
             .expect("Mutex lock is poisoned")
             .hidden
+    }
+
+    pub fn set_selection(&self, selection: Selection) {
+        self.imp()
+            .data
+            .as_ref()
+            .lock()
+            .expect("Mutex lock is poisoned")
+            .selection = selection
     }
 
     pub fn pick(&self) {

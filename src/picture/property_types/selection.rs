@@ -6,7 +6,7 @@ use std::str::FromStr;
 use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use glib::value::{FromValue, ValueType};
-use glib::Value;
+use glib::{FromVariant, ToVariant, Value, Variant};
 use gtk::glib;
 use gtk::glib::value::GenericValueTypeChecker;
 use serde::{Deserialize, Serialize};
@@ -77,5 +77,26 @@ unsafe impl<'a> FromValue<'a> for Selection {
 impl StaticType for Selection {
     fn static_type() -> glib::Type {
         String::static_type()
+    }
+}
+
+impl StaticVariantType for Selection {
+    fn static_variant_type() -> std::borrow::Cow<'static, glib::VariantTy> {
+        String::static_variant_type()
+    }
+}
+
+impl ToVariant for Selection {
+    fn to_variant(&self) -> Variant {
+        self.to_string().to_variant()
+    }
+}
+
+impl FromVariant for Selection {
+    fn from_variant(variant: &Variant) -> Option<Self> {
+        variant
+            .str()
+            .map(|i: &str| Selection::from_str(i).ok())
+            .flatten()
     }
 }

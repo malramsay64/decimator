@@ -18,9 +18,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkButton" id="picked">
-        <property name="label">Pick</property>
-        <property name="action-name">win.image-pick</property>
+      <object class="GtkBox" id="selection">
       </object>
     </child>
   </template>

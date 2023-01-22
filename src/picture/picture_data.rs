@@ -2,9 +2,9 @@ use adw::subclass::prelude::*;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use gdk::Texture;
-use glib::Object;
+
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::{gdk, glib};
+use gtk::{gdk};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};

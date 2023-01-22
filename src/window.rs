@@ -5,7 +5,7 @@ use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
 use gio::{ListStore, SimpleAction};
-use glib::{clone, Object};
+use glib::{clone, FromVariant, Object};
 use gtk::pango::EllipsizeMode;
 use gtk::{
     gio, glib, Align, FileChooserAction, FileChooserDialog, Label, ListItem, PolicyType,
@@ -256,60 +256,26 @@ impl Window {
         }));
         self.add_action(&action_import);
 
-        let action_pick = SimpleAction::new("image-pick", None);
-        action_pick.connect_activate(clone!(@weak self as window => move |_, _| {
-            let _span = tracing::span!(Level::INFO, "Setting image to picked").entered();
+        let action_image_select =
+            SimpleAction::new("image-select", Some(&Selection::static_variant_type()));
+
+        action_image_select.connect_activate(clone!(@weak self as window => move |_, v| {
+            let _span = tracing::span!(Level::INFO, "Updating image selection").entered();
             // We need to set these values to help the borrow checker with move
             // in the closure. We are borrowing different items from window
             // so this is fine, just need the finer control in this instance.
             let preview = window.preview_image();
             let db = window.database();
 
+            let value = Selection::from_variant(v.unwrap()).unwrap();
             // Set the value within the frontend
-            preview.pick();
+            preview.set_selection(value);
             // Update the database with the new status
             window.runtime().block_on(async move {
-                update_selection_state(db, preview.id(), Selection::Pick).await.unwrap();
+                update_selection_state(db, preview.id(), value).await.unwrap();
             });
         }));
-        self.add_action(&action_pick);
-
-        let action_ignore = SimpleAction::new("image-ignore", None);
-        action_ignore.connect_activate(clone!(@weak self as window => move |_, _| {
-            let _span = tracing::span!(Level::INFO, "Setting image to ignored").entered();
-            // We need to set these values to help the borrow checker with move
-            // in the closure. We are borrowing different items from window
-            // so this is fine, just need the finer control in this instance.
-            let preview = window.preview_image();
-            let db = window.database();
-
-            // Set the value within the frontend
-            preview.ignore();
-            // Update the database with the new status
-            window.runtime().block_on(async move {
-                update_selection_state(db, preview.id(), Selection::Pick).await.unwrap();
-            });
-        }));
-        self.add_action(&action_ignore);
-
-        let action_ordinary = SimpleAction::new("image-ordinary", None);
-        action_ordinary.connect_activate(clone!(@weak self as window => move |_, _| {
-            let _span = tracing::span!(Level::INFO, "Setting image to ordinary").entered();
-            // We need to set these values to help the borrow checker with move
-            // in the closure. We are borrowing different items from window
-            // so this is fine, just need the finer control in this instance.
-            let preview = window.preview_image();
-            let db = window.database();
-
-            // Set the value within the frontend
-            preview.ordinary();
-            // Update the database with the new status
-            window.runtime().block_on(async move {
-                update_selection_state(db, preview.id(), Selection::Pick).await.unwrap();
-            });
-        }));
-        self.add_action(&action_ordinary);
-    }
+        self.add_action(&action_image_select);
 
     #[tracing::instrument(name = "Initialising thumbnail factory.", skip(self))]
     fn init_factory(&self) {
