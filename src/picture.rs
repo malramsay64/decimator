@@ -13,8 +13,8 @@ use walkdir::DirEntry;
 
 pub fn is_image(entry: &DirEntry) -> bool {
     match entry.path().extension().and_then(|s| s.to_str()) {
-        Some("jpg" | "JPG") => true,
-        Some("tiff" | "png" | "gif" | "RAW" | "webp" | "heif" | "heic" | "arw" | "ARW") => false,
+        Some("jpg" | "JPG" | "raw" | "RAW" | "ARW" | "arw" | "raf" | "RAF") => true,
+        Some("tiff" | "png" | "gif" | "webp" | "heif" | "heic") => false,
         _ => false,
     }
 }

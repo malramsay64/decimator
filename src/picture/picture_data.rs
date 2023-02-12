@@ -2,14 +2,14 @@ use adw::subclass::prelude::*;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use gdk::Texture;
-
+use gtk::gdk;
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::{gdk};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
 use time::PrimitiveDateTime;
 use uuid::Uuid;
+use walkdir::DirEntry;
 
 use crate::picture::{DateTime, Flag, Rating, Selection};
 
@@ -47,6 +47,7 @@ impl PictureData {
             .to_owned()
     }
 
+    #[tracing::instrument(name = "Updating exif data from file")]
     pub fn update_from_exif(&mut self) -> Result<(), Error> {
         // Get the image capture date
         let file = std::fs::File::open(&self.filepath)?;
@@ -73,6 +74,16 @@ impl From<Utf8PathBuf> for PictureData {
         Self {
             id: Uuid::new_v4(),
             filepath: path,
+            ..Default::default()
+        }
+    }
+}
+impl From<DirEntry> for PictureData {
+    fn from(path: DirEntry) -> Self {
+        let p = Utf8PathBuf::from(path.into_path().to_str().expect("Invalid UTF-8 Path"));
+        Self {
+            id: Uuid::new_v4(),
+            filepath: p,
             ..Default::default()
         }
     }
@@ -116,6 +127,12 @@ impl std::fmt::Debug for PictureData {
         f.debug_struct("PictureData")
             .field("id", &self.id)
             .field("path", &self.filepath)
+            .field("raw_extension", &self.raw_extension)
+            .field("capture_time", &self.capture_time)
+            .field("selection", &self.selection)
+            .field("rating", &self.rating)
+            .field("flag", &self.flag)
+            .field("hidden", &self.hidden)
             .field("thumbnail", &self.thumbnail.is_some())
             .finish()
     }

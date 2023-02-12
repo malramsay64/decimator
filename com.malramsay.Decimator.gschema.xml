@@ -1,0 +1,14 @@
+<?xml verison="1.0" encoding="utf-8"?>
+<schemalist>
+  <schema id="com.malramsay.Decimator" path="/com/malramsay/Decimator/">
+    <key name="filter" type="s">
+      <choices>
+        <choice value="All"/>
+        <choice value="Picked"/>
+        <choice value="Not Ignored"/>
+      </choices>
+      <default>"All"</default>
+      <summary>Filter for the thumbnail images</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -8,7 +8,6 @@ use glib::Value;
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum Flag {
     #[default]

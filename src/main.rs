@@ -37,7 +37,7 @@ fn build_ui(app: &Application) {
 
 #[tracing::instrument(name = "Initialising keyboard shortcuts.", skip(app))]
 fn build_shortcuts(app: &Application) {
-    app.set_accels_for_action("win.image-pick", &["p"]);
-    app.set_accels_for_action("win.image-ordinary", &["o"]);
-    app.set_accels_for_action("win.image-ignore", &["i"]);
+    app.set_accels_for_action("win.image-select('Pick')", &["p"]);
+    app.set_accels_for_action("win.image-select('Ordinary')", &["o"]);
+    app.set_accels_for_action("win.image-select('Ignore')", &["i"]);
 }

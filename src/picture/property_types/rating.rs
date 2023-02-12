@@ -30,7 +30,7 @@ impl FromStr for Rating {
             "three" | "Three" => Ok(Rating::Three),
             "four" | "Four" => Ok(Rating::Four),
             "five" | "Five" => Ok(Rating::Five),
-            _ => Err(anyhow!("Invalid value for rating.")),
+            _ => Ok(Rating::default()),
         }
     }
 }

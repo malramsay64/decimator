@@ -45,8 +45,21 @@ impl PicturePreview {
                 ))
             })
             .build();
-
         bindings.push(buffer_binding);
+
+        let rating_binding = picture_object
+            .bind_property("rating", &rating, "label")
+            .flags(BindingFlags::SYNC_CREATE)
+            // .transform_to(|_, s: Rating| s.to_string())
+            .build();
+        bindings.push(rating_binding);
+
+        let selection_binding = picture_object
+            .bind_property("selection", &selection, "label")
+            .flags(BindingFlags::SYNC_CREATE)
+            // .transform_to(|_, s: Option<Selection>| s.map(|i| i.to_string()))
+            .build();
+        bindings.push(selection_binding);
     }
 
     #[tracing::instrument(name = "Unbinding preview from widget.", level = "trace")]
@@ -54,31 +67,6 @@ impl PicturePreview {
         for binding in self.imp().bindings.borrow_mut().drain(..) {
             binding.unbind();
         }
-    }
-
-    #[tracing::instrument(name = "Initialising toggles", level = "trace")]
-    pub fn init_toggles(&self) {
-        let selection = self.imp().selection.get();
-        let ignore = ToggleButtonBuilder::new()
-            .label("I")
-            .action_name("win.image-select")
-            .action_target(&Selection::Ignore.to_variant())
-            .build();
-        let ordinary = ToggleButtonBuilder::new()
-            .label("O")
-            .group(&ignore)
-            .action_name("win.image-select")
-            .action_target(&Selection::Ordinary.to_variant())
-            .build();
-        let pick = ToggleButtonBuilder::new()
-            .label("P")
-            .group(&ignore)
-            .action_name("win.image-select")
-            .action_target(&Selection::Pick.to_variant())
-            .build();
-        selection.append(&ignore);
-        selection.append(&ordinary);
-        selection.append(&pick);
     }
 }
 
@@ -104,7 +92,7 @@ mod imp {
         #[template_child]
         pub rating: TemplateChild<Label>,
         #[template_child]
-        pub selection: TemplateChild<Box>,
+        pub selection: TemplateChild<Label>,
         pub bindings: RefCell<Vec<Binding>>,
     }
 
@@ -131,8 +119,6 @@ mod imp {
 
             // Setup
             let obj = self.obj();
-
-            obj.init_toggles();
         }
     }
 

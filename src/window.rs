@@ -4,13 +4,13 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
-use gio::{ListStore, SimpleAction};
+use gio::{ListStore, Settings, SimpleAction};
 use glib::{clone, FromVariant, Object};
 use gtk::pango::EllipsizeMode;
 use gtk::{
-    gio, glib, Align, FileChooserAction, FileChooserDialog, Label, ListItem, PolicyType,
-    ResponseType, ScrollType, ScrolledWindow, SignalListItemFactory, SingleSelection, StringObject,
-    Widget,
+    gio, glib, Align, CustomFilter, FileChooserAction, FileChooserDialog, FilterListModel, Label,
+    ListItem, PolicyType, ResponseType, ScrollType, ScrolledWindow, SignalListItemFactory,
+    SingleSelection, StringObject, Widget,
 };
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use tokio::runtime::Runtime;
@@ -23,8 +23,9 @@ use crate::data::{
     add_new_images, query_directory_pictures, query_existing_pictures, query_unique_directories,
     update_selection_state,
 };
-use crate::import::import;
+use crate::import::{import, map_directory_images};
 use crate::picture::{is_image, PictureData, PictureObject, PictureThumbnail, Selection};
+use crate::APP_ID;
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -65,21 +66,26 @@ impl Window {
 
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
+        let filter_model = FilterListModel::new(Some(&self.thumbnails()), self.filter().as_ref());
+
         // TODO: Bind model to the thumbnails
-        let selection_model = SingleSelection::builder().model(&self.thumbnails()).build();
+        let selection_model = SingleSelection::builder().model(&filter_model).build();
 
         // Provide the updating of a picture in a single location.
         // TODO: Find a way to link these two properties together
-        fn update_picture(window: &Window, picture: PictureObject) {
-            window.imp().preview.bind(&picture);
-            window.imp().preview_image.replace(Some(picture));
+        fn update_picture(window: &Window, picture: Option<PictureObject>) {
+            window.imp().preview.unbind();
+            if let Some(ref p) = picture {
+                window.imp().preview.bind(p);
+            }
+            window.imp().preview_image.replace(picture);
         }
 
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
+
             let picture = item
                 .selected_item()
-                .expect("No items selected")
-                .downcast::<PictureObject>().expect("Require a `PictureObject`");
+                .map(|i| i.downcast::<PictureObject>().expect("Require a `PictureObject`"));
 
             update_picture(&window, picture);
 
@@ -87,17 +93,12 @@ impl Window {
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
 
-        // Select the first item in the list when we initialise so there will
-        // always be something selected.
-        selection_model.select_item(0, true);
-        tracing::debug!("Model has been selected");
-
-        let picture = selection_model
-            .selected_item()
-            .expect("No items selected")
-            .downcast::<PictureObject>()
-            .expect("Require a `PictureObject`");
-        update_picture(self, picture);
+        self.settings().connect_changed(
+            Some("filter"),
+            clone!(@weak self as window, @weak filter_model => move |_, _| {
+                filter_model.set_filter(window.filter().as_ref());
+            }),
+        );
     }
 
     fn runtime(&self) -> &Runtime {
@@ -134,12 +135,8 @@ impl Window {
             existing_pictures.len()
         );
 
-        let images: Vec<_> = WalkDir::new(directory)
+        let images: Vec<_> = map_directory_images(directory)
             .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(is_image)
-            .map(|p: DirEntry| Utf8PathBuf::try_from(p.into_path()).expect("Invalid UTF-8 path."))
-            .map(PictureData::from)
             .filter(|p| !existing_pictures.contains(&p.filepath))
             .collect();
 
@@ -180,6 +177,7 @@ impl Window {
             }
             //
             window.import_new_files(&directory);
+            window.update_directory_list()
         } ));
 
         dialog.present();
@@ -212,6 +210,7 @@ impl Window {
             }
             //
             window.add_pictures_from(&directory);
+            window.update_directory_list()
         }));
         dialog.present();
     }
@@ -238,8 +237,41 @@ impl Window {
         self.imp().preview_image.borrow().clone().unwrap()
     }
 
+    fn filter(&self) -> Option<CustomFilter> {
+        // Define Filters
+
+        let filter_picked = CustomFilter::new(|obj| {
+            let task_obj = obj
+                .downcast_ref::<PictureObject>()
+                .expect("The object needs to be of type `PictureObject`");
+
+            task_obj.selection() == Selection::Pick
+        });
+
+        let filter_not_ignored = CustomFilter::new(|obj| {
+            let task_obj = obj
+                .downcast_ref::<PictureObject>()
+                .expect("The object needs to be of type `PictureObject`");
+
+            task_obj.selection() != Selection::Ignore
+        });
+
+        // Get filter state from settings
+        let filter_state: String = self.settings().get("filter");
+
+        match filter_state.as_str() {
+            "All" => None,
+            "Picked" => Some(filter_picked),
+            "Not Ignored" => Some(filter_not_ignored),
+            _ => unreachable!(),
+        }
+    }
+
     #[tracing::instrument(name = "Setting up Actions.", skip(self))]
     fn setup_actions(&self) {
+        let action_filter = self.settings().create_action("filter");
+        self.add_action(&action_filter);
+
         // Create action to create new collection and add to action group "win"
         let action_new_directory = SimpleAction::new("new-directory", None);
         action_new_directory.connect_activate(clone!(@weak self as window => move |_, _| {
@@ -261,21 +293,25 @@ impl Window {
 
         action_image_select.connect_activate(clone!(@weak self as window => move |_, v| {
             let _span = tracing::span!(Level::INFO, "Updating image selection").entered();
+            if let Some(value) = v {
             // We need to set these values to help the borrow checker with move
             // in the closure. We are borrowing different items from window
             // so this is fine, just need the finer control in this instance.
             let preview = window.preview_image();
             let db = window.database();
 
-            let value = Selection::from_variant(v.unwrap()).unwrap();
+            tracing::debug!("Setting to value {}", &value.to_string());
             // Set the value within the frontend
-            preview.set_selection(value);
+            preview.set_property("selection", value.to_string());
             // Update the database with the new status
             window.runtime().block_on(async move {
-                update_selection_state(db, preview.id(), value).await.unwrap();
+                update_selection_state(db, preview.id(), Selection::from_variant(value).unwrap()).await.unwrap();
             });
+
+            }
         }));
         self.add_action(&action_image_select);
+    }
 
     #[tracing::instrument(name = "Initialising thumbnail factory.", skip(self))]
     fn init_factory(&self) {
@@ -293,16 +329,14 @@ impl Window {
                 .downcast_ref::<ListItem>()
                 .expect("Needs to be ListItem")
                 .item()
-                .expect("The item has to exist.")
-                .downcast::<PictureObject>()
+                .and_downcast::<PictureObject>()
                 .expect("The item has to be an `PictureObject`.");
 
             let image_thumbnail = list_item
                 .downcast_ref::<ListItem>()
                 .expect("Needs to be ListItem")
                 .child()
-                .expect("The child has to exist.")
-                .downcast::<PictureThumbnail>()
+                .and_downcast::<PictureThumbnail>()
                 .expect("The child has to be a `PictureThumbnail`.");
 
             image_thumbnail.bind(&picture_object);
@@ -313,8 +347,7 @@ impl Window {
                 .downcast_ref::<ListItem>()
                 .expect("Needs to be ListItem")
                 .child()
-                .expect("The child has to exist.")
-                .downcast::<PictureThumbnail>()
+                .and_downcast::<PictureThumbnail>()
                 .expect("The child has to be a `PictureThumbnail`.");
 
             image_thumbnail.unbind();
@@ -421,6 +454,21 @@ impl Window {
             );
         }
     }
+
+    fn init_settings(&self) {
+        let settings = Settings::new(APP_ID);
+        self.imp()
+            .settings
+            .set(settings)
+            .expect("`settings` should not be set before calling `setup_settings`.");
+    }
+
+    fn settings(&self) -> &Settings {
+        self.imp()
+            .settings
+            .get()
+            .expect("`settings` should be set in `setup_settings` before accessing them.")
+    }
 }
 
 mod imp {
@@ -430,7 +478,7 @@ mod imp {
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
-    use gio::ListStore;
+    use gio::{ListStore, Settings};
     use glib::subclass::InitializingObject;
     use gtk::{gio, glib, CompositeTemplate, ListView, ScrolledWindow, Stack};
     use once_cell::sync::OnceCell;
@@ -443,21 +491,32 @@ mod imp {
     #[derive(CompositeTemplate)]
     #[template(resource = "/resources/decimator.ui")]
     pub struct Window {
+        // Provides the capability to run asynchronous tasks. We are using a
+        // separate tokio runtime which does seem to make things simpler,
+        // however, TODO use the internal glib runtime.
+        pub runtime: OnceCell<Runtime>,
+        // Provide the connection pool for the database. This allows multiple
+        // threads access.
+        pub database: OnceCell<SqlitePool>,
+
+        pub settings: OnceCell<Settings>,
+
         #[template_child]
-        pub thumbnail_scroll: TemplateChild<ScrolledWindow>,
+        pub stack: TemplateChild<Stack>,
+
+        pub directories: RefCell<ListStore>,
         #[template_child]
-        pub preview: TemplateChild<PicturePreview>,
-        pub preview_image: RefCell<Option<PictureObject>>,
+        pub filetree: TemplateChild<ListView>,
+
+        pub thumbnails: RefCell<ListStore>,
         #[template_child]
         pub thumbnail_list: TemplateChild<ListView>,
         #[template_child]
-        pub filetree: TemplateChild<ListView>,
+        pub thumbnail_scroll: TemplateChild<ScrolledWindow>,
+
+        pub preview_image: RefCell<Option<PictureObject>>,
         #[template_child]
-        pub stack: TemplateChild<Stack>,
-        pub thumbnails: RefCell<ListStore>,
-        pub directories: RefCell<ListStore>,
-        pub runtime: OnceCell<Runtime>,
-        pub database: OnceCell<SqlitePool>,
+        pub preview: TemplateChild<PicturePreview>,
     }
 
     impl Default for Window {
@@ -485,6 +544,7 @@ mod imp {
 
             Self {
                 thumbnail_scroll: Default::default(),
+                settings: Default::default(),
                 preview: Default::default(),
                 preview_image: Default::default(),
                 thumbnail_list: Default::default(),
@@ -522,6 +582,7 @@ mod imp {
             // Setup
             let obj = self.obj();
 
+            obj.init_settings();
             obj.init_scroll();
             obj.init_factory();
             obj.update_directory_list();

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 // Collection of options for picking an image,
 // it can either be Rejected, Hidden or Selected.
-#[derive(Copy, Clone, Serialize, Deserialize, Debug, Default)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub enum Selection {
     Ignore,
     #[default]
@@ -26,9 +26,12 @@ impl FromStr for Selection {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
-            "Ignore" => Ok(Selection::Ignore),
-            "Ordinary" => Ok(Selection::Ordinary),
-            "Pick" => Ok(Selection::Pick),
+            // We need to match the string with quotes to allow for converting
+            // from the variant representation.
+            // TODO: Consolidate all handling of Selection to a variant
+            "Ignore" | "'Ignore'" => Ok(Selection::Ignore),
+            "Ordinary" | "'Ordinary'" => Ok(Selection::Ordinary),
+            "Pick" | "'Pick'" => Ok(Selection::Pick),
             _ => Err(anyhow!("Invalid value for Selection.")),
         }
     }

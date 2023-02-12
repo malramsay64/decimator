@@ -21,14 +21,21 @@ impl PictureThumbnail {
     #[tracing::instrument(name = "Binding thumbnail to widget.", level = "trace")]
     pub fn bind(&self, picture_object: &PictureObject) {
         let thumbnail_picture = self.imp().thumbnail_picture.get();
-        let thumbnail_label = self.imp().thumbnail_label.get();
+        let selection = self.imp().selection.get();
+        let rating = self.imp().rating.get();
         let mut bindings = self.imp().bindings.borrow_mut();
 
-        let label_binding = picture_object
-            .bind_property("path", &thumbnail_label, "label")
+        let selection_binding = picture_object
+            .bind_property("selection", &selection, "label")
             .flags(BindingFlags::SYNC_CREATE)
             .build();
-        bindings.push(label_binding);
+        bindings.push(selection_binding);
+
+        let rating_binding = picture_object
+            .bind_property("rating", &rating, "label")
+            .flags(BindingFlags::SYNC_CREATE)
+            .build();
+        bindings.push(rating_binding);
 
         let buffer_binding = picture_object
             .bind_property("thumbnail", &thumbnail_picture, "paintable")
@@ -42,13 +49,11 @@ impl PictureThumbnail {
                 let filepath: String = picture_object.property("path");
                 let local_picture = picture_object.clone();
                 let scale_factor = self.scale_factor();
-                dbg!(&scale_factor);
                 let (scale_x, scale_y) = self.size_request();
                 let scale = (
                     scale_factor * i32::max(scale_x, 240),
                     scale_factor * i32::max(scale_y, 240),
                 );
-                dbg!(&scale);
                 spawn_fifo(move || {
                     let thumbnail = PictureData::thumbnail(&filepath, scale);
                     // By using set_property we also trigger the signal telling
@@ -88,7 +93,9 @@ mod imp {
         #[template_child]
         pub thumbnail_picture: TemplateChild<Picture>,
         #[template_child]
-        pub thumbnail_label: TemplateChild<Label>,
+        pub selection: TemplateChild<Label>,
+        #[template_child]
+        pub rating: TemplateChild<Label>,
         pub bindings: RefCell<Vec<Binding>>,
     }
 

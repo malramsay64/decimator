@@ -4,12 +4,13 @@ use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
 use glib::{user_special_dir, UserDirectory};
 use gtk::glib;
+use itertools::Itertools;
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::data::{add_new_images, query_directory_pictures};
+use crate::data::{add_new_images, query_directory_pictures, query_existing_pictures};
 use crate::picture::{is_image, PictureData};
 
 #[derive(Clone, Debug)]
@@ -47,23 +48,75 @@ impl Default for ImportStructure {
     }
 }
 
+pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
+    WalkDir::new(directory)
+        // This ensures the filenames are in order
+        .sort_by_file_name()
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(is_image)
+        .map(|p| p.into_path().try_into().expect("Invalid UTF-8 path."))
+        .group_by(|p: &Utf8PathBuf| p.with_extension(""))
+        .into_iter()
+        .map(|(_key, group)| {
+            group.fold(None, |data: Option<PictureData>, path| {
+                match (data, path.extension()) {
+                    // When we haven't created the image we don't care what the filetype is
+                    (None, _) => Some(PictureData::from(path)),
+                    // We have created the PictureData from the RAW file so need to re-generate
+                    (Some(p), Some("jpg" | "JPG")) => {
+                        let mut output = PictureData::from(path);
+                        output.raw_extension = Some(
+                            p.filepath
+                                .extension()
+                                .expect("There must be a file extension set.")
+                                .to_owned(),
+                        );
+                        Some(output)
+                    }
+                    (Some(mut p), Some(e)) => {
+                        p.raw_extension = Some(e.to_owned());
+                        Some(p)
+                    }
+                    (Some(_), None) => unreachable!(),
+                }
+            })
+        })
+        .filter_map(std::convert::identity)
+        .map(|mut p: PictureData| {
+            p.update_from_exif().expect("File not found");
+            p
+        })
+        .collect()
+}
+
 // Copy the files from an exisiting location creating a new folder
 // structure.
 pub fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
-    // Load all pictures
+    // Load all existing pictures from the database. We want to do the checks within rust, rather than
+    // potentially having large numbers of database queries.
     let (tx, mut rx) = oneshot::channel();
     runtime.block_on(async move {
-        let results = query_directory_pictures(db, String::from("%/"))
-            .await
-            .unwrap();
-        tx.send(results).unwrap()
+        let results = query_existing_pictures(db, String::from("")).await.unwrap();
+        tx.send(
+            results
+                .into_iter()
+                .map(PictureData::from)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
     });
 
-    let pictures: Vec<PictureData> = rx.try_recv().unwrap();
+    // The list of all the pictures that currently exist within the database.
+    let pictures_existing: Vec<PictureData> = rx.try_recv().unwrap();
 
+    // To make the lookup process simpler, we first want to convert to a hashmap to make the
+    // act of looking up whether a picture already exists withih the database a quick proces.
+    // Currently this is only using the filename, that is the name given to the file by the camera
+    // as the lookup key, however, this lookup process will be improved over time.
+    // TODO: Use hashes to check for uniqueness within the database.
     let mut hash_existing: HashMap<String, Vec<PictureData>> = HashMap::new();
-
-    for picture in pictures.into_iter() {
+    for picture in pictures_existing.into_iter() {
         if let Some(f) = hash_existing.get_mut(&picture.filename()) {
             f.push(picture);
         } else {
@@ -71,18 +124,9 @@ pub fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Resul
         }
     }
 
-    // Quick method
-
-    let mut new_images: Vec<_> = WalkDir::new(directory)
+    // Determine whether the new images we are importing already exist within the database.
+    let new_images: Vec<_> = map_directory_images(directory)
         .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(is_image)
-        .map(|p: DirEntry| p.into_path().try_into().expect("Invalid UTF-8 path."))
-        .map(Utf8PathBuf::into)
-        .map(|mut p: PictureData| {
-            p.update_from_exif().unwrap();
-            p
-        })
         // TODO: Improve this filter beyond being very basic
         .filter(|p| !hash_existing.contains_key(&p.filename()))
         .collect();
@@ -100,9 +144,33 @@ pub fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Resul
         tracing::debug!("Importing {} into {}", image.filepath, &new_path);
         dbg!(&parent);
 
-        // Copy to new location
-        std::fs::create_dir_all(parent.unwrap())?;
-        std::fs::copy(&image.filepath, &new_path).expect("Unable to copy file");
+        // Where the new path is the same as the old one we are actually adding the
+        // file rather than importing, so we can skip all the import steps.
+        if image.filepath != new_path {
+            // Copy to new location
+
+            // Firstly we have to be sure that the directory already exists we are
+            // going to be copying to. This creates the entire directory structure
+            // where it doesn't already exist.
+            std::fs::create_dir_all(parent.unwrap())?;
+
+            // Where there is a file that already exists within the new locaton,
+            // we don't want to overwrite it, which does result in the contents
+            // of the file being removed.
+            if new_path.try_exists().expect("Error checking path exists") {
+                tracing::warn!("File {} already exsits, not copying", &new_path);
+            } else {
+                std::fs::copy(&image.filepath, &new_path).expect("Unable to copy file");
+                // Also copy across the raw file
+                if let Some(ref ext) = image.raw_extension {
+                    std::fs::copy(
+                        &image.filepath.with_extension(ext),
+                        &new_path.with_extension(ext),
+                    )
+                    .expect("Unable to copy file");
+                }
+            }
+        }
 
         image.filepath = new_path;
 

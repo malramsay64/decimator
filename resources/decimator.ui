@@ -1,5 +1,25 @@
 <?xml version='1.0' encoding='UTF-8' ?>
 <interface>
+  <menu id="main-menu">
+    <submenu>
+      <attribute name="label" translatable="yes">_Filter</attribute>
+      <item>
+        <attribute name="label" translatable="yes">_All</attribute>
+        <attribute name="action">win.filter</attribute>
+        <attribute name="target">All</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Not _Ignored</attribute>
+        <attribute name="action">win.filter</attribute>
+        <attribute name="target">Not Ignored</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Picked</attribute>
+        <attribute name="action">win.filter</attribute>
+        <attribute name="target">Picked</attribute>
+      </item>
+    </submenu>
+  </menu>  
   <template class="DecimatorWindow" parent="AdwApplicationWindow">
     <property name="title">Decimator</property>
     <property name="width-request">960</property>
@@ -116,6 +136,7 @@
                         <child type="end">
                           <object class="GtkMenuButton">
                             <property name="icon-name">open-menu-symbolic</property>
+                            <property name="menu-model">main-menu</property>
                             <property
                               name="tooltip-text"
                               translatable="yes"

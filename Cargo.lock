@@ -235,6 +235,7 @@ dependencies = [
  "camino",
  "glib-build-tools",
  "gtk4",
+ "itertools",
  "kamadak-exif",
  "libadwaita",
  "log",

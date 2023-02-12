@@ -13,12 +13,22 @@
       </object>
     </child>
     <child>
-      <object class="GtkLabel" id="thumbnail_label">
-        <property name="ellipsize">start</property>
-        <property name="width-request">240</property>
-        <property name="margin-start">10</property>
-        <property name="margin-end">10</property>
-        <property name="lines">1</property>
+      <object class="GtkBox">
+        <property name="orientation">horizontal</property>
+        <child>
+          <object class="GtkLabel" id="selection">
+            <property name="margin-start">10</property>
+            <property name="margin-end">10</property>
+            <property name="lines">1</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="rating">
+            <property name="margin-start">10</property>
+            <property name="margin-end">10</property>
+            <property name="lines">1</property>
+          </object>
+        </child>
       </object>
     </child>
   </template>

@@ -33,7 +33,7 @@ impl PictureObject {
             .id
     }
 
-    fn capture_time(&self) -> Option<DateTime> {
+    pub fn capture_time(&self) -> Option<DateTime> {
         self.imp()
             .data
             .as_ref()
@@ -42,7 +42,7 @@ impl PictureObject {
             .capture_time
     }
 
-    fn selection(&self) -> Selection {
+    pub fn selection(&self) -> Selection {
         self.imp()
             .data
             .as_ref()
@@ -50,7 +50,8 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .selection
     }
-    fn rating(&self) -> Rating {
+
+    pub fn rating(&self) -> Rating {
         self.imp()
             .data
             .as_ref()
@@ -58,7 +59,8 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .rating
     }
-    fn flag(&self) -> Flag {
+
+    pub fn flag(&self) -> Flag {
         self.imp()
             .data
             .as_ref()
@@ -66,7 +68,8 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .flag
     }
-    fn hidden(&self) -> Option<bool> {
+
+    pub fn hidden(&self) -> Option<bool> {
         self.imp()
             .data
             .as_ref()
@@ -92,6 +95,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .selection = Selection::Pick
     }
+
     pub fn ordinary(&self) {
         self.imp()
             .data
@@ -100,6 +104,7 @@ impl PictureObject {
             .expect("Mutex lock is poisoned")
             .selection = Selection::Ordinary
     }
+
     pub fn ignore(&self) {
         self.imp()
             .data
@@ -132,6 +137,7 @@ impl From<PictureData> for PictureObject {
             .property("id", pic.id.to_string())
             .property("path", pic.path())
             .property("selection", pic.selection.to_string())
+            .property("rating", pic.selection.to_string())
             .property("capture-time", pic.capture_time.map(|c| c.to_string()))
             .property::<Option<Texture>>("thumbnail", None)
             .build()
@@ -142,18 +148,18 @@ mod imp {
 
     use std::sync::{Arc, Mutex};
 
+    use adw::prelude::*;
+    use adw::subclass::prelude::*;
     use camino::Utf8PathBuf;
     use gdk::Texture;
     use glib::{ParamSpec, ParamSpecObject, ParamSpecString, Value};
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
     use gtk::{gdk, glib};
     use once_cell::sync::Lazy;
     use uuid::Uuid;
 
     use crate::picture::{DateTime, Flag, PictureData, Rating, Selection};
 
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     pub struct PictureObject {
         pub data: Arc<Mutex<PictureData>>,
     }
@@ -239,6 +245,8 @@ mod imp {
             PROPERTIES.as_ref()
         }
 
+        // To properly handle the automatic updating of values, this set_property function
+        // needs to be used.
         fn set_property(&self, _id: usize, value: &Value, pspec: &ParamSpec) {
             match pspec.name() {
                 "path" => {
@@ -260,6 +268,10 @@ mod imp {
                 "selection" => {
                     let input_value: Selection = value.get().expect("Needs a `Selection`.");
                     self.data.lock().expect("Mutex is poisoned.").selection = input_value;
+                }
+                "rating" => {
+                    let input_value: Rating = value.get().expect("Needs a `Rating`.");
+                    self.data.lock().expect("Mutex is poisoned.").rating = input_value;
                 }
                 "thumbnail" => {
                     let input_value: Option<Texture> = value.get().expect("Needs a texture.");
