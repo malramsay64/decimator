@@ -6,8 +6,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-gtk = {package="gtk4", version="*", features = ['v4_8']}
-adw = { version = "0.2.1", package = "libadwaita", features = ["gtk_v4_6"] }
+gtk = {package="gtk4", version="*", features = ['v4_8', 'xml_validation', 'blueprint']}
+adw = { version = "~0.3.0", package = "libadwaita", features = ["gtk_v4_6"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-bunyan-formatter = "0.3.4"
@@ -28,6 +28,4 @@ kamadak-exif = "0.5.5"
 itertools = "0.10.5"
 
 [build-dependencies]
-glib-build-tools = "0.16.3"
-
-
+glib-build-tools = "0.17"

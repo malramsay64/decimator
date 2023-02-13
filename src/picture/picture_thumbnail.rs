@@ -9,8 +9,8 @@ use super::{PictureData, PictureObject};
 
 glib::wrapper! {
     pub struct PictureThumbnail(ObjectSubclass<imp::PictureThumbnail>)
-    @extends gtk::Box, gtk::Widget,
-    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
+    @extends gtk::Widget,
+    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl PictureThumbnail {
@@ -87,8 +87,27 @@ mod imp {
     use gtk::subclass::prelude::*;
     use gtk::{glib, CompositeTemplate, Label, Picture};
 
-    #[derive(Default, CompositeTemplate)]
-    #[template(resource = "/resources/picture_thumbnail.ui")]
+    #[derive(Debug, Default, CompositeTemplate)]
+    #[template(string = "
+        template PictureThumbnail : Box {
+            orientation: vertical;
+            margin-top: 5;
+            margin-bottom: 5;
+            margin-start: 5;
+            margin-end: 5;
+            Picture thumbnail_picture {
+                width-request: 240;
+                height-request: 240;
+            }
+            Box {
+                orientation: horizontal;
+                margin-start: 10;
+                margin-end: 10;
+                Label selection {}
+                Label rating {}
+            }
+        }
+    ")]
     pub struct PictureThumbnail {
         #[template_child]
         pub thumbnail_picture: TemplateChild<Picture>,
@@ -103,7 +122,7 @@ mod imp {
     impl ObjectSubclass for PictureThumbnail {
         const NAME: &'static str = "PictureThumbnail";
         type Type = super::PictureThumbnail;
-        type ParentType = gtk::Box;
+        type ParentType = gtk::Widget;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -119,7 +138,4 @@ mod imp {
 
     // Trait shared by all widgets
     impl WidgetImpl for PictureThumbnail {}
-
-    // Trait shared by all boxes
-    impl BoxImpl for PictureThumbnail {}
 }

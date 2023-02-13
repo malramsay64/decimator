@@ -139,7 +139,7 @@ impl From<PictureData> for PictureObject {
             .property("selection", pic.selection.to_string())
             .property("rating", pic.selection.to_string())
             .property("capture-time", pic.capture_time.map(|c| c.to_string()))
-            .property::<Option<Texture>>("thumbnail", None)
+            .property("thumbnail", None::<Texture>)
             .build()
     }
 }
@@ -239,7 +239,7 @@ mod imp {
                     ParamSpecString::builder("rating").build(),
                     ParamSpecString::builder("flag").build(),
                     ParamSpecString::builder("hidden").build(),
-                    ParamSpecObject::builder::<Option<Texture>>("thumbnail").build(),
+                    ParamSpecObject::builder::<Texture>("thumbnail").build(),
                 ]
             });
             PROPERTIES.as_ref()

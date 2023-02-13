@@ -1,8 +1,7 @@
 use adw::prelude::*;
 use adw::Application;
-use anyhow::Result;
 use gio::resources_register_include;
-use gtk::gio;
+use gtk::{gio, glib};
 use window::Window;
 
 mod data;
@@ -16,7 +15,7 @@ use telemetry::{get_subscriber, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
 
-fn main() -> Result<()> {
+fn main() -> glib::ExitCode {
     let subscriber = get_subscriber(APP_ID.into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
     resources_register_include!("decimator.gresource").expect("Failed to register resources.");
@@ -25,8 +24,7 @@ fn main() -> Result<()> {
     app.connect_startup(build_shortcuts);
     app.connect_activate(build_ui);
 
-    app.run();
-    Ok(())
+    app.run()
 }
 
 fn build_ui(app: &Application) {

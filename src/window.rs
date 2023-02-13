@@ -12,11 +12,10 @@ use gtk::{
     ListItem, PolicyType, ResponseType, ScrollType, ScrolledWindow, SignalListItemFactory,
     SingleSelection, StringObject, Widget,
 };
-use sqlx::{QueryBuilder, Sqlite, SqlitePool};
+use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tracing::Level;
-use uuid::Uuid;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::data::{
@@ -66,7 +65,7 @@ impl Window {
 
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
-        let filter_model = FilterListModel::new(Some(&self.thumbnails()), self.filter().as_ref());
+        let filter_model = FilterListModel::new(Some(self.thumbnails()), self.filter());
 
         // TODO: Bind model to the thumbnails
         let selection_model = SingleSelection::builder().model(&filter_model).build();

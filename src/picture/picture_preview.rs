@@ -2,16 +2,15 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gdk::Texture;
 use glib::{BindingFlags, Object};
-use gtk::builders::ToggleButtonBuilder;
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::{gdk, glib, ToggleButton};
+use gtk::{gdk, glib};
 
-use super::{PictureObject, Selection};
+use super::PictureObject;
 
 glib::wrapper! {
     pub struct PicturePreview(ObjectSubclass<imp::PicturePreview>)
-    @extends gtk::Box, gtk::Widget,
-    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
+    @extends gtk::Widget,
+    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl PicturePreview {
@@ -79,13 +78,26 @@ impl Default for PicturePreview {
 mod imp {
     use std::cell::RefCell;
 
+    use adw::prelude::*;
+    use adw::subclass::prelude::*;
     use glib::Binding;
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
     use gtk::{glib, Box, CompositeTemplate, Label, Picture};
 
-    #[derive(Default, CompositeTemplate)]
-    #[template(resource = "/resources/picture_preview.ui")]
+    #[derive(Debug, Default, CompositeTemplate)]
+    #[template(string = "
+        template PicturePreview : Box {
+            orientation: vertical;
+            Picture preview {
+                hexpand: true;
+                vexpand: true;
+            }
+            Box {
+                orientation: horizontal;
+                Label selection {}
+                Label rating {}
+            }
+        }
+    ")]
     pub struct PicturePreview {
         #[template_child]
         pub preview: TemplateChild<Picture>,
@@ -100,7 +112,7 @@ mod imp {
     impl ObjectSubclass for PicturePreview {
         const NAME: &'static str = "PicturePreview";
         type Type = super::PicturePreview;
-        type ParentType = gtk::Box;
+        type ParentType = gtk::Widget;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -124,7 +136,4 @@ mod imp {
 
     // Trait shared by all widgets
     impl WidgetImpl for PicturePreview {}
-
-    // Trait shared by all boxes
-    impl BoxImpl for PicturePreview {}
 }
