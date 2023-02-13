@@ -92,23 +92,16 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-pub fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
+pub async fn import(db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
-    let (tx, mut rx) = oneshot::channel();
-    runtime.block_on(async move {
-        let results = query_existing_pictures(db, String::from("")).await.unwrap();
-        tx.send(
-            results
-                .into_iter()
-                .map(PictureData::from)
-                .collect::<Vec<_>>(),
-        )
-        .unwrap()
-    });
-
     // The list of all the pictures that currently exist within the database.
-    let pictures_existing: Vec<PictureData> = rx.try_recv().unwrap();
+    let pictures_existing = query_existing_pictures(db, String::from(""))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(PictureData::from)
+        .collect::<Vec<_>>();
 
     // To make the lookup process simpler, we first want to convert to a hashmap to make the
     // act of looking up whether a picture already exists withih the database a quick proces.
@@ -175,7 +168,7 @@ pub fn import(runtime: &Runtime, db: &SqlitePool, directory: &Utf8Path) -> Resul
         image.filepath = new_path;
 
         // Create entry in the database / import
-        runtime.block_on(async move { add_new_images(db, vec![image]).await.unwrap() });
+        add_new_images(db, vec![image]).await.unwrap();
     }
     // Check the filename
     // Check the capture time

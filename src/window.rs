@@ -1,30 +1,100 @@
+use std::cmp::Ord;
 use std::collections::HashSet;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
-use gio::{ListStore, Settings, SimpleAction};
+use gio::{ListStore, SimpleAction};
 use glib::{clone, FromVariant, Object};
 use gtk::pango::EllipsizeMode;
 use gtk::{
-    gio, glib, Align, CustomFilter, FileChooserAction, FileChooserDialog, FilterListModel, Label,
-    ListItem, PolicyType, ResponseType, ScrollType, ScrolledWindow, SignalListItemFactory,
-    SingleSelection, StringObject, Widget,
+    gio, glib, Align, CustomFilter, CustomSorter, FileChooserAction, FileChooserDialog,
+    FilterListModel, Label, ListItem, PolicyType, ResponseType, ScrollType, ScrolledWindow,
+    SignalListItemFactory, SingleSelection, SortListModel, StringObject, Widget,
 };
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tracing::Level;
-use walkdir::{DirEntry, WalkDir};
 
 use crate::data::{
     add_new_images, query_directory_pictures, query_existing_pictures, query_unique_directories,
     update_selection_state,
 };
 use crate::import::{import, map_directory_images};
-use crate::picture::{is_image, PictureData, PictureObject, PictureThumbnail, Selection};
-use crate::APP_ID;
+use crate::picture::{PictureData, PictureObject, PictureThumbnail, Selection};
+
+#[derive(Default, Debug, Clone)]
+pub enum FilterState {
+    #[default]
+    Include,
+    Exclude,
+}
+
+// Where we have a True value this
+#[derive(Debug, Default, Clone)]
+pub struct FilterSettings {
+    selection_ignore: FilterState,
+    selection_ordinary: FilterState,
+    selection_pick: FilterState,
+}
+
+impl FilterSettings {
+    fn filter(&self, picture: &PictureObject) -> bool {
+        match picture.selection() {
+            Selection::Ignore => match self.selection_ignore {
+                FilterState::Include => true,
+                FilterState::Exclude => false,
+            },
+            Selection::Ordinary => match self.selection_ordinary {
+                FilterState::Include => true,
+                FilterState::Exclude => false,
+            },
+            Selection::Pick => match self.selection_pick {
+                FilterState::Include => true,
+                FilterState::Exclude => false,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum SortField {
+    #[default]
+    CaptureDate,
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum SortDirection {
+    #[default]
+    Ascending,
+    Descending,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct SortOrder {
+    sort_field: SortField,
+    sort_direction: SortDirection,
+}
+
+impl SortOrder {
+    fn sort(&self, left: &PictureObject, right: &PictureObject) -> std::cmp::Ordering {
+        let cmp = match self.sort_field {
+            SortField::CaptureDate => match (left.capture_time(), right.capture_time()) {
+                (Some(l), Some(r)) => l.cmp(&r),
+                (None, Some(_)) => std::cmp::Ordering::Less,
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            },
+        };
+
+        match self.sort_direction {
+            SortDirection::Ascending => cmp,
+            SortDirection::Descending => cmp.reverse(),
+        }
+    }
+}
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -65,10 +135,17 @@ impl Window {
 
     #[tracing::instrument(name = "Initialising selection model.", skip(self))]
     fn init_selection_model(&self) {
-        let filter_model = FilterListModel::new(Some(self.thumbnails()), self.filter());
+        let filter_model = FilterListModel::new(Some(self.thumbnails()), Some(self.filter()));
+        self.filter().connect_changed(
+            clone!(@weak self as window, @weak filter_model => move |_, _| {
+                filter_model.set_filter(Some(&window.filter()));
+            }),
+        );
+
+        let sort_model = SortListModel::new(Some(filter_model), Some(self.sorter()));
 
         // TODO: Bind model to the thumbnails
-        let selection_model = SingleSelection::builder().model(&filter_model).build();
+        let selection_model = SingleSelection::builder().model(&sort_model).build();
 
         // Provide the updating of a picture in a single location.
         // TODO: Find a way to link these two properties together
@@ -81,21 +158,17 @@ impl Window {
         }
 
         selection_model.connect_selected_item_notify(clone!(@weak self as window => move |item| {
-
             let picture = item
                 .selected_item()
                 .map(|i| i.downcast::<PictureObject>().expect("Require a `PictureObject`"));
-
             update_picture(&window, picture);
-
         }));
 
         self.imp().thumbnail_list.set_model(Some(&selection_model));
 
-        self.settings().connect_changed(
-            Some("filter"),
-            clone!(@weak self as window, @weak filter_model => move |_, _| {
-                filter_model.set_filter(window.filter().as_ref());
+        self.sorter().connect_changed(
+            clone!(@weak self as window, @weak sort_model => move |_, _| {
+                sort_model.set_sorter(Some(&window.sorter()));
             }),
         );
     }
@@ -184,7 +257,8 @@ impl Window {
 
     #[tracing::instrument(name = "Importing pictures from directory", skip(self))]
     fn import_new_files(&self, directory: &Utf8Path) {
-        import(self.runtime(), self.database(), directory).unwrap()
+        self.runtime()
+            .block_on(async move { import(self.database(), directory).await.unwrap() })
     }
 
     #[tracing::instrument(name = "Selecting new directory dialog.", skip(self))]
@@ -236,41 +310,44 @@ impl Window {
         self.imp().preview_image.borrow().clone().unwrap()
     }
 
-    fn filter(&self) -> Option<CustomFilter> {
+    fn filter_settings(&self) -> FilterSettings {
+        self.imp().filter_state.borrow().clone()
+    }
+
+    fn filter(&self) -> CustomFilter {
         // Define Filters
-
-        let filter_picked = CustomFilter::new(|obj| {
-            let task_obj = obj
+        let filter_settings = self.filter_settings();
+        CustomFilter::new(move |obj| {
+            let picture_object = obj
                 .downcast_ref::<PictureObject>()
                 .expect("The object needs to be of type `PictureObject`");
 
-            task_obj.selection() == Selection::Pick
-        });
+            filter_settings.filter(&picture_object)
+        })
+    }
 
-        let filter_not_ignored = CustomFilter::new(|obj| {
-            let task_obj = obj
+    fn sort_settings(&self) -> SortOrder {
+        self.imp().sort_state.borrow().clone()
+    }
+
+    fn sorter(&self) -> CustomSorter {
+        let sort_settings = self.sort_settings();
+        // Define Filters
+        CustomSorter::new(move |left, right| {
+            let left = left
                 .downcast_ref::<PictureObject>()
                 .expect("The object needs to be of type `PictureObject`");
 
-            task_obj.selection() != Selection::Ignore
-        });
+            let right = right
+                .downcast_ref::<PictureObject>()
+                .expect("The object needs to be of type `PictureObject`");
 
-        // Get filter state from settings
-        let filter_state: String = self.settings().get("filter");
-
-        match filter_state.as_str() {
-            "All" => None,
-            "Picked" => Some(filter_picked),
-            "Not Ignored" => Some(filter_not_ignored),
-            _ => unreachable!(),
-        }
+            sort_settings.sort(left, right).into()
+        })
     }
 
     #[tracing::instrument(name = "Setting up Actions.", skip(self))]
     fn setup_actions(&self) {
-        let action_filter = self.settings().create_action("filter");
-        self.add_action(&action_filter);
-
         // Create action to create new collection and add to action group "win"
         let action_new_directory = SimpleAction::new("new-directory", None);
         action_new_directory.connect_activate(clone!(@weak self as window => move |_, _| {
@@ -453,21 +530,6 @@ impl Window {
             );
         }
     }
-
-    fn init_settings(&self) {
-        let settings = Settings::new(APP_ID);
-        self.imp()
-            .settings
-            .set(settings)
-            .expect("`settings` should not be set before calling `setup_settings`.");
-    }
-
-    fn settings(&self) -> &Settings {
-        self.imp()
-            .settings
-            .get()
-            .expect("`settings` should be set in `setup_settings` before accessing them.")
-    }
 }
 
 mod imp {
@@ -477,7 +539,7 @@ mod imp {
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
-    use gio::{ListStore, Settings};
+    use gio::ListStore;
     use glib::subclass::InitializingObject;
     use gtk::{gio, glib, CompositeTemplate, ListView, ScrolledWindow, Stack};
     use once_cell::sync::OnceCell;
@@ -485,6 +547,7 @@ mod imp {
     use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
     use tokio::sync::oneshot;
 
+    use super::{FilterSettings, SortOrder};
     use crate::picture::{PictureData, PictureObject, PicturePreview};
 
     #[derive(CompositeTemplate)]
@@ -493,12 +556,16 @@ mod imp {
         // Provides the capability to run asynchronous tasks. We are using a
         // separate tokio runtime which does seem to make things simpler,
         // however, TODO use the internal glib runtime.
+        // The sqlx integration requires a Tokio runtime to work, so this is
+        // required for the database access.
         pub runtime: OnceCell<Runtime>,
         // Provide the connection pool for the database. This allows multiple
         // threads access.
         pub database: OnceCell<SqlitePool>,
 
-        pub settings: OnceCell<Settings>,
+        pub filter_state: RefCell<FilterSettings>,
+
+        pub sort_state: RefCell<SortOrder>,
 
         #[template_child]
         pub stack: TemplateChild<Stack>,
@@ -543,7 +610,8 @@ mod imp {
 
             Self {
                 thumbnail_scroll: Default::default(),
-                settings: Default::default(),
+                filter_state: Default::default(),
+                sort_state: Default::default(),
                 preview: Default::default(),
                 preview_image: Default::default(),
                 thumbnail_list: Default::default(),
@@ -581,7 +649,6 @@ mod imp {
             // Setup
             let obj = self.obj();
 
-            obj.init_settings();
             obj.init_scroll();
             obj.init_factory();
             obj.update_directory_list();

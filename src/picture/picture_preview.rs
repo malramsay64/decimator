@@ -112,7 +112,7 @@ mod imp {
     impl ObjectSubclass for PicturePreview {
         const NAME: &'static str = "PicturePreview";
         type Type = super::PicturePreview;
-        type ParentType = gtk::Widget;
+        type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -136,4 +136,6 @@ mod imp {
 
     // Trait shared by all widgets
     impl WidgetImpl for PicturePreview {}
+
+    impl BoxImpl for PicturePreview {}
 }

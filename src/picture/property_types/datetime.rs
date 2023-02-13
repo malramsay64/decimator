@@ -17,6 +17,12 @@ use time::PrimitiveDateTime;
 const DISPLAY_FORMAT: &[FormatItem<'_>] =
     format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
 
+// Define a datetime format to be used internally within the application
+//
+// This allows for wrapping all the required traits, ensuring the easy
+// conversion between all the nessecary types and representations. The main
+// one of concern here is to and from strings for display along with the
+// representation within the database.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct DateTime {
     datetime: PrimitiveDateTime,
@@ -43,6 +49,26 @@ impl DateTime {
 impl From<PrimitiveDateTime> for DateTime {
     fn from(value: PrimitiveDateTime) -> Self {
         Self { datetime: value }
+    }
+}
+
+impl PartialOrd for DateTime {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.datetime.partial_cmp(&other.datetime)
+    }
+}
+
+impl Ord for DateTime {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.datetime.cmp(&other.datetime)
+    }
+}
+
+impl Eq for DateTime {}
+
+impl PartialEq for DateTime {
+    fn eq(&self, other: &Self) -> bool {
+        self.datetime.eq(&other.datetime)
     }
 }
 

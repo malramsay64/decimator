@@ -122,7 +122,7 @@ mod imp {
     impl ObjectSubclass for PictureThumbnail {
         const NAME: &'static str = "PictureThumbnail";
         type Type = super::PictureThumbnail;
-        type ParentType = gtk::Widget;
+        type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -138,4 +138,6 @@ mod imp {
 
     // Trait shared by all widgets
     impl WidgetImpl for PictureThumbnail {}
+
+    impl BoxImpl for PictureThumbnail {}
 }
