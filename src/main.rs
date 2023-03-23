@@ -7,6 +7,7 @@ use window::Window;
 mod data;
 mod directory;
 mod import;
+mod menu;
 mod picture;
 mod telemetry;
 mod window;

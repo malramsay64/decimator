@@ -1,24 +1,10 @@
 <?xml version='1.0' encoding='UTF-8' ?>
 <interface>
   <menu id="main-menu">
-    <submenu>
-      <attribute name="label" translatable="yes">_Filter</attribute>
-      <item>
-        <attribute name="label" translatable="yes">_All</attribute>
-        <attribute name="action">win.filter</attribute>
-        <attribute name="target">All</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">Not _Ignored</attribute>
-        <attribute name="action">win.filter</attribute>
-        <attribute name="target">Not Ignored</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">_Picked</attribute>
-        <attribute name="action">win.filter</attribute>
-        <attribute name="target">Picked</attribute>
-      </item>
-    </submenu>
+    <item>
+      <attribute name="label" translatable="yes">Toggle _Ignored</attribute>
+      <attribute name="action">win.toggle_ignored</attribute>
+    </item>
   </menu>  
   <template class="DecimatorWindow" parent="AdwApplicationWindow">
     <property name="title">Decimator</property>

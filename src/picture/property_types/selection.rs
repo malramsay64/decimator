@@ -99,7 +99,6 @@ impl FromVariant for Selection {
     fn from_variant(variant: &Variant) -> Option<Self> {
         variant
             .str()
-            .map(|i: &str| Selection::from_str(i).ok())
-            .flatten()
+            .and_then(|i: &str| Selection::from_str(i).ok())
     }
 }

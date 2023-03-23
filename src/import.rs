@@ -82,7 +82,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
                 }
             })
         })
-        .filter_map(std::convert::identity)
+        .flatten()
         .map(|mut p: PictureData| {
             p.update_from_exif().expect("File not found");
             p

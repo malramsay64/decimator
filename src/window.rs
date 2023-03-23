@@ -1,12 +1,14 @@
+use std::cell::RefMut;
 use std::cmp::Ord;
 use std::collections::HashSet;
+use std::sync::{LockResult, MutexGuard};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use adw::Application;
 use camino::{Utf8Path, Utf8PathBuf};
 use gio::{ListStore, SimpleAction};
-use glib::{clone, FromVariant, Object};
+use glib::{clone, FromVariant, Object, StaticVariantType};
 use gtk::pango::EllipsizeMode;
 use gtk::{
     gio, glib, Align, CustomFilter, CustomSorter, FileChooserAction, FileChooserDialog,
@@ -25,11 +27,20 @@ use crate::data::{
 use crate::import::{import, map_directory_images};
 use crate::picture::{PictureData, PictureObject, PictureThumbnail, Selection};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, glib::Variant)]
 pub enum FilterState {
     #[default]
     Include,
     Exclude,
+}
+
+impl FilterState {
+    fn toggle(&mut self) {
+        match self {
+            FilterState::Include => std::mem::swap(self, &mut FilterState::Exclude),
+            FilterState::Exclude => std::mem::swap(self, &mut FilterState::Include),
+        }
+    }
 }
 
 // Where we have a True value this
@@ -41,6 +52,18 @@ pub struct FilterSettings {
 }
 
 impl FilterSettings {
+    fn toggle_ignore(&mut self) {
+        self.selection_ignore.toggle()
+    }
+
+    fn toggle_ordinary(&mut self) {
+        self.selection_ordinary.toggle()
+    }
+
+    fn toggle_pick(&mut self) {
+        self.selection_pick.toggle()
+    }
+
     fn filter(&self, picture: &PictureObject) -> bool {
         match picture.selection() {
             Selection::Ignore => match self.selection_ignore {
@@ -310,20 +333,35 @@ impl Window {
         self.imp().preview_image.borrow().clone().unwrap()
     }
 
-    fn filter_settings(&self) -> FilterSettings {
-        self.imp().filter_state.borrow().clone()
+    fn filter_settings(&self) -> LockResult<MutexGuard<'_, FilterSettings>> {
+        self.imp().filter_state.lock()
+    }
+
+    fn filter_toggle_ignore(&self) {
+        self.filter_settings().unwrap().toggle_ignore()
+    }
+
+    fn filter_toggle_picked(&self) {
+        self.filter_settings().unwrap().toggle_pick()
+    }
+
+    fn filter_toggle_ordinary(&self) {
+        self.filter_settings().unwrap().toggle_ordinary()
+    }
+
+    fn filter_pictures(&self, picture: &PictureObject) -> bool {
+        self.filter_settings().unwrap().filter(picture)
     }
 
     fn filter(&self) -> CustomFilter {
         // Define Filters
-        let filter_settings = self.filter_settings();
-        CustomFilter::new(move |obj| {
+        CustomFilter::new(clone!(@strong self as window => move |obj| {
             let picture_object = obj
                 .downcast_ref::<PictureObject>()
                 .expect("The object needs to be of type `PictureObject`");
 
-            filter_settings.filter(&picture_object)
-        })
+            window.filter_pictures(picture_object)
+        }))
     }
 
     fn sort_settings(&self) -> SortOrder {
@@ -348,6 +386,18 @@ impl Window {
 
     #[tracing::instrument(name = "Setting up Actions.", skip(self))]
     fn setup_actions(&self) {
+        let settings = self.filter_settings().unwrap();
+        let action_toggle_ignored = SimpleAction::new_stateful(
+            "toggle-ignored",
+            Some(&FilterState::static_variant_type()),
+            settings.selection_ignore.to_variant(),
+        );
+        action_toggle_ignored.connect_activate(clone!(@weak settings => move |action, parameter| {
+
+                window.filter_toggle_ignore();
+        }));
+        self.add_action(&action_toggle_ignored);
+
         // Create action to create new collection and add to action group "win"
         let action_new_directory = SimpleAction::new("new-directory", None);
         action_new_directory.connect_activate(clone!(@weak self as window => move |_, _| {
@@ -536,6 +586,7 @@ mod imp {
 
     use std::cell::RefCell;
     use std::fs::File;
+    use std::sync::{Arc, Mutex};
 
     use adw::prelude::*;
     use adw::subclass::prelude::*;
@@ -563,7 +614,7 @@ mod imp {
         // threads access.
         pub database: OnceCell<SqlitePool>,
 
-        pub filter_state: RefCell<FilterSettings>,
+        pub filter_state: Mutex<FilterSettings>,
 
         pub sort_state: RefCell<SortOrder>,
 
