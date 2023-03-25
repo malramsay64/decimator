@@ -1,143 +1,129 @@
-use adw::prelude::*;
-use adw::subclass::prelude::*;
-use gdk::Texture;
-use glib::{BindingFlags, Object};
-use gtk::{gdk, glib};
-use rayon::spawn_fifo;
+use gtk::gdk::Texture;
+use gtk::prelude::*;
+use relm4::factory::positions::GridPosition;
+use relm4::factory::{AsyncFactoryComponent, AsyncPosition};
+use relm4::loading_widgets::LoadingWidgets;
+use relm4::prelude::DynamicIndex;
+use relm4::{gtk, view, AsyncFactorySender};
 
-use super::{PictureData, PictureObject};
+use super::PictureData;
+use crate::AppMsg;
 
-glib::wrapper! {
-    pub struct PictureThumbnail(ObjectSubclass<imp::PictureThumbnail>)
-    @extends gtk::Widget,
-    @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+#[derive(Debug)]
+pub struct PictureThumbnail {
+    picture: PictureData,
+    thumbnail: Option<Texture>,
 }
 
-impl PictureThumbnail {
-    pub fn new() -> Self {
-        Object::builder().build()
-    }
+#[derive(Debug)]
+pub enum PictureThumbnailMsg {
+    SetThumbnail(Option<Texture>),
+}
 
-    #[tracing::instrument(name = "Binding thumbnail to widget.", level = "trace")]
-    pub fn bind(&self, picture_object: &PictureObject) {
-        let thumbnail_picture = self.imp().thumbnail_picture.get();
-        let selection = self.imp().selection.get();
-        let rating = self.imp().rating.get();
-        let mut bindings = self.imp().bindings.borrow_mut();
-
-        let selection_binding = picture_object
-            .bind_property("selection", &selection, "label")
-            .flags(BindingFlags::SYNC_CREATE)
-            .build();
-        bindings.push(selection_binding);
-
-        let rating_binding = picture_object
-            .bind_property("rating", &rating, "label")
-            .flags(BindingFlags::SYNC_CREATE)
-            .build();
-        bindings.push(rating_binding);
-
-        let buffer_binding = picture_object
-            .bind_property("thumbnail", &thumbnail_picture, "paintable")
-            .flags(BindingFlags::SYNC_CREATE)
-            .build();
-        bindings.push(buffer_binding);
-
-        match picture_object.property::<Option<Texture>>("thumbnail") {
-            Some(_) => {}
-            None => {
-                let filepath: String = picture_object.property("path");
-                let local_picture = picture_object.clone();
-                let scale_factor = self.scale_factor();
-                let (scale_x, scale_y) = self.size_request();
-                let scale = (
-                    scale_factor * i32::max(scale_x, 240),
-                    scale_factor * i32::max(scale_y, 240),
-                );
-                spawn_fifo(move || {
-                    let thumbnail = PictureData::thumbnail(&filepath, scale);
-                    // By using set_property we also trigger the signal telling
-                    // GTK the thumbnail has been updated and the Picture
-                    // should subsequently be updated.
-                    local_picture.set_property("thumbnail", thumbnail);
-                });
-            }
-        }
-    }
-
-    #[tracing::instrument(name = "Unbinding thumbnail from widget.", level = "trace")]
-    pub fn unbind(&self) {
-        for binding in self.imp().bindings.borrow_mut().drain(..) {
-            binding.unbind();
+impl AsyncPosition<GridPosition> for PictureThumbnail {
+    fn position(index: usize) -> GridPosition {
+        let x = index % 3;
+        let y = index / 3;
+        GridPosition {
+            column: x as i32,
+            row: y as i32,
+            width: 1,
+            height: 1,
         }
     }
 }
 
-impl Default for PictureThumbnail {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+#[relm4::factory(async, pub)]
+impl AsyncFactoryComponent for PictureThumbnail {
+    type Init = PictureData;
+    type Input = PictureThumbnailMsg;
+    type Output = PictureThumbnailMsg;
+    type CommandOutput = ();
+    type ParentInput = AppMsg;
+    type ParentWidget = gtk::Grid;
 
-mod imp {
-    use std::cell::RefCell;
+    view! {
+        root = gtk::Box {
+            set_orientation: gtk::Orientation::Vertical,
+            set_hexpand: true,
+            set_margin_top: 5,
+            set_margin_bottom: 5,
+            set_margin_start: 5,
+            set_margin_end: 5,
+            set_focusable: true,
+            // set_has_frame: true,
 
-    use glib::Binding;
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
-    use gtk::{glib, CompositeTemplate, Label, Picture};
+            #[name(thumbnail_picture)]
+            gtk::Picture {
+                // set_width_request: 240,
+                set_height_request: 240,
+                #[watch]
+                set_paintable: self.thumbnail.as_ref(),
+            },
 
-    #[derive(Debug, Default, CompositeTemplate)]
-    #[template(string = "
-        template PictureThumbnail : Box {
-            orientation: vertical;
-            margin-top: 5;
-            margin-bottom: 5;
-            margin-start: 5;
-            margin-end: 5;
-            Picture thumbnail_picture {
-                width-request: 240;
-                height-request: 240;
+            gtk::Box {
+                set_orientation: gtk::Orientation::Horizontal,
+
+                #[name(rating)]
+                gtk::Label {
+                    #[watch]
+                    set_label: &self.picture.rating.to_string(),
+                    set_hexpand: true,
+                    set_margin_start: 10,
+                    set_halign: gtk::Align::Start,
+                },
+                #[name(flag)]
+                gtk::Label {
+                    #[watch]
+                    set_label: &self.picture.flag.to_string(),
+                    set_hexpand: true,
+                    set_margin_end: 10,
+                    set_halign: gtk::Align::End,
+                }
             }
-            Box {
-                orientation: horizontal;
-                margin-start: 10;
-                margin-end: 10;
-                Label selection {}
-                Label rating {}
+        }
+    }
+
+    fn init_loading_widgets(root: &mut Self::Root) -> Option<LoadingWidgets> {
+        view! {
+            #[local_ref]
+            root {
+                set_orientation: gtk::Orientation::Vertical,
+
+                #[name(spinner)]
+                gtk::Spinner {
+                    start: (),
+                    set_hexpand: true,
+                    set_halign: gtk::Align::Center,
+                    set_valign: gtk::Align::Center,
+                    set_height_request: 240,
+                }
             }
         }
-    ")]
-    pub struct PictureThumbnail {
-        #[template_child]
-        pub thumbnail_picture: TemplateChild<Picture>,
-        #[template_child]
-        pub selection: TemplateChild<Label>,
-        #[template_child]
-        pub rating: TemplateChild<Label>,
-        pub bindings: RefCell<Vec<Binding>>,
+        Some(LoadingWidgets::new(root, spinner))
     }
 
-    #[glib::object_subclass]
-    impl ObjectSubclass for PictureThumbnail {
-        const NAME: &'static str = "PictureThumbnail";
-        type Type = super::PictureThumbnail;
-        type ParentType = gtk::Box;
+    async fn init_model(
+        picture: PictureData,
+        _index: &DynamicIndex,
+        sender: AsyncFactorySender<Self>,
+    ) -> Self {
+        let filepath = picture.filepath.clone();
+        let thumbnail =
+            relm4::spawn(async move { Some(PictureData::load_thumbnail(filepath, 240, 240)) })
+                .await
+                .unwrap();
+        Self { picture, thumbnail }
+    }
 
-        fn class_init(klass: &mut Self::Class) {
-            klass.bind_template();
-        }
-
-        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
-            obj.init_template();
+    async fn update(&mut self, msg: Self::Input, _sender: AsyncFactorySender<Self>) {
+        match msg {
+            PictureThumbnailMsg::SetThumbnail(thumbnail) => self.thumbnail = thumbnail,
         }
     }
 
-    // Trait shared by all GObjects
-    impl ObjectImpl for PictureThumbnail {}
-
-    // Trait shared by all widgets
-    impl WidgetImpl for PictureThumbnail {}
-
-    impl BoxImpl for PictureThumbnail {}
+    fn shutdown(&mut self, _widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
+        // self.handle.abort();
+        println!("Picture with path {} was destroyed", &self.picture.filepath);
+    }
 }

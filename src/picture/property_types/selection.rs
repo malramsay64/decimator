@@ -3,12 +3,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
-use glib::value::{FromValue, ValueType};
-use glib::{FromVariant, ToVariant, Value, Variant};
-use gtk::glib;
-use gtk::glib::value::GenericValueTypeChecker;
 use serde::{Deserialize, Serialize};
 
 // Collection of options for picking an image,
@@ -53,52 +48,5 @@ impl Display for Selection {
             Selection::Pick => "Pick",
         };
         write!(f, "{text}")
-    }
-}
-
-impl ToValue for Selection {
-    fn to_value(&self) -> glib::Value {
-        <str>::to_value(&self.to_string())
-    }
-
-    fn value_type(&self) -> glib::Type {
-        String::static_type()
-    }
-}
-
-impl ValueType for Selection {
-    type Type = String;
-}
-
-unsafe impl<'a> FromValue<'a> for Selection {
-    type Checker = GenericValueTypeChecker<Self>;
-    unsafe fn from_value(value: &'a Value) -> Self {
-        Selection::from_str(<&str>::from_value(value)).unwrap()
-    }
-}
-
-impl StaticType for Selection {
-    fn static_type() -> glib::Type {
-        String::static_type()
-    }
-}
-
-impl StaticVariantType for Selection {
-    fn static_variant_type() -> std::borrow::Cow<'static, glib::VariantTy> {
-        String::static_variant_type()
-    }
-}
-
-impl ToVariant for Selection {
-    fn to_variant(&self) -> Variant {
-        self.to_string().to_variant()
-    }
-}
-
-impl FromVariant for Selection {
-    fn from_variant(variant: &Variant) -> Option<Self> {
-        variant
-            .str()
-            .and_then(|i: &str| Selection::from_str(i).ok())
     }
 }

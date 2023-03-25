@@ -1,12 +1,12 @@
 mod picture_data;
-mod picture_object;
-mod picture_preview;
+// mod picture_object;
+// mod picture_preview;
 mod picture_thumbnail;
 mod property_types;
 
 pub use picture_data::*;
-pub use picture_object::*;
-pub use picture_preview::*;
+// pub use picture_object::*;
+// pub use picture_preview::*;
 pub use picture_thumbnail::*;
 pub use property_types::*;
 use walkdir::DirEntry;

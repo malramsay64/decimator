@@ -1,9 +1,7 @@
-use adw::subclass::prelude::*;
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use gdk::Texture;
-use gtk::gdk;
-use gtk::gdk_pixbuf::Pixbuf;
+use relm4::gtk::gdk::Texture;
+use relm4::gtk::gdk_pixbuf::Pixbuf;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
@@ -23,8 +21,6 @@ pub struct PictureData {
     pub rating: Rating,
     pub flag: Flag,
     pub hidden: Option<bool>,
-    #[serde(skip)]
-    pub thumbnail: Option<Texture>,
 }
 
 impl PictureData {
@@ -66,6 +62,18 @@ impl PictureData {
         };
 
         Ok(())
+    }
+
+    #[tracing::instrument(
+        name = "Loading thumbnail from file using ImageReader",
+        level = "trace"
+    )]
+    pub fn load_thumbnail(filepath: Utf8PathBuf, scale_x: i32, scale_y: i32) -> Texture {
+        let image = Pixbuf::from_file_at_scale(filepath, scale_x, scale_y, true)
+            .expect("Image not found.")
+            .apply_embedded_orientation()
+            .expect("Unable to apply orientation.");
+        Texture::for_pixbuf(&image)
     }
 }
 
@@ -117,7 +125,6 @@ impl FromRow<'_, SqliteRow> for PictureData {
                 .try_into()
                 .unwrap_or_default(),
             hidden: row.try_get("hidden")?,
-            thumbnail: None,
         })
     }
 }
@@ -133,21 +140,6 @@ impl std::fmt::Debug for PictureData {
             .field("rating", &self.rating)
             .field("flag", &self.flag)
             .field("hidden", &self.hidden)
-            .field("thumbnail", &self.thumbnail.is_some())
             .finish()
-    }
-}
-
-impl PictureData {
-    #[tracing::instrument(
-        name = "Loading thumbnail from file using ImageReader",
-        level = "trace"
-    )]
-    pub fn thumbnail(path: &str, (scale_x, scale_y): (i32, i32)) -> Texture {
-        let image = Pixbuf::from_file_at_scale(path, scale_x, scale_y, true)
-            .expect("Image not found.")
-            .apply_embedded_orientation()
-            .expect("Unable to apply orientation.");
-        Texture::for_pixbuf(&image)
     }
 }

@@ -81,7 +81,7 @@ mod imp {
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use glib::Binding;
-    use gtk::{glib, Box, CompositeTemplate, Label, Picture};
+    use gtk::{glib, CompositeTemplate, Label, Picture};
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(string = "
@@ -130,7 +130,7 @@ mod imp {
             self.parent_constructed();
 
             // Setup
-            let obj = self.obj();
+            let _obj = self.obj();
         }
     }
 

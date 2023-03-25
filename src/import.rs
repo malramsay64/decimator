@@ -3,14 +3,12 @@ use std::collections::HashMap;
 use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
 use glib::{user_special_dir, UserDirectory};
-use gtk::glib;
 use itertools::Itertools;
+use relm4::gtk::glib;
 use sqlx::SqlitePool;
-use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
-use crate::data::{add_new_images, query_directory_pictures, query_existing_pictures};
+use crate::data::{add_new_images, query_existing_pictures};
 use crate::picture::{is_image, PictureData};
 
 #[derive(Clone, Debug)]
@@ -58,7 +56,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
         .map(|p| p.into_path().try_into().expect("Invalid UTF-8 path."))
         .group_by(|p: &Utf8PathBuf| p.with_extension(""))
         .into_iter()
-        .map(|(_key, group)| {
+        .filter_map(|(_key, group)| {
             group.fold(None, |data: Option<PictureData>, path| {
                 match (data, path.extension()) {
                     // When we haven't created the image we don't care what the filetype is
@@ -82,7 +80,6 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
                 }
             })
         })
-        .flatten()
         .map(|mut p: PictureData| {
             p.update_from_exif().expect("File not found");
             p

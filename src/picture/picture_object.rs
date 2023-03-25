@@ -1,9 +1,7 @@
 use adw::subclass::prelude::*;
 use camino::Utf8PathBuf;
-use gdk::Texture;
 use glib::Object;
-use gtk::{gdk, glib};
-use sqlx::Row;
+use gtk::glib;
 use uuid::Uuid;
 
 use super::PictureData;
@@ -126,7 +124,6 @@ impl<T: AsRef<PictureObject>> From<T> for PictureData {
             rating: p.rating(),
             flag: p.flag(),
             hidden: p.hidden(),
-            thumbnail: None,
         }
     }
 }
@@ -139,7 +136,6 @@ impl From<PictureData> for PictureObject {
             .property("selection", pic.selection.to_string())
             .property("rating", pic.selection.to_string())
             .property("capture-time", pic.capture_time.map(|c| c.to_string()))
-            .property("thumbnail", None::<Texture>)
             .build()
     }
 }
@@ -151,9 +147,8 @@ mod imp {
     use adw::prelude::*;
     use adw::subclass::prelude::*;
     use camino::Utf8PathBuf;
-    use gdk::Texture;
-    use glib::{ParamSpec, ParamSpecObject, ParamSpecString, Value};
-    use gtk::{gdk, glib};
+    use glib::{ParamSpec, ParamSpecString, Value};
+    use gtk::glib;
     use once_cell::sync::Lazy;
     use uuid::Uuid;
 
@@ -239,7 +234,6 @@ mod imp {
                     ParamSpecString::builder("rating").build(),
                     ParamSpecString::builder("flag").build(),
                     ParamSpecString::builder("hidden").build(),
-                    ParamSpecObject::builder::<Texture>("thumbnail").build(),
                 ]
             });
             PROPERTIES.as_ref()
@@ -255,8 +249,6 @@ mod imp {
                         .expect("The value needs to be of type `String`.");
                     let mut data = self.data.lock().expect("Mutex is Poisoned.");
                     data.filepath = input_value.into();
-                    // Reset the thumbnail when the path changes
-                    data.thumbnail = None;
                 }
                 "id" => {
                     let input_value: String = value
@@ -272,10 +264,6 @@ mod imp {
                 "rating" => {
                     let input_value: Rating = value.get().expect("Needs a `Rating`.");
                     self.data.lock().expect("Mutex is poisoned.").rating = input_value;
-                }
-                "thumbnail" => {
-                    let input_value: Option<Texture> = value.get().expect("Needs a texture.");
-                    self.data.lock().expect("Mutex is poisoned.").thumbnail = input_value;
                 }
                 "capture-time" => {
                     self.data.lock().expect("Mutex is Poisoned.").capture_time =
@@ -294,14 +282,6 @@ mod imp {
                 "rating" => self.rating().to_value(),
                 "flag" => self.flag().to_value(),
                 "hidden" => self.hidden().unwrap_or(false).to_value(),
-                "thumbnail" => self
-                    .data
-                    .as_ref()
-                    .lock()
-                    .expect("Mutex lock is poisoned")
-                    .thumbnail
-                    .as_ref()
-                    .to_value(),
                 _ => unimplemented!(),
             }
         }

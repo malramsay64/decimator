@@ -1,11 +1,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use adw::prelude::*;
 use anyhow::{anyhow, Error, Result};
-use glib::value::{FromValue, GenericValueTypeChecker, ValueType};
-use glib::Value;
-use gtk::glib;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
@@ -54,32 +50,5 @@ impl Display for Flag {
             Flag::Purple => "Purple",
         };
         write!(f, "{text}")
-    }
-}
-
-impl ToValue for Flag {
-    fn to_value(&self) -> glib::Value {
-        <str>::to_value(&self.to_string())
-    }
-
-    fn value_type(&self) -> glib::Type {
-        String::static_type()
-    }
-}
-
-impl ValueType for Flag {
-    type Type = String;
-}
-
-unsafe impl<'a> FromValue<'a> for Flag {
-    type Checker = GenericValueTypeChecker<Self>;
-    unsafe fn from_value(value: &'a Value) -> Self {
-        Flag::from_str(<&str>::from_value(value)).unwrap()
-    }
-}
-
-impl StaticType for Flag {
-    fn static_type() -> glib::Type {
-        String::static_type()
     }
 }
