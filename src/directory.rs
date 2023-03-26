@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use camino::Utf8PathBuf;
 use gtk::prelude::*;
 use relm4::factory::AsyncFactoryComponent;
@@ -29,6 +27,7 @@ impl FromRow<'_, SqliteRow> for DirectoryData {
     }
 }
 
+#[derive(Debug)]
 pub struct Directory {
     pub path: Utf8PathBuf,
 }
@@ -53,7 +52,7 @@ impl AsyncFactoryComponent for Directory {
             gtk::Button {
                 set_width_request: 320,
                 #[watch]
-                set_label: &self.path.as_str(),
+                set_label: self.path.as_str(),
                 connect_clicked[sender, index] => move |_| {
                     sender.output(DirectoryOutput::Select(index.clone()))
                 }

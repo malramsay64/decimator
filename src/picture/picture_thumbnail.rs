@@ -1,7 +1,7 @@
 use gtk::gdk::Texture;
 use gtk::prelude::*;
-use relm4::factory::positions::GridPosition;
-use relm4::factory::{AsyncFactoryComponent, AsyncPosition};
+
+use relm4::factory::{AsyncFactoryComponent};
 use relm4::loading_widgets::LoadingWidgets;
 use relm4::prelude::DynamicIndex;
 use relm4::{gtk, view, AsyncFactorySender};
@@ -11,26 +11,13 @@ use crate::AppMsg;
 
 #[derive(Debug)]
 pub struct PictureThumbnail {
-    picture: PictureData,
+    pub picture: PictureData,
     thumbnail: Option<Texture>,
 }
 
 #[derive(Debug)]
 pub enum PictureThumbnailMsg {
     SetThumbnail(Option<Texture>),
-}
-
-impl AsyncPosition<GridPosition> for PictureThumbnail {
-    fn position(index: usize) -> GridPosition {
-        let x = index % 3;
-        let y = index / 3;
-        GridPosition {
-            column: x as i32,
-            row: y as i32,
-            width: 1,
-            height: 1,
-        }
-    }
 }
 
 #[relm4::factory(async, pub)]
@@ -40,22 +27,20 @@ impl AsyncFactoryComponent for PictureThumbnail {
     type Output = PictureThumbnailMsg;
     type CommandOutput = ();
     type ParentInput = AppMsg;
-    type ParentWidget = gtk::Grid;
+    type ParentWidget = gtk::ListBox;
 
     view! {
         root = gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
-            set_hexpand: true,
             set_margin_top: 5,
-            set_margin_bottom: 5,
+            set_margin_bottom: 15,
             set_margin_start: 5,
             set_margin_end: 5,
             set_focusable: true,
-            // set_has_frame: true,
 
             #[name(thumbnail_picture)]
             gtk::Picture {
-                // set_width_request: 240,
+                set_width_request: 240,
                 set_height_request: 240,
                 #[watch]
                 set_paintable: self.thumbnail.as_ref(),
@@ -88,15 +73,13 @@ impl AsyncFactoryComponent for PictureThumbnail {
         view! {
             #[local_ref]
             root {
-                set_orientation: gtk::Orientation::Vertical,
-
                 #[name(spinner)]
                 gtk::Spinner {
                     start: (),
                     set_hexpand: true,
                     set_halign: gtk::Align::Center,
                     set_valign: gtk::Align::Center,
-                    set_height_request: 240,
+                    set_height_request: 260,
                 }
             }
         }
@@ -106,7 +89,7 @@ impl AsyncFactoryComponent for PictureThumbnail {
     async fn init_model(
         picture: PictureData,
         _index: &DynamicIndex,
-        sender: AsyncFactorySender<Self>,
+        _sender: AsyncFactorySender<Self>,
     ) -> Self {
         let filepath = picture.filepath.clone();
         let thumbnail =

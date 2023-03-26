@@ -1,5 +1,7 @@
 use camino::Utf8PathBuf;
 use data::{query_directory_pictures, query_unique_directories};
+use gtk::gdk::Texture;
+use gtk::gdk_pixbuf::Pixbuf;
 use gtk::glib;
 use gtk::prelude::*;
 use relm4::component::{AsyncComponent, AsyncComponentParts};
@@ -27,12 +29,15 @@ const APP_ID: &str = "com.malramsay.Decimator";
 pub enum AppMsg {
     UpdateDirectories,
     SelectDirectory(DynamicIndex),
+    SelectPreview(Option<i32>),
 }
 
+#[derive(Debug)]
 struct App {
     database: SqlitePool,
     directories: AsyncFactoryVecDeque<Directory>,
     thumbnails: AsyncFactoryVecDeque<PictureThumbnail>,
+    preview_image: Option<Texture>,
 }
 
 #[relm4::component(async)]
@@ -56,15 +61,33 @@ impl AsyncComponent for App {
                         set_spacing: 5
                     }
                 },
-                gtk::ScrolledWindow {
-                    set_hexpand: true,
-                    set_has_frame: true,
-
-                    #[local_ref]
-                    thumbnail_grid -> gtk::Grid {
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Horizontal,
+                    gtk::Box {
                         set_vexpand: true,
-                        set_column_spacing: 5,
-                        set_row_spacing: 5,
+                        set_hexpand: true,
+                        gtk::Picture {
+                            #[watch]
+                            set_paintable: model.preview_image.as_ref(),
+
+                        }
+                    },
+                    gtk::ScrolledWindow {
+                        set_propagate_natural_width: true,
+                        set_has_frame: true,
+
+                        #[local_ref]
+                        thumbnail_grid -> gtk::ListBox {
+                            set_width_request: 260,
+                            set_show_separators: true,
+                            set_selection_mode: gtk::SelectionMode::Single,
+
+                            connect_row_selected[sender] => move |_, row| {
+                                let index = row.map(|r| r.index());
+                                println!("{index:?}");
+                                sender.input(AppMsg::SelectPreview(index));
+                            }
+                        }
                     }
                 }
             }
@@ -99,7 +122,7 @@ impl AsyncComponent for App {
             .expect("Unable to initialise sqlite database");
 
         let mut directories = AsyncFactoryVecDeque::new(gtk::Box::default(), sender.input_sender());
-        let thumbnails = AsyncFactoryVecDeque::new(gtk::Grid::default(), sender.input_sender());
+        let thumbnails = AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
 
         {
             let mut directory_guard = directories.guard();
@@ -113,6 +136,7 @@ impl AsyncComponent for App {
             database,
             directories,
             thumbnails,
+            preview_image: None,
         };
         let directory_list = model.directories.widget();
         let thumbnail_grid = model.thumbnails.widget();
@@ -121,6 +145,7 @@ impl AsyncComponent for App {
         AsyncComponentParts { model, widgets }
     }
 
+    #[tracing::instrument(name = "Updating App", level = "debug", skip(self, _sender, _root))]
     async fn update(
         &mut self,
         msg: Self::Input,
@@ -148,6 +173,25 @@ impl AsyncComponent for App {
                 for pic in pictures {
                     thumbnail_guard.push_back(pic);
                 }
+            }
+            AppMsg::SelectPreview(index) => {
+                self.preview_image =
+                    if let Some(pic) = index.and_then(|i| self.thumbnails.get(i as usize)) {
+                        let filepath = pic.picture.filepath.clone();
+                        Some(
+                            relm4::spawn(async move {
+                                let image = Pixbuf::from_file(filepath)
+                                    .expect("Image not found.")
+                                    .apply_embedded_orientation()
+                                    .expect("Unable to apply orientation.");
+                                Texture::for_pixbuf(&image)
+                            })
+                            .await
+                            .unwrap(),
+                        )
+                    } else {
+                        None
+                    }
             }
         }
     }
