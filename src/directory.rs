@@ -32,53 +32,24 @@ pub struct Directory {
     pub path: Utf8PathBuf,
 }
 
-#[derive(Debug)]
-pub enum DirectoryOutput {
-    Select(DynamicIndex),
-}
-
 #[relm4::factory(async, pub)]
 impl AsyncFactoryComponent for Directory {
     type Init = Utf8PathBuf;
     type Input = ();
-    type Output = DirectoryOutput;
+    type Output = ();
     type CommandOutput = ();
     type ParentInput = AppMsg;
-    type ParentWidget = gtk::Box;
+    type ParentWidget = gtk::ListBox;
 
     view! {
         root = gtk::Box {
             #[name(label)]
-            gtk::Button {
+            gtk::Label {
                 set_width_request: 320,
                 #[watch]
                 set_label: self.path.as_str(),
-                connect_clicked[sender, index] => move |_| {
-                    sender.output(DirectoryOutput::Select(index.clone()))
-                }
             }
         }
-    }
-
-    fn init_loading_widgets(root: &mut Self::Root) -> Option<LoadingWidgets> {
-        view! {
-            #[local_ref]
-            root {
-                #[name(spinner)]
-                gtk::Spinner {
-                    start: (),
-                    set_halign: gtk::Align::Center,
-                    set_height_request: 34,
-                }
-            }
-        }
-        Some(LoadingWidgets::new(root, spinner))
-    }
-
-    fn output_to_parent_input(output: Self::Output) -> Option<AppMsg> {
-        Some(match output {
-            DirectoryOutput::Select(index) => AppMsg::SelectDirectory(index),
-        })
     }
 
     async fn init_model(

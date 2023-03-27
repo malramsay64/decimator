@@ -28,7 +28,7 @@ const APP_ID: &str = "com.malramsay.Decimator";
 #[derive(Debug)]
 pub enum AppMsg {
     UpdateDirectories,
-    SelectDirectory(DynamicIndex),
+    SelectDirectory(Option<i32>),
     SelectPreview(Option<i32>),
 }
 
@@ -60,18 +60,27 @@ impl AsyncComponent for App {
                     #[name = "sidebar_header"]
                     adw::HeaderBar {
                         set_show_end_title_buttons: false,
-                        #[wrap(Some)]
-                        set_title_widget = &adw::WindowTitle {
-                            set_title: "Directories",
-                        }
+                        pack_start = &gtk::Box {
+                            gtk::Button {
+                                set_label: "Add Directory",
+                            },
+                            gtk::Button {
+                                set_label: "Import",
+                            }
+                        },
                     },
                     gtk::ScrolledWindow {
                         set_vexpand: true,
                         set_width_request: 325,
                         #[local_ref]
-                        directory_list -> gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 5
+                        directory_list -> gtk::ListBox {
+                            set_selection_mode: gtk::SelectionMode::Single,
+
+                            connect_row_selected[sender] => move |_, row| {
+                                let index = row.map(|r| r.index());
+                                println!("{index:?}");
+                                sender.input(AppMsg::SelectDirectory(index));
+                            }
                         }
                     }
                 },
@@ -89,7 +98,7 @@ impl AsyncComponent for App {
 
                         #[wrap(Some)]
                         set_title_widget = &adw::WindowTitle {
-                            set_title: "Content"
+                            set_title: "Decimator"
                         }
                     },
                     gtk::Box {
@@ -157,7 +166,8 @@ impl AsyncComponent for App {
             .await
             .expect("Unable to initialise sqlite database");
 
-        let mut directories = AsyncFactoryVecDeque::new(gtk::Box::default(), sender.input_sender());
+        let mut directories =
+            AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
         let thumbnails = AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
 
         {
@@ -205,15 +215,16 @@ impl AsyncComponent for App {
                 }
             }
             AppMsg::SelectDirectory(index) => {
-                let directory = self.directories.get(index.current_index()).unwrap();
-                let pictures =
-                    query_directory_pictures(&self.database, directory.path.clone().into())
-                        .await
-                        .unwrap();
                 let mut thumbnail_guard = self.thumbnails.guard();
                 thumbnail_guard.clear();
-                for pic in pictures {
-                    thumbnail_guard.push_back(pic);
+                if let Some(directory) = index.and_then(|i| self.directories.get(i as usize)) {
+                    let pictures =
+                        query_directory_pictures(&self.database, directory.path.clone().into())
+                            .await
+                            .unwrap();
+                    for pic in pictures {
+                        thumbnail_guard.push_back(pic);
+                    }
                 }
             }
             AppMsg::SelectPreview(index) => {
