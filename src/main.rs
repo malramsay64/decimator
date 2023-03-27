@@ -1,14 +1,14 @@
+use adw::prelude::*;
 use camino::Utf8PathBuf;
 use data::{query_directory_pictures, query_unique_directories};
 use gtk::gdk::Texture;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::glib;
-use gtk::prelude::*;
 use relm4::component::{AsyncComponent, AsyncComponentParts};
 use relm4::factory::AsyncFactoryVecDeque;
 use relm4::loading_widgets::LoadingWidgets;
 use relm4::prelude::*;
-use relm4::{gtk, view, AsyncComponentSender};
+use relm4::{view, AsyncComponentSender};
 use sqlx::SqlitePool;
 
 mod data;
@@ -48,44 +48,76 @@ impl AsyncComponent for App {
     type CommandOutput = ();
 
     view! {
-        gtk::Window {
+        adw::Window {
             set_default_size: (960, 540),
-            gtk::Box{
+            #[name = "flap"]
+            adw::Flap {
                 set_vexpand: true,
-                set_hexpand: true,
-                gtk::ScrolledWindow {
-                    set_width_request: 325,
-                    #[local_ref]
-                    directory_list -> gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 5
-                    }
-                },
-                gtk::Box {
-                    set_orientation: gtk::Orientation::Horizontal,
-                    gtk::Box {
-                        set_vexpand: true,
-                        set_hexpand: true,
-                        gtk::Picture {
-                            #[watch]
-                            set_paintable: model.preview_image.as_ref(),
 
+                #[wrap(Some)]
+                set_flap = &gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    #[name = "sidebar_header"]
+                    adw::HeaderBar {
+                        set_show_end_title_buttons: false,
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "Directories",
                         }
                     },
                     gtk::ScrolledWindow {
-                        set_propagate_natural_width: true,
-                        set_has_frame: true,
-
+                        set_vexpand: true,
+                        set_width_request: 325,
                         #[local_ref]
-                        thumbnail_grid -> gtk::ListBox {
-                            set_width_request: 260,
-                            set_show_separators: true,
-                            set_selection_mode: gtk::SelectionMode::Single,
+                        directory_list -> gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 5
+                        }
+                    }
+                },
+                #[wrap(Some)]
+                set_content = &gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_vexpand: true,
+                    #[name = "content_header"]
+                    adw::HeaderBar {
+                        #[name = "flap_status"]
+                        pack_start = &gtk::ToggleButton {
+                            set_icon_name: "sidebar-show-symbolic",
+                            set_active: true,
+                        },
 
-                            connect_row_selected[sender] => move |_, row| {
-                                let index = row.map(|r| r.index());
-                                println!("{index:?}");
-                                sender.input(AppMsg::SelectPreview(index));
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "Content"
+                        }
+                    },
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Horizontal,
+                        gtk::Box {
+                            set_vexpand: true,
+                            set_hexpand: true,
+                            gtk::Picture {
+                                #[watch]
+                                set_paintable: model.preview_image.as_ref(),
+
+                            }
+                        },
+                        gtk::ScrolledWindow {
+                            set_propagate_natural_width: true,
+                            set_has_frame: true,
+
+                            #[local_ref]
+                            thumbnail_grid -> gtk::ListBox {
+                                set_width_request: 260,
+                                set_show_separators: true,
+                                set_selection_mode: gtk::SelectionMode::Single,
+
+                                connect_row_selected[sender] => move |_, row| {
+                                    let index = row.map(|r| r.index());
+                                    println!("{index:?}");
+                                    sender.input(AppMsg::SelectPreview(index));
+                                }
                             }
                         }
                     }
@@ -93,6 +125,10 @@ impl AsyncComponent for App {
             }
         }
     }
+
+    // menu! {
+    //     main_menu:
+    // }
 
     fn init_loading_widgets(root: &mut Self::Root) -> Option<LoadingWidgets> {
         view! {
@@ -142,6 +178,12 @@ impl AsyncComponent for App {
         let thumbnail_grid = model.thumbnails.widget();
 
         let widgets = view_output!();
+
+        widgets
+            .flap_status
+            .bind_property("active", &widgets.flap, "reveal-flap")
+            .flags(glib::BindingFlags::SYNC_CREATE)
+            .build();
         AsyncComponentParts { model, widgets }
     }
 
