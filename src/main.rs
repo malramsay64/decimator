@@ -1,14 +1,17 @@
+use std::convert::identity;
+
 use adw::prelude::*;
 use camino::Utf8PathBuf;
 use data::{query_directory_pictures, query_unique_directories};
 use gtk::gdk::Texture;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::glib;
-use relm4::component::{AsyncComponent, AsyncComponentParts};
+use relm4::component::{
+    AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
+};
 use relm4::factory::AsyncFactoryVecDeque;
-use relm4::loading_widgets::LoadingWidgets;
 use relm4::prelude::*;
-use relm4::{view, AsyncComponentSender};
+use relm4::AsyncComponentSender;
 use sqlx::SqlitePool;
 
 mod data;
@@ -20,7 +23,7 @@ mod telemetry;
 // mod window;
 
 use directory::Directory;
-use picture::PictureThumbnail;
+use picture::{PictureView, PictureViewMsg};
 use telemetry::{get_subscriber, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
@@ -29,15 +32,13 @@ const APP_ID: &str = "com.malramsay.Decimator";
 pub enum AppMsg {
     UpdateDirectories,
     SelectDirectory(Option<i32>),
-    SelectPreview(Option<i32>),
 }
 
 #[derive(Debug)]
 struct App {
     database: SqlitePool,
     directories: AsyncFactoryVecDeque<Directory>,
-    thumbnails: AsyncFactoryVecDeque<PictureThumbnail>,
-    preview_image: Option<Texture>,
+    picture_view: AsyncController<PictureView>,
 }
 
 #[relm4::component(async)]
@@ -101,36 +102,8 @@ impl AsyncComponent for App {
                             set_title: "Decimator"
                         }
                     },
-                    gtk::Box {
-                        set_orientation: gtk::Orientation::Horizontal,
-                        gtk::Box {
-                            set_vexpand: true,
-                            set_hexpand: true,
-                            gtk::Picture {
-                                #[watch]
-                                set_paintable: model.preview_image.as_ref(),
-
-                            }
-                        },
-                        gtk::ScrolledWindow {
-                            set_propagate_natural_width: true,
-                            set_has_frame: true,
-
-                            #[local_ref]
-                            thumbnail_grid -> gtk::ListBox {
-                                set_width_request: 260,
-                                set_show_separators: true,
-                                set_selection_mode: gtk::SelectionMode::Single,
-
-                                connect_row_selected[sender] => move |_, row| {
-                                    let index = row.map(|r| r.index());
-                                    println!("{index:?}");
-                                    sender.input(AppMsg::SelectPreview(index));
-                                }
-                            }
-                        }
-                    }
-                }
+                    model.picture_view.widget(),
+                 }
             }
         }
     }
@@ -138,23 +111,6 @@ impl AsyncComponent for App {
     // menu! {
     //     main_menu:
     // }
-
-    fn init_loading_widgets(root: &mut Self::Root) -> Option<LoadingWidgets> {
-        view! {
-            #[local_ref]
-            root {
-                set_title: Some("Decimator Relm Demo"),
-                set_default_size: (300, 100),
-
-                #[name(spinner)]
-                gtk::Spinner {
-                    start: (),
-                    set_halign: gtk::Align::Center,
-                }
-            }
-        }
-        Some(LoadingWidgets::new(root, spinner))
-    }
 
     #[tracing::instrument(name = "Initialising App", skip(root, sender))]
     async fn init(
@@ -168,7 +124,6 @@ impl AsyncComponent for App {
 
         let mut directories =
             AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
-        let thumbnails = AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
 
         {
             let mut directory_guard = directories.guard();
@@ -177,15 +132,16 @@ impl AsyncComponent for App {
                 directory_guard.push_back(Utf8PathBuf::from(dir));
             }
         }
+        let picture_view = PictureView::builder()
+            .launch(())
+            .forward(sender.input_sender(), identity);
 
         let model = App {
             database,
             directories,
-            thumbnails,
-            preview_image: None,
+            picture_view,
         };
         let directory_list = model.directories.widget();
-        let thumbnail_grid = model.thumbnails.widget();
 
         let widgets = view_output!();
 
@@ -215,36 +171,16 @@ impl AsyncComponent for App {
                 }
             }
             AppMsg::SelectDirectory(index) => {
-                let mut thumbnail_guard = self.thumbnails.guard();
-                thumbnail_guard.clear();
-                if let Some(directory) = index.and_then(|i| self.directories.get(i as usize)) {
-                    let pictures =
+                let pictures =
+                    if let Some(directory) = index.and_then(|i| self.directories.get(i as usize)) {
                         query_directory_pictures(&self.database, directory.path.clone().into())
                             .await
-                            .unwrap();
-                    for pic in pictures {
-                        thumbnail_guard.push_back(pic);
-                    }
-                }
-            }
-            AppMsg::SelectPreview(index) => {
-                self.preview_image =
-                    if let Some(pic) = index.and_then(|i| self.thumbnails.get(i as usize)) {
-                        let filepath = pic.picture.filepath.clone();
-                        Some(
-                            relm4::spawn(async move {
-                                let image = Pixbuf::from_file(filepath)
-                                    .expect("Image not found.")
-                                    .apply_embedded_orientation()
-                                    .expect("Unable to apply orientation.");
-                                Texture::for_pixbuf(&image)
-                            })
-                            .await
-                            .unwrap(),
-                        )
+                            .unwrap()
                     } else {
-                        None
-                    }
+                        vec![]
+                    };
+                self.picture_view
+                    .emit(PictureViewMsg::SelectPictures(pictures))
             }
         }
     }

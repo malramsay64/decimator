@@ -1,12 +1,11 @@
 use gtk::gdk::Texture;
 use gtk::prelude::*;
-
-use relm4::factory::{AsyncFactoryComponent};
+use relm4::factory::AsyncFactoryComponent;
 use relm4::loading_widgets::LoadingWidgets;
 use relm4::prelude::DynamicIndex;
 use relm4::{gtk, view, AsyncFactorySender};
 
-use super::PictureData;
+use super::{PictureData, PictureViewMsg};
 use crate::AppMsg;
 
 #[derive(Debug)]
@@ -26,7 +25,7 @@ impl AsyncFactoryComponent for PictureThumbnail {
     type Input = PictureThumbnailMsg;
     type Output = PictureThumbnailMsg;
     type CommandOutput = ();
-    type ParentInput = AppMsg;
+    type ParentInput = PictureViewMsg;
     type ParentWidget = gtk::ListBox;
 
     view! {
