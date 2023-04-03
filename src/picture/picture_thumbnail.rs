@@ -6,7 +6,6 @@ use relm4::prelude::DynamicIndex;
 use relm4::{gtk, view, AsyncFactorySender};
 
 use super::{PictureData, PictureViewMsg};
-use crate::AppMsg;
 
 #[derive(Debug)]
 pub struct PictureThumbnail {
@@ -16,14 +15,16 @@ pub struct PictureThumbnail {
 
 #[derive(Debug)]
 pub enum PictureThumbnailMsg {
-    SetThumbnail(Option<Texture>),
+    SelectionPick,
+    SelectionOrdinary,
+    SelectionIgnore,
 }
 
 #[relm4::factory(async, pub)]
 impl AsyncFactoryComponent for PictureThumbnail {
     type Init = PictureData;
-    type Input = PictureThumbnailMsg;
-    type Output = PictureThumbnailMsg;
+    type Input = ();
+    type Output = ();
     type CommandOutput = ();
     type ParentInput = PictureViewMsg;
     type ParentWidget = gtk::ListBox;
@@ -98,14 +99,7 @@ impl AsyncFactoryComponent for PictureThumbnail {
         Self { picture, thumbnail }
     }
 
-    async fn update(&mut self, msg: Self::Input, _sender: AsyncFactorySender<Self>) {
-        match msg {
-            PictureThumbnailMsg::SetThumbnail(thumbnail) => self.thumbnail = thumbnail,
-        }
-    }
-
     fn shutdown(&mut self, _widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
-        // self.handle.abort();
         println!("Picture with path {} was destroyed", &self.picture.filepath);
     }
 }

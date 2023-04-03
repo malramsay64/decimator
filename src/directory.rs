@@ -1,9 +1,9 @@
 use camino::Utf8PathBuf;
 use gtk::prelude::*;
 use relm4::factory::AsyncFactoryComponent;
-use relm4::loading_widgets::LoadingWidgets;
+
 use relm4::prelude::DynamicIndex;
-use relm4::{gtk, view, AsyncFactorySender};
+use relm4::{gtk, AsyncFactorySender};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
 

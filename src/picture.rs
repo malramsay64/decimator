@@ -1,7 +1,11 @@
+mod filter;
 mod picture_data;
 mod picture_thumbnail;
 mod property_types;
+mod sort;
+use std::collections::HashMap;
 
+use filter::*;
 use gtk::prelude::*;
 pub use picture_data::*;
 pub use picture_thumbnail::*;
@@ -12,10 +16,13 @@ use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
 use relm4::prelude::*;
 use relm4::{gtk, AsyncComponentSender};
+pub use sort::*;
+
+use uuid::Uuid;
 use walkdir::DirEntry;
 
-use crate::data::query_directory_pictures;
-use crate::directory::Directory;
+
+
 use crate::AppMsg;
 
 pub fn is_image(entry: &DirEntry) -> bool {
@@ -30,12 +37,45 @@ pub fn is_image(entry: &DirEntry) -> bool {
 pub enum PictureViewMsg {
     SelectPictures(Vec<PictureData>),
     SelectPreview(Option<i32>),
+    FilterTogglePick,
+    FilterToggleOrdinary,
+    FilterToggleIgnore,
+    SelectionPick,
+    SelectionOrdinary,
+    SelectionIgnore,
 }
 
 #[derive(Debug)]
 pub struct PictureView {
-    thumbnails: AsyncFactoryVecDeque<PictureThumbnail>,
+    thumbnails: HashMap<Uuid, PictureData>,
+    shown_thumbnails: AsyncFactoryVecDeque<PictureThumbnail>,
+    preview_id: Option<Uuid>,
     preview_image: Option<Texture>,
+    filter_settings: FilterSettings,
+    sort_settings: SortSettings,
+}
+
+impl PictureView {
+    fn get_thumbnails(&self) -> Vec<PictureData> {
+        let mut values = self
+            .thumbnails
+            .values()
+            .filter(|v| self.filter_settings.filter(v))
+            .map(|v| v.to_owned())
+            .collect::<Vec<_>>();
+        values.sort_by(|a, b| self.sort_settings.sort(a, b));
+        values
+    }
+
+    async fn update_visible(&mut self) {
+        // This needs to be first due to the mutable borrow of the thumbnail guard
+        let thumbnails = self.get_thumbnails();
+        let mut thumbnail_guard = self.shown_thumbnails.guard();
+        thumbnail_guard.clear();
+        for pic in thumbnails {
+            thumbnail_guard.push_back(pic.clone());
+        }
+    }
 }
 
 #[relm4::component(async, pub)]
@@ -69,7 +109,6 @@ impl AsyncComponent for PictureView {
 
                     connect_row_selected[sender] => move |_, row| {
                         let index = row.map(|r| r.index());
-                        println!("{index:?}");
                         sender.input(PictureViewMsg::SelectPreview(index));
                     }
                 }
@@ -82,12 +121,18 @@ impl AsyncComponent for PictureView {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let thumbnails = AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
+        let shown_thumbnails =
+            AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
+
         let model = Self {
-            thumbnails,
-            preview_image: None,
+            thumbnails: Default::default(),
+            shown_thumbnails,
+            preview_id: Default::default(),
+            preview_image: Default::default(),
+            filter_settings: Default::default(),
+            sort_settings: Default::default(),
         };
-        let thumbnail_list = model.thumbnails.widget();
+        let thumbnail_list = model.shown_thumbnails.widget();
         let widgets = view_output!();
 
         AsyncComponentParts { model, widgets }
@@ -96,35 +141,60 @@ impl AsyncComponent for PictureView {
     async fn update(
         &mut self,
         msg: Self::Input,
-        sender: AsyncComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match msg {
             PictureViewMsg::SelectPictures(pictures) => {
-                let mut thumbnail_guard = self.thumbnails.guard();
-                thumbnail_guard.clear();
-                for pic in pictures {
-                    thumbnail_guard.push_back(pic);
-                }
+                self.thumbnails = pictures.into_iter().map(|pic| (pic.id, pic)).collect();
+                self.update_visible().await;
             }
             PictureViewMsg::SelectPreview(index) => {
-                self.preview_image =
-                    if let Some(pic) = index.and_then(|i| self.thumbnails.get(i as usize)) {
-                        let filepath = pic.picture.filepath.clone();
-                        Some(
-                            relm4::spawn(async move {
-                                let image = Pixbuf::from_file(filepath)
-                                    .expect("Image not found.")
-                                    .apply_embedded_orientation()
-                                    .expect("Unable to apply orientation.");
-                                Texture::for_pixbuf(&image)
-                            })
-                            .await
-                            .unwrap(),
-                        )
-                    } else {
-                        None
-                    }
+                if let Some(pic) = index.and_then(|i| self.shown_thumbnails.get(i as usize)) {
+                    self.preview_id = Some(pic.picture.id);
+                    let filepath = pic.picture.filepath.clone();
+                    self.preview_image = Some(
+                        relm4::spawn(async move {
+                            let image = Pixbuf::from_file(filepath)
+                                .expect("Image not found.")
+                                .apply_embedded_orientation()
+                                .expect("Unable to apply orientation.");
+                            Texture::for_pixbuf(&image)
+                        })
+                        .await
+                        .unwrap(),
+                    );
+                } else {
+                    self.preview_id = None;
+                    self.preview_image = None;
+                }
+            }
+            PictureViewMsg::FilterTogglePick => {
+                self.filter_settings.toggle_pick();
+                self.update_visible().await;
+            }
+            PictureViewMsg::FilterToggleOrdinary => {
+                self.filter_settings.toggle_ordinary();
+                self.update_visible().await;
+            }
+            PictureViewMsg::FilterToggleIgnore => {
+                self.filter_settings.toggle_ignore();
+                self.update_visible().await;
+            }
+            PictureViewMsg::SelectionPick => {
+                if let Some(index) = self.preview_id && let Some(pic) = self.thumbnails.get_mut(&index) {
+                    pic.selection = Selection::Pick;
+                }
+            }
+            PictureViewMsg::SelectionOrdinary => {
+                if let Some(index) = self.preview_id && let Some(pic) = self.thumbnails.get_mut(&index) {
+                    pic.selection = Selection::Ordinary;
+                }
+            }
+            PictureViewMsg::SelectionIgnore => {
+                if let Some(index) = self.preview_id && let Some(pic) = self.thumbnails.get_mut(&index) {
+                    pic.selection = Selection::Ignore;
+                }
             }
         }
     }
