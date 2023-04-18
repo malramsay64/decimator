@@ -6,7 +6,9 @@
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
+use futures::stream::StreamExt;
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::directory::DirectoryData;
@@ -18,7 +20,16 @@ pub(crate) async fn query_directory_pictures(
 ) -> Result<Vec<PictureData>, Error> {
     Ok(sqlx::query_as(
         r#"
-            SELECT id, directory, filename, capture_time, selection, rating, flag, hidden
+            SELECT 
+                id, 
+                directory, 
+                filename, 
+                capture_time, 
+                selection, 
+                rating, 
+                flag, 
+                hidden, 
+                thumbnail
             FROM picture
             WHERE directory == $1
             ORDER BY capture_time DESC, filename DESC
@@ -53,9 +64,83 @@ pub(crate) async fn query_existing_pictures(
     .collect::<Vec<_>>())
 }
 
+pub(crate) async fn update_thumbnails(db: &SqlitePool, update_all: bool) -> Result<(), Error> {
+    // TODO: Improve the performance of this query. Not entirely sure where the bottlenecks are
+    let mut query = QueryBuilder::new(
+        "
+            SELECT 
+                id, 
+                directory, 
+                filename, 
+                capture_time, 
+                selection, 
+                rating, 
+                flag, 
+                hidden, 
+                thumbnail
+            FROM
+                picture
+        ",
+    );
+    if !update_all {
+        query.push("WHERE thumbnail is NULL");
+    }
+    query
+        .build_query_as::<'_, PictureData>()
+        .fetch(db)
+        .map(|r| {
+            let db = db.clone();
+            relm4::spawn(async move {
+                let picture = r.unwrap();
+                let span = tracing::debug_span!("Updating thumbnail");
+                let filepath = picture.filepath.clone();
+                async move {
+                    tracing::debug!("loading file from {}", &filepath);
+                    let thumbnail = PictureData::load_thumbnail(filepath, 240, 240).await;
+                    if let Ok(t) = thumbnail {
+                        // TODO: Potential optimisations using a join in the SQL query for the update
+                        sqlx::query(
+                            r#"
+                    UPDATE picture
+                    SET             
+                        thumbnail = ?
+                    WHERE
+                        id = ?
+                "#,
+                        )
+                        .bind(&t.into_bytes())
+                        .bind(picture.id)
+                        .execute(&db)
+                        .await
+                        .expect("Query failed to execute");
+                    }
+                }
+                .instrument(span)
+                .await
+            })
+        })
+        .buffer_unordered(num_cpus::get())
+        .collect::<Vec<_>>()
+        .await;
+    Ok(())
+}
+
 pub(crate) async fn add_new_images(db: &SqlitePool, images: Vec<PictureData>) -> Result<(), Error> {
-    let mut query_builder: QueryBuilder<Sqlite> =
-        QueryBuilder::new("INSERT INTO picture(id, directory, filename, raw_extension, capture_time, rating, flag, hidden, selection)");
+    let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+        "
+        INSERT INTO picture(
+            id, 
+            directory, 
+            filename, 
+            raw_extension, 
+            capture_time, 
+            rating, 
+            flag, 
+            hidden, 
+            selection, 
+            thumbnail
+        )",
+    );
 
     query_builder.push_values(images, |mut b, picture| {
         b.push_bind(Uuid::new_v4())
@@ -66,7 +151,8 @@ pub(crate) async fn add_new_images(db: &SqlitePool, images: Vec<PictureData>) ->
             .push_bind(picture.rating.to_string())
             .push_bind(picture.flag.to_string())
             .push_bind(picture.hidden)
-            .push_bind(picture.selection.to_string());
+            .push_bind(picture.selection.to_string())
+            .push_bind(picture.thumbnail.map(|p| p.into_bytes()));
     });
 
     // Run the database query to update all the files

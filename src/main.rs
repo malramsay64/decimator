@@ -3,9 +3,9 @@ use std::convert::identity;
 
 use adw::prelude::*;
 use camino::Utf8PathBuf;
-use data::{query_directory_pictures, query_unique_directories};
+use data::{query_directory_pictures, query_unique_directories, update_thumbnails};
 use gtk::glib;
-use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup};
+use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
@@ -31,10 +31,12 @@ const APP_ID: &str = "com.malramsay.Decimator";
 #[derive(Debug)]
 pub enum AppMsg {
     UpdateDirectories,
+    UpdateThumbnailsAll,
+    UpdateThumbnailsNew,
     SelectDirectory(Option<i32>),
-    FilterTogglePick,
-    FilterToggleOrdinary,
-    FilterToggleIgnore,
+    FilterPick(bool),
+    FilterOrdinary(bool),
+    FilterIgnore(bool),
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
@@ -103,6 +105,10 @@ impl AsyncComponent for App {
                             set_icon_name: "sidebar-show-symbolic",
                             set_active: true,
                         },
+                        pack_end = &gtk::MenuButton {
+                            set_icon_name: "open-menu-symbolic",
+                            set_menu_model: Some(&main_menu),
+                        },
 
                         #[wrap(Some)]
                         set_title_widget = &adw::WindowTitle {
@@ -115,9 +121,17 @@ impl AsyncComponent for App {
         }
     }
 
-    // menu! {
-    //     main_menu:
-    // }
+    menu! {
+        main_menu: {
+            "Generate Thumbnails" => ActionUpdateThumbnailNew,
+            "Update Thumbnails" => ActionUpdateThumbnailAll,
+            section! {
+                "Filter Pick" => ActionFilterPick,
+                "Filter Ordinary" => ActionFilterOrdinary,
+                "Filter Ignore" => ActionFilterIgnore,
+            }
+        }
+    }
 
     #[tracing::instrument(name = "Initialising App", skip(root, sender))]
     async fn init(
@@ -153,63 +167,83 @@ impl AsyncComponent for App {
 
         let app = relm4::main_application();
 
-        app.set_accelerators_for_action::<PickAction>(&["p"]);
-        app.set_accelerators_for_action::<OrdinaryAction>(&["o"]);
-        app.set_accelerators_for_action::<IgnoreAction>(&["i"]);
+        app.set_accelerators_for_action::<ActionPick>(&["p"]);
+        app.set_accelerators_for_action::<ActionOrdinary>(&["o"]);
+        app.set_accelerators_for_action::<ActionIgnore>(&["i"]);
 
         {
-            let group = RelmActionGroup::<WindowActionGroup>::new();
+            // TODO: Write a send message action macro and a toggle state action macro
+
+            let mut group = RelmActionGroup::<WindowActionGroup>::new();
+
+            let sender_update_thumbnail_all = sender.clone();
+            let action_update_thumbnail_all: RelmAction<ActionUpdateThumbnailAll> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_update_thumbnail_all.input(AppMsg::UpdateThumbnailsAll);
+                })
+            };
+            let sender_update_thumbnail_new = sender.clone();
+            let action_update_thumbnail_new: RelmAction<ActionUpdateThumbnailNew> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_update_thumbnail_new.input(AppMsg::UpdateThumbnailsNew);
+                })
+            };
 
             let sender_pick = sender.clone();
-            let action_pick: RelmAction<PickAction> = {
+            let action_pick: RelmAction<ActionPick> = {
                 RelmAction::new_stateless(move |_| {
                     sender_pick.input(AppMsg::SelectionPick);
                 })
             };
             let sender_ordinary = sender.clone();
-            let action_ordinary: RelmAction<OrdinaryAction> = {
+            let action_ordinary: RelmAction<ActionOrdinary> = {
                 RelmAction::new_stateless(move |_| {
                     sender_ordinary.input(AppMsg::SelectionOrdinary);
                 })
             };
             let sender_ignore = sender.clone();
-            let action_ignore: RelmAction<IgnoreAction> = {
+            let action_ignore: RelmAction<ActionIgnore> = {
                 RelmAction::new_stateless(move |_| {
                     sender_ignore.input(AppMsg::SelectionIgnore);
                 })
             };
 
             let sender_filter_pick = sender.clone();
-            let action_filter_pick: RelmAction<PickFilterAction> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_filter_pick.input(AppMsg::FilterTogglePick);
+            let action_filter_pick: RelmAction<ActionFilterPick> = {
+                RelmAction::new_stateful(&false, move |_, state: &mut bool| {
+                    *state = !*state;
+                    sender_filter_pick.input(AppMsg::FilterPick(*state));
                 })
             };
             let sender_filter_ordinary = sender.clone();
-            let action_filter_ordinary: RelmAction<OrdinaryFilterAction> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_filter_ordinary.input(AppMsg::FilterToggleOrdinary);
+            let action_filter_ordinary: RelmAction<ActionFilterOrdinary> = {
+                RelmAction::new_stateful(&false, move |_, state: &mut bool| {
+                    *state = !*state;
+                    sender_filter_ordinary.input(AppMsg::FilterOrdinary(*state));
                 })
             };
             let sender_filter_ignore = sender.clone();
-            let action_filter_ignore: RelmAction<IgnoreFilterAction> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_filter_ignore.input(AppMsg::FilterToggleIgnore);
+            let action_filter_ignore: RelmAction<ActionFilterIgnore> = {
+                RelmAction::new_stateful(&false, move |_, state: &mut bool| {
+                    *state = !*state;
+                    sender_filter_ignore.input(AppMsg::FilterIgnore(*state));
                 })
             };
 
-            group.add_action(&action_filter_pick);
-            group.add_action(&action_filter_ordinary);
-            group.add_action(&action_filter_ignore);
-            group.add_action(&action_pick);
-            group.add_action(&action_ordinary);
-            group.add_action(&action_ignore);
+            group.add_action(action_update_thumbnail_all);
+            group.add_action(action_update_thumbnail_new);
+            group.add_action(action_filter_pick);
+            group.add_action(action_filter_ordinary);
+            group.add_action(action_filter_ignore);
+            group.add_action(action_pick);
+            group.add_action(action_ordinary);
+            group.add_action(action_ignore);
 
             let actions = group.into_action_group();
 
             widgets
                 .main_window
-                .insert_action_group("win", Some(&actions));
+                .insert_action_group(WindowActionGroup::NAME, Some(&actions));
         }
 
         widgets
@@ -236,6 +270,27 @@ impl AsyncComponent for App {
                     directory_guard.push_back(Utf8PathBuf::from(dir));
                 }
             }
+            AppMsg::UpdateThumbnailsAll => {
+                // TODO: Add a dialog confirmation box
+                let db = self.database.clone();
+                relm4::spawn(async move {
+                    update_thumbnails(&db, true)
+                        .await
+                        .expect("Unable to update thumbnails");
+                })
+                .await
+                .unwrap();
+            }
+            AppMsg::UpdateThumbnailsNew => {
+                let db = self.database.clone();
+                relm4::spawn(async move {
+                    update_thumbnails(&db, false)
+                        .await
+                        .expect("Unable to update thumbnails");
+                })
+                .await
+                .unwrap();
+            }
             AppMsg::SelectDirectory(index) => {
                 let pictures =
                     if let Some(directory) = index.and_then(|i| self.directories.get(i as usize)) {
@@ -248,12 +303,12 @@ impl AsyncComponent for App {
                 self.picture_view
                     .emit(PictureViewMsg::SelectPictures(pictures))
             }
-            AppMsg::FilterTogglePick => self.picture_view.emit(PictureViewMsg::FilterTogglePick),
-            AppMsg::FilterToggleOrdinary => {
-                self.picture_view.emit(PictureViewMsg::FilterToggleOrdinary)
-            }
-            AppMsg::FilterToggleIgnore => {
-                self.picture_view.emit(PictureViewMsg::FilterToggleIgnore)
+            AppMsg::FilterPick(value) => self.picture_view.emit(PictureViewMsg::FilterPick(value)),
+            AppMsg::FilterOrdinary(value) => self
+                .picture_view
+                .emit(PictureViewMsg::FilterOrdinary(value)),
+            AppMsg::FilterIgnore(value) => {
+                self.picture_view.emit(PictureViewMsg::FilterIgnore(value))
             }
             AppMsg::SelectionPick => self.picture_view.emit(PictureViewMsg::SelectionPick),
             AppMsg::SelectionOrdinary => self.picture_view.emit(PictureViewMsg::SelectionOrdinary),
@@ -264,16 +319,40 @@ impl AsyncComponent for App {
 
 relm4::new_action_group!(WindowActionGroup, "win");
 
-relm4::new_stateless_action!(NextAction, WindowActionGroup, "next");
-relm4::new_stateless_action!(PreviousAction, WindowActionGroup, "previous");
+relm4::new_stateless_action!(
+    ActionUpdateThumbnailAll,
+    WindowActionGroup,
+    "update_thumbnails_all"
+);
 
-relm4::new_stateless_action!(PickAction, WindowActionGroup, "pick");
-relm4::new_stateless_action!(OrdinaryAction, WindowActionGroup, "ordinary");
-relm4::new_stateless_action!(IgnoreAction, WindowActionGroup, "ignore");
+relm4::new_stateless_action!(
+    ActionUpdateThumbnailNew,
+    WindowActionGroup,
+    "update_thumbnails_new"
+);
 
-relm4::new_stateless_action!(PickFilterAction, WindowActionGroup, "pick_filter");
-relm4::new_stateless_action!(OrdinaryFilterAction, WindowActionGroup, "ordinary_filter");
-relm4::new_stateless_action!(IgnoreFilterAction, WindowActionGroup, "ignore_filter");
+relm4::new_stateless_action!(ActionNext, WindowActionGroup, "next");
+relm4::new_stateless_action!(ActionPrevious, WindowActionGroup, "previous");
+
+relm4::new_stateless_action!(ActionPick, WindowActionGroup, "pick");
+relm4::new_stateless_action!(ActionOrdinary, WindowActionGroup, "ordinary");
+relm4::new_stateless_action!(ActionIgnore, WindowActionGroup, "ignore");
+
+relm4::new_stateful_action!(ActionFilterPick, WindowActionGroup, "pick_filter", (), bool);
+relm4::new_stateful_action!(
+    ActionFilterOrdinary,
+    WindowActionGroup,
+    "ordinary_filter",
+    (),
+    bool
+);
+relm4::new_stateful_action!(
+    ActionFilterIgnore,
+    WindowActionGroup,
+    "ignore_filter",
+    (),
+    bool
+);
 
 fn main() {
     // Configure tracing information

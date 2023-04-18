@@ -1,8 +1,14 @@
+
+use std::io::BufReader;
+
 use anyhow::Error;
 use camino::Utf8PathBuf;
+
+use image::imageops::FilterType;
+use image::io::Reader;
+use image::{DynamicImage, ImageFormat};
 use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
-use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{FromRow, Row};
 use time::PrimitiveDateTime;
@@ -11,7 +17,7 @@ use walkdir::DirEntry;
 
 use crate::picture::{DateTime, Flag, Rating, Selection};
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone)]
 pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
@@ -21,6 +27,7 @@ pub struct PictureData {
     pub rating: Rating,
     pub flag: Flag,
     pub hidden: Option<bool>,
+    pub thumbnail: Option<DynamicImage>,
 }
 
 impl PictureData {
@@ -47,7 +54,7 @@ impl PictureData {
     pub fn update_from_exif(&mut self) -> Result<(), Error> {
         // Get the image capture date
         let file = std::fs::File::open(&self.filepath)?;
-        let mut bufreader = std::io::BufReader::new(&file);
+        let mut bufreader = BufReader::new(&file);
 
         let exifreader = exif::Reader::new();
         let exif = exifreader.read_from_container(&mut bufreader)?;
@@ -68,7 +75,23 @@ impl PictureData {
         name = "Loading thumbnail from file using ImageReader",
         level = "trace"
     )]
-    pub fn load_thumbnail(filepath: Utf8PathBuf, scale_x: i32, scale_y: i32) -> Texture {
+    pub async fn load_thumbnail(
+        filepath: Utf8PathBuf,
+        scale_x: u32,
+        scale_y: u32,
+    ) -> Result<DynamicImage, Error> {
+        let contents: Vec<u8> = relm4::tokio::fs::read(filepath).await?;
+        Ok(Reader::new(std::io::Cursor::new(contents))
+            .with_guessed_format()?
+            .decode()?
+            .resize(scale_x, scale_y, FilterType::Triangle))
+    }
+
+    #[tracing::instrument(
+        name = "Loading thumbnail from file using gdk::Pixbuf",
+        level = "trace"
+    )]
+    pub fn load_thumbnail_gtk(filepath: Utf8PathBuf, scale_x: i32, scale_y: i32) -> Texture {
         let image = Pixbuf::from_file_at_scale(filepath, scale_x, scale_y, true)
             .expect("Image not found.")
             .apply_embedded_orientation()
@@ -107,6 +130,12 @@ impl FromRow<'_, SqliteRow> for PictureData {
             .try_get::<Option<PrimitiveDateTime>, _>("capture_time")?
             .map(|t| t.into());
 
+        let thumbnail_data = row.try_get("thumbnail")?;
+        let thumbnail: Option<DynamicImage> = match thumbnail_data {
+            Some(data) => image::load_from_memory_with_format(data, ImageFormat::Png).ok(),
+            _ => None,
+        };
+
         Ok(Self {
             id: row.try_get("id")?,
             filepath,
@@ -125,6 +154,7 @@ impl FromRow<'_, SqliteRow> for PictureData {
                 .try_into()
                 .unwrap_or_default(),
             hidden: row.try_get("hidden")?,
+            thumbnail,
         })
     }
 }
