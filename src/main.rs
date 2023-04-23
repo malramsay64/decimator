@@ -10,6 +10,7 @@ use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
 use relm4::factory::AsyncFactoryVecDeque;
+use relm4::once_cell::sync::OnceCell;
 use relm4::prelude::*;
 use relm4::AsyncComponentSender;
 use sqlx::SqlitePool;
@@ -356,7 +357,7 @@ relm4::new_stateful_action!(
 
 fn main() {
     // Configure tracing information
-    let subscriber = get_subscriber(APP_ID.into(), "debug".into(), std::io::stdout);
+    let subscriber = get_subscriber(APP_ID.into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
 
     // Set up the database we are running from
@@ -364,6 +365,10 @@ fn main() {
     path.push(crate::APP_ID);
     std::fs::create_dir_all(&path).expect("Could not create directory.");
     let database_path = format!("sqlite://{}/database.db?mode=rwc", path.display());
+    relm4::RELM_THREADS.set(2).unwrap();
+    relm4::RELM_BLOCKING_THREADS
+        .set(num_cpus::get_physical())
+        .unwrap();
 
     // Starting the Relm Application Service
     let app = RelmApp::new(APP_ID);

@@ -4,9 +4,12 @@
 // to be properly handled and tested, so we split it into this file to maintain
 // the understanding and separation.
 
+use std::io::Cursor;
+
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use futures::stream::StreamExt;
+use image::ImageFormat;
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use tracing::Instrument;
 use uuid::Uuid;
@@ -88,39 +91,35 @@ pub(crate) async fn update_thumbnails(db: &SqlitePool, update_all: bool) -> Resu
     query
         .build_query_as::<'_, PictureData>()
         .fetch(db)
-        .map(|r| {
-            let db = db.clone();
-            relm4::spawn(async move {
-                let picture = r.unwrap();
-                let span = tracing::debug_span!("Updating thumbnail");
-                let filepath = picture.filepath.clone();
-                async move {
-                    tracing::debug!("loading file from {}", &filepath);
-                    let thumbnail = PictureData::load_thumbnail(filepath, 240, 240).await;
-                    if let Ok(t) = thumbnail {
-                        // TODO: Potential optimisations using a join in the SQL query for the update
-                        sqlx::query(
-                            r#"
+        .for_each_concurrent(4, |r| async move {
+            let picture = r.unwrap();
+            let span = tracing::debug_span!("Updating thumbnail");
+            let filepath = picture.filepath.clone();
+            tracing::debug!("loading file from {}", &filepath);
+            let mut buffer = Cursor::new(vec![]);
+            let thumbnail = PictureData::load_thumbnail(&filepath, 240, 240)
+                .await
+                .map(|f| f.write_to(&mut buffer, ImageFormat::Jpeg).unwrap());
+            if thumbnail.is_ok() {
+                // TODO: Potential optimisations using a join in the SQL query for the update
+                sqlx::query(
+                    r#"
                     UPDATE picture
                     SET             
                         thumbnail = ?
                     WHERE
                         id = ?
                 "#,
-                        )
-                        .bind(&t.into_bytes())
-                        .bind(picture.id)
-                        .execute(&db)
-                        .await
-                        .expect("Query failed to execute");
-                    }
-                }
-                .instrument(span)
+                )
+                .bind(&buffer.into_inner())
+                .bind(picture.id)
+                .execute(db)
                 .await
-            })
+                .expect("Query failed to execute");
+            } else {
+                tracing::info!("Unable to read file {filepath}");
+            }
         })
-        .buffer_unordered(num_cpus::get())
-        .collect::<Vec<_>>()
         .await;
     Ok(())
 }

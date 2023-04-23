@@ -2,15 +2,16 @@ mod picture_data;
 mod picture_thumbnail;
 mod property_types;
 
+use gtk::glib;
 use gtk::prelude::*;
 pub use picture_data::*;
 pub use picture_thumbnail::*;
 pub use property_types::*;
 use relm4::component::{AsyncComponent, AsyncComponentParts};
 use relm4::gtk::gdk::Texture;
-use relm4::typed_list_view::TypedListView;
+use relm4::gtk::gdk_pixbuf::Pixbuf;
+use relm4::typed_list_view::{TypedListItem, TypedListView};
 use relm4::{gtk, AsyncComponentSender};
-use uuid::Uuid;
 use walkdir::DirEntry;
 
 use crate::AppMsg;
@@ -26,7 +27,7 @@ pub fn is_image(entry: &DirEntry) -> bool {
 #[derive(Debug)]
 pub enum PictureViewMsg {
     SelectPictures(Vec<PictureData>),
-    SelectPreview(Option<i32>),
+    SelectPreview(Option<u32>),
     FilterPick(bool),
     FilterOrdinary(bool),
     FilterIgnore(bool),
@@ -38,7 +39,6 @@ pub enum PictureViewMsg {
 #[derive(Debug)]
 pub struct PictureView {
     thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection>,
-    preview_id: Option<Uuid>,
     preview_image: Option<Texture>,
 }
 
@@ -71,10 +71,6 @@ impl AsyncComponent for PictureView {
                     set_show_separators: true,
                     set_enable_rubberband: true,
 
-                    // connect_row_selected[sender] => move |_, row| {
-                    //     let index = row.map(|r| r.index());
-                    //     sender.input(PictureViewMsg::SelectPreview(index));
-                    // }
                 }
             }
         }
@@ -83,10 +79,10 @@ impl AsyncComponent for PictureView {
     async fn init(
         _: (),
         root: Self::Root,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let mut thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection> =
-            TypedListView::with_sorting();
+            TypedListView::default();
 
         thumbnails.add_filter(|item| item.picture.selection == Selection::Pick);
         thumbnails.add_filter(|item| item.picture.selection == Selection::Ordinary);
@@ -96,9 +92,14 @@ impl AsyncComponent for PictureView {
         thumbnails.set_filter_status(1, false);
         thumbnails.set_filter_status(2, false);
 
+        thumbnails
+            .selection_model
+            .connect_selected_notify(move |s| {
+                sender.input(PictureViewMsg::SelectPreview(Some(s.selected())))
+            });
+
         let model = Self {
             thumbnails,
-            preview_id: Default::default(),
             preview_image: Default::default(),
         };
         let thumbnail_list = &model.thumbnails.view;
@@ -119,25 +120,23 @@ impl AsyncComponent for PictureView {
                 self.thumbnails
                     .extend_from_iter(pictures.into_iter().map(PictureThumbnail::from));
             }
-            PictureViewMsg::SelectPreview(_index) => {
-                // if let Some(pic) = index.and_then(|i| self.shown_thumbnails.get(i as usize)) {
-                //     self.preview_id = Some(pic.picture.id);
-                //     let filepath = pic.picture.filepath.clone();
-                //     self.preview_image = Some(
-                //         relm4::spawn(async move {
-                //             let image = Pixbuf::from_file(filepath)
-                //                 .expect("Image not found.")
-                //                 .apply_embedded_orientation()
-                //                 .expect("Unable to apply orientation.");
-                //             Texture::for_pixbuf(&image)
-                //         })
-                //         .await
-                //         .unwrap(),
-                //     );
-                // } else {
-                //     self.preview_id = None;
-                //     self.preview_image = None;
-                // }
+            PictureViewMsg::SelectPreview(index) => {
+                if let Some(pic) = index.and_then(|i| self.thumbnails.get(i)) {
+                    let selected_path = pic.borrow().picture.filepath.clone();
+                    self.preview_image = Some(
+                        relm4::spawn_blocking(|| {
+                            let image = Pixbuf::from_file(selected_path)
+                                .expect("Image not found.")
+                                .apply_embedded_orientation()
+                                .expect("Unable to apply orientation.");
+                            Texture::for_pixbuf(&image)
+                        })
+                        .await
+                        .unwrap(),
+                    );
+                } else {
+                    self.preview_image = None;
+                }
             }
             PictureViewMsg::FilterPick(value) => {
                 let index = 0;

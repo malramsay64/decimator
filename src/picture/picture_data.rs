@@ -1,12 +1,13 @@
-
-use std::io::BufReader;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Seek};
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-
-use image::imageops::FilterType;
+use exif::{In, Tag};
+use futures::io::Cursor;
+use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
-use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, ImageBuffer, ImageFormat, RgbaImage};
 use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
 use sqlx::sqlite::SqliteRow;
@@ -76,15 +77,43 @@ impl PictureData {
         level = "trace"
     )]
     pub async fn load_thumbnail(
-        filepath: Utf8PathBuf,
+        filepath: &Utf8PathBuf,
         scale_x: u32,
         scale_y: u32,
-    ) -> Result<DynamicImage, Error> {
-        let contents: Vec<u8> = relm4::tokio::fs::read(filepath).await?;
-        Ok(Reader::new(std::io::Cursor::new(contents))
-            .with_guessed_format()?
-            .decode()?
-            .resize(scale_x, scale_y, FilterType::Triangle))
+    ) -> Result<RgbaImage, Error> {
+        let contents = relm4::tokio::fs::read(filepath).await?;
+        relm4::spawn_blocking(move || {
+            let mut cursor = std::io::Cursor::new(contents);
+            let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
+
+            // Reset the buffer to the start to read the image file
+            cursor.rewind()?;
+            let image = Reader::new(cursor).with_guessed_format()?.decode()?.resize(
+                scale_x,
+                scale_y,
+                FilterType::Triangle,
+            );
+            // Apply Exif image transformations
+            // https://sirv.com/help/articles/rotate-photos-to-be-upright/
+            Ok(
+                match exif_data
+                    .get_field(Tag::Orientation, In::PRIMARY)
+                    .and_then(|e| e.value.get_uint(0))
+                {
+                    Some(1) => image.into_rgba8(),
+                    Some(2) => flip_horizontal(&image),
+                    Some(3) => rotate180(&image),
+                    Some(4) => flip_horizontal(&rotate180(&image)),
+                    Some(5) => rotate270(&image),
+                    Some(6) => rotate270(&flip_horizontal(&image)),
+                    Some(7) => rotate90(&image),
+                    Some(8) => rotate90(&flip_horizontal(&image)),
+                    // Where we can't interpret the exif data, we revert to the base image
+                    _ => image.into_rgba8(),
+                },
+            )
+        })
+        .await?
     }
 
     #[tracing::instrument(
@@ -130,11 +159,11 @@ impl FromRow<'_, SqliteRow> for PictureData {
             .try_get::<Option<PrimitiveDateTime>, _>("capture_time")?
             .map(|t| t.into());
 
-        let thumbnail_data = row.try_get("thumbnail")?;
-        let thumbnail: Option<DynamicImage> = match thumbnail_data {
-            Some(data) => image::load_from_memory_with_format(data, ImageFormat::Png).ok(),
-            _ => None,
-        };
+        let thumbnail_data: Option<Vec<u8>> = row.try_get("thumbnail")?;
+        let thumbnail: Option<DynamicImage> = thumbnail_data.map(|data| {
+            image::load_from_memory_with_format(&data, ImageFormat::Jpeg)
+                .expect("Unable to load image from database")
+        });
 
         Ok(Self {
             id: row.try_get("id")?,

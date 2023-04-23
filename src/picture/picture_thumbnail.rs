@@ -1,10 +1,11 @@
+use std::io::Cursor;
+
 use glib::Bytes;
 use gtk::gdk::Texture;
-
 use gtk::glib;
 use gtk::prelude::*;
-
-
+use image::{DynamicImage, ImageFormat};
+use relm4::gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use relm4::prelude::*;
 use relm4::typed_list_view::RelmListItem;
 use relm4::{gtk, view};
@@ -45,8 +46,31 @@ impl Ord for PictureThumbnail {
 }
 
 impl From<PictureData> for PictureThumbnail {
+    #[tracing::instrument(name = "Converting PictureData to PictureThumbnail")]
     fn from(picture: PictureData) -> Self {
-        let thumbnail = picture.thumbnail.clone().map(|t| Texture::from_bytes(&Bytes::from(&t.into_bytes())).unwrap());
+        let thumbnail = picture.thumbnail.clone().map(|t| {
+            let (colorspace, has_alpha, bits_per_sample) = match &t {
+                DynamicImage::ImageRgb8(_) => (Colorspace::Rgb, false, 8_u32),
+                DynamicImage::ImageRgba8(_) => (Colorspace::Rgb, true, 8_u32),
+                _ => unimplemented!(),
+            };
+            let width = t.width();
+            let height = t.height();
+            let rowstride = if has_alpha {
+                bits_per_sample * 4 * width / 8
+            } else {
+                bits_per_sample * 3 * width / 8
+            };
+            Texture::for_pixbuf(&Pixbuf::from_bytes(
+                &Bytes::from(&t.into_bytes()),
+                colorspace,
+                has_alpha,
+                bits_per_sample as i32,
+                width as i32,
+                height as i32,
+                rowstride as i32,
+            ))
+        });
         PictureThumbnail { picture, thumbnail }
     }
 }
@@ -107,7 +131,7 @@ impl RelmListItem for PictureThumbnail {
         (root, widgets)
     }
 
-    #[tracing::instrument(name = "Binding Widget", skip(widgets, _root))]
+    #[tracing::instrument(name = "Binding Widget", level = "trace", skip(widgets, _root))]
     fn bind(&mut self, widgets: &mut Self::Widgets, _root: &mut Self::Root) {
         let Widgets {
             thumbnail,
@@ -115,8 +139,6 @@ impl RelmListItem for PictureThumbnail {
             flag,
         } = widgets;
 
-        let _filepath = self.picture.filepath.clone();
-        // self.thumbnail = Some(PictureData::load_thumbnail(filepath, 240, 240).unwrap());
         rating.set_label(&format!("{}", self.picture.rating));
         flag.set_label(&format!("{}", self.picture.flag));
         thumbnail.set_paintable(self.thumbnail.as_ref());
