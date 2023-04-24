@@ -76,44 +76,41 @@ impl PictureData {
         name = "Loading thumbnail from file using ImageReader",
         level = "trace"
     )]
-    pub async fn load_thumbnail(
+    pub fn load_thumbnail(
         filepath: &Utf8PathBuf,
         scale_x: u32,
         scale_y: u32,
     ) -> Result<RgbaImage, Error> {
-        let contents = relm4::tokio::fs::read(filepath).await?;
-        relm4::spawn_blocking(move || {
-            let mut cursor = std::io::Cursor::new(contents);
-            let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
+        let file = std::fs::File::open(filepath)?;
+        let mut cursor = std::io::BufReader::new(file);
+        let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
 
-            // Reset the buffer to the start to read the image file
-            cursor.rewind()?;
-            let image = Reader::new(cursor).with_guessed_format()?.decode()?.resize(
-                scale_x,
-                scale_y,
-                FilterType::Triangle,
-            );
-            // Apply Exif image transformations
-            // https://sirv.com/help/articles/rotate-photos-to-be-upright/
-            Ok(
-                match exif_data
-                    .get_field(Tag::Orientation, In::PRIMARY)
-                    .and_then(|e| e.value.get_uint(0))
-                {
-                    Some(1) => image.into_rgba8(),
-                    Some(2) => flip_horizontal(&image),
-                    Some(3) => rotate180(&image),
-                    Some(4) => flip_horizontal(&rotate180(&image)),
-                    Some(5) => rotate270(&image),
-                    Some(6) => rotate270(&flip_horizontal(&image)),
-                    Some(7) => rotate90(&image),
-                    Some(8) => rotate90(&flip_horizontal(&image)),
-                    // Where we can't interpret the exif data, we revert to the base image
-                    _ => image.into_rgba8(),
-                },
-            )
-        })
-        .await?
+        // Reset the buffer to the start to read the image file
+        cursor.rewind()?;
+        let image = Reader::new(cursor).with_guessed_format()?.decode()?.resize(
+            scale_x,
+            scale_y,
+            FilterType::Triangle,
+        );
+        // Apply Exif image transformations
+        // https://sirv.com/help/articles/rotate-photos-to-be-upright/
+        Ok(
+            match exif_data
+                .get_field(Tag::Orientation, In::PRIMARY)
+                .and_then(|e| e.value.get_uint(0))
+            {
+                Some(1) => image.into_rgba8(),
+                Some(2) => flip_horizontal(&image),
+                Some(3) => rotate180(&image),
+                Some(4) => flip_vertical(&image),
+                Some(5) => rotate270(&flip_horizontal(&image)),
+                Some(6) => rotate90(&image),
+                Some(7) => rotate90(&flip_horizontal(&image)),
+                Some(8) => rotate270(&image),
+                // Where we can't interpret the exif data, we revert to the base image
+                _ => image.into_rgba8(),
+            },
+        )
     }
 
     #[tracing::instrument(

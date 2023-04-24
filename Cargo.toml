@@ -24,7 +24,7 @@ camino = { version = "1.1.1", features = ["serde1"] }
 time = {version = "0.3.17", features = ["serde"] }
 kamadak-exif = "0.5.5"
 itertools = "0.10.5"
-relm4 = { git="https://github.com/Relm4/Relm4", branch="list-view-wrapper", features = ["macros", "gnome_43", "libadwaita"] }
+relm4 = { git="https://github.com/malramsay64/Relm4", branch="list-view-wrapper", features = ["macros", "gnome_43", "libadwaita"] }
 image = "0.24.6"
 futures = "0.3.28"
 num_cpus = "1.15.0"

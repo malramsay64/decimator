@@ -1,12 +1,9 @@
-use std::io::Cursor;
-
 use glib::Bytes;
 use gtk::gdk::Texture;
 use gtk::glib;
 use gtk::prelude::*;
-use image::{DynamicImage, ImageFormat};
+use image::DynamicImage;
 use relm4::gtk::gdk_pixbuf::{Colorspace, Pixbuf};
-use relm4::prelude::*;
 use relm4::typed_list_view::RelmListItem;
 use relm4::{gtk, view};
 
@@ -78,7 +75,7 @@ impl From<PictureData> for PictureThumbnail {
 pub struct Widgets {
     thumbnail: gtk::Picture,
     rating: gtk::Label,
-    flag: gtk::Label,
+    selection: gtk::Label,
 }
 
 impl RelmListItem for PictureThumbnail {
@@ -112,7 +109,7 @@ impl RelmListItem for PictureThumbnail {
                         set_margin_start: 10,
                         set_halign: gtk::Align::Start,
                     },
-                    #[name(flag)]
+                    #[name(selection)]
                     gtk::Label {
                         set_hexpand: true,
                         set_margin_end: 10,
@@ -125,7 +122,7 @@ impl RelmListItem for PictureThumbnail {
         let widgets = Widgets {
             thumbnail,
             rating,
-            flag,
+            selection,
         };
 
         (root, widgets)
@@ -136,11 +133,11 @@ impl RelmListItem for PictureThumbnail {
         let Widgets {
             thumbnail,
             rating,
-            flag,
+            selection,
         } = widgets;
 
         rating.set_label(&format!("{}", self.picture.rating));
-        flag.set_label(&format!("{}", self.picture.flag));
+        selection.set_label(&format!("{}", self.picture.selection));
         thumbnail.set_paintable(self.thumbnail.as_ref());
     }
 

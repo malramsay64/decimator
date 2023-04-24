@@ -10,10 +10,11 @@ use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
 use relm4::factory::AsyncFactoryVecDeque;
-use relm4::once_cell::sync::OnceCell;
 use relm4::prelude::*;
 use relm4::AsyncComponentSender;
 use sqlx::SqlitePool;
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::prelude::*;
 
 mod data;
 mod directory;
@@ -25,7 +26,7 @@ mod telemetry;
 
 use directory::Directory;
 use picture::{PictureView, PictureViewMsg};
-use telemetry::{get_subscriber, init_subscriber};
+use telemetry::{get_subscriber, get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
 
@@ -124,12 +125,12 @@ impl AsyncComponent for App {
 
     menu! {
         main_menu: {
-            "Generate Thumbnails" => ActionUpdateThumbnailNew,
-            "Update Thumbnails" => ActionUpdateThumbnailAll,
+            "Generate New Thumbnails" => ActionUpdateThumbnailNew,
+            "Update All Thumbnails" => ActionUpdateThumbnailAll,
             section! {
-                "Filter Pick" => ActionFilterPick,
-                "Filter Ordinary" => ActionFilterOrdinary,
-                "Filter Ignore" => ActionFilterIgnore,
+                "Hide Picked" => ActionFilterPick,
+                "Hide Ordinary" => ActionFilterOrdinary,
+                "Hide Ignored" => ActionFilterIgnore,
             }
         }
     }
@@ -357,7 +358,7 @@ relm4::new_stateful_action!(
 
 fn main() {
     // Configure tracing information
-    let subscriber = get_subscriber(APP_ID.into(), "info".into(), std::io::stdout);
+    let subscriber = get_subscriber_terminal(APP_ID.into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
 
     // Set up the database we are running from

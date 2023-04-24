@@ -91,15 +91,17 @@ pub(crate) async fn update_thumbnails(db: &SqlitePool, update_all: bool) -> Resu
     query
         .build_query_as::<'_, PictureData>()
         .fetch(db)
-        .for_each_concurrent(4, |r| async move {
+        .for_each_concurrent(num_cpus::get(), |r| async move {
             let picture = r.unwrap();
             let span = tracing::debug_span!("Updating thumbnail");
             let filepath = picture.filepath.clone();
             tracing::debug!("loading file from {}", &filepath);
             let mut buffer = Cursor::new(vec![]);
-            let thumbnail = PictureData::load_thumbnail(&filepath, 240, 240)
-                .await
-                .map(|f| f.write_to(&mut buffer, ImageFormat::Jpeg).unwrap());
+            let thumbnail =
+                relm4::spawn_blocking(move || PictureData::load_thumbnail(&filepath, 240, 240))
+                    .await
+                    .unwrap()
+                    .map(|f| f.write_to(&mut buffer, ImageFormat::Jpeg).unwrap());
             if thumbnail.is_ok() {
                 // TODO: Potential optimisations using a join in the SQL query for the update
                 sqlx::query(
@@ -117,7 +119,7 @@ pub(crate) async fn update_thumbnails(db: &SqlitePool, update_all: bool) -> Resu
                 .await
                 .expect("Query failed to execute");
             } else {
-                tracing::info!("Unable to read file {filepath}");
+                tracing::info!("Unable to read file {}", &picture.filepath);
             }
         })
         .await;

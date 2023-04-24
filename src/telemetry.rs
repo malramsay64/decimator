@@ -4,7 +4,8 @@ use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::{EnvFilter, Registry};
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::{filter, EnvFilter, Registry};
 
 /// Compose multiple layers into a `tracing`'s subscriber.
 ///
@@ -12,7 +13,7 @@ use tracing_subscriber::{EnvFilter, Registry};
 ///
 /// We are using `impl Subscriber` as return type to avoid having to spell out the actual
 /// type of the returned subscriber, which is indeed quite complex.
-pub fn get_subscriber<Sink>(
+pub fn get_subscriber_file<Sink>(
     name: String,
     env_filter: String,
     sink: Sink,
@@ -27,6 +28,33 @@ where
         .with(env_filter)
         .with(JsonStorageLayer)
         .with(formatting_layer)
+}
+
+/// Compose multiple layers into a `tracing`'s subscriber.
+///
+/// # Implementation Notes
+///
+/// We are using `impl Subscriber` as return type to avoid having to spell out the actual
+/// type of the returned subscriber, which is indeed quite complex.
+pub fn get_subscriber_terminal<Sink>(
+    name: String,
+    env_filter: String,
+    sink: Sink,
+) -> impl Subscriber + Sync + Send
+where
+    Sink: for<'a> MakeWriter<'a> + Send + Sync + 'static,
+{
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
+    let layer = tracing_subscriber::fmt::layer()
+        .with_thread_names(true)
+        .with_target(true)
+        .pretty()
+        .with_filter(env_filter)
+        .with_filter(filter::filter_fn(|metadata| {
+            metadata.target() != "relm4::component::r#async::builder"
+        }));
+    tracing_subscriber::registry().with(layer)
 }
 
 /// Register a subscriber as global default to process span data.
