@@ -5,6 +5,7 @@ use adw::prelude::*;
 use camino::Utf8PathBuf;
 use data::{query_directory_pictures, query_unique_directories, update_thumbnails};
 use gtk::glib;
+use import::find_new_images;
 use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
@@ -12,9 +13,11 @@ use relm4::component::{
 use relm4::factory::AsyncFactoryVecDeque;
 use relm4::prelude::*;
 use relm4::AsyncComponentSender;
+use relm4_components::open_dialog::*;
 use sqlx::SqlitePool;
-use tracing::metadata::LevelFilter;
-use tracing_subscriber::prelude::*;
+
+use crate::data::{add_new_images, query_existing_pictures};
+use crate::import::{import, map_directory_images};
 
 mod data;
 mod directory;
@@ -26,12 +29,16 @@ mod telemetry;
 
 use directory::Directory;
 use picture::{PictureView, PictureViewMsg};
-use telemetry::{get_subscriber, get_subscriber_terminal, init_subscriber};
+use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
 
 #[derive(Debug)]
 pub enum AppMsg {
+    DirectoryAddRequest,
+    DirectoryAdd(Utf8PathBuf),
+    DirectoryImportRequest,
+    DirectoryImport(Utf8PathBuf),
     UpdateDirectories,
     UpdateThumbnailsAll,
     UpdateThumbnailsNew,
@@ -42,6 +49,7 @@ pub enum AppMsg {
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
+    Ignore,
 }
 
 #[derive(Debug)]
@@ -49,6 +57,8 @@ struct App {
     database: SqlitePool,
     directories: AsyncFactoryVecDeque<Directory>,
     picture_view: AsyncController<PictureView>,
+    dialog_import: Controller<OpenDialog>,
+    dialog_add: Controller<OpenDialog>,
 }
 
 #[relm4::component(async)]
@@ -75,9 +85,11 @@ impl AsyncComponent for App {
                         pack_start = &gtk::Box {
                             gtk::Button {
                                 set_label: "Add Directory",
+                                connect_clicked => AppMsg::DirectoryAddRequest,
                             },
                             gtk::Button {
                                 set_label: "Import",
+                                connect_clicked => AppMsg::DirectoryImportRequest,
                             }
                         },
                     },
@@ -90,7 +102,6 @@ impl AsyncComponent for App {
 
                             connect_row_selected[sender] => move |_, row| {
                                 let index = row.map(|r| r.index());
-                                // println!("{index:?}");
                                 sender.input(AppMsg::SelectDirectory(index));
                             }
                         }
@@ -158,10 +169,45 @@ impl AsyncComponent for App {
         let picture_view = PictureView::builder()
             .launch(())
             .forward(sender.input_sender(), identity);
+
+        let dialog_settings = OpenDialogSettings {
+            folder_mode: true,
+            create_folders: false,
+            accept_label: String::from("Import"),
+            ..Default::default()
+        };
+
+        let dialog_import = OpenDialog::builder()
+            .transient_for_native(&root)
+            .launch(dialog_settings)
+            .forward(sender.input_sender(), |response| match response {
+                OpenDialogResponse::Accept(path) => {
+                    AppMsg::DirectoryImport(path.try_into().unwrap())
+                }
+                OpenDialogResponse::Cancel => AppMsg::Ignore,
+            });
+
+        let dialog_settings = OpenDialogSettings {
+            folder_mode: true,
+            create_folders: false,
+            accept_label: String::from("Add"),
+            ..Default::default()
+        };
+
+        let dialog_add = OpenDialog::builder()
+            .transient_for_native(&root)
+            .launch(dialog_settings)
+            .forward(sender.input_sender(), |response| match response {
+                OpenDialogResponse::Accept(path) => AppMsg::DirectoryAdd(path.try_into().unwrap()),
+                OpenDialogResponse::Cancel => AppMsg::Ignore,
+            });
+
         let model = App {
             database,
             directories,
             picture_view,
+            dialog_import,
+            dialog_add,
         };
         let directory_list = model.directories.widget();
 
@@ -256,14 +302,26 @@ impl AsyncComponent for App {
         AsyncComponentParts { model, widgets }
     }
 
-    #[tracing::instrument(name = "Updating App", level = "debug", skip(self, _sender, _root))]
+    #[tracing::instrument(name = "Updating App", level = "debug", skip(self, sender, _root))]
     async fn update(
         &mut self,
         msg: Self::Input,
-        _sender: AsyncComponentSender<Self>,
+        sender: AsyncComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match msg {
+            AppMsg::DirectoryImportRequest => self.dialog_import.emit(OpenDialogMsg::Open),
+            AppMsg::DirectoryImport(dir) => {
+                let db = self.database.clone();
+                relm4::spawn(async move { import(&db, &dir).await });
+                sender.input(AppMsg::UpdateDirectories)
+            }
+            AppMsg::DirectoryAddRequest => self.dialog_add.emit(OpenDialogMsg::Open),
+            AppMsg::DirectoryAdd(dir) => {
+                let db = self.database.clone();
+                relm4::spawn(async move { find_new_images(&db, &dir).await });
+                sender.input(AppMsg::UpdateDirectories)
+            }
             AppMsg::UpdateDirectories => {
                 let mut directory_guard = self.directories.guard();
                 let directories = query_unique_directories(&self.database).await.unwrap();
@@ -315,6 +373,7 @@ impl AsyncComponent for App {
             AppMsg::SelectionPick => self.picture_view.emit(PictureViewMsg::SelectionPick),
             AppMsg::SelectionOrdinary => self.picture_view.emit(PictureViewMsg::SelectionOrdinary),
             AppMsg::SelectionIgnore => self.picture_view.emit(PictureViewMsg::SelectionIgnore),
+            AppMsg::Ignore => {}
         }
     }
 }

@@ -89,11 +89,11 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-pub async fn import(db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> {
+pub async fn import(db: &SqlitePool, directory: &Utf8PathBuf) -> Result<(), Error> {
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
     // The list of all the pictures that currently exist within the database.
-    let pictures_existing = query_existing_pictures(db, String::from(""))
+    let pictures_existing = query_existing_pictures(db, &Utf8PathBuf::from(""))
         .await
         .unwrap()
         .into_iter()
@@ -181,4 +181,32 @@ pub async fn import(db: &SqlitePool, directory: &Utf8Path) -> Result<(), Error> 
     // 3. Check the files are equal
     //     Now we also need to read in the old file to check.
     Ok(())
+}
+
+pub async fn find_new_images(db: &SqlitePool, directory: &Utf8PathBuf) {
+    let existing_pictures = query_existing_pictures(db, directory).await.unwrap();
+
+    tracing::info!(
+        "Found {} existing files within directory",
+        existing_pictures.len()
+    );
+
+    let dir = directory.clone();
+    let images: Vec<_> = relm4::spawn_blocking(move || {
+        map_directory_images(&dir)
+            .into_iter()
+            .filter(|p| !existing_pictures.contains(&p.filepath))
+            .collect()
+    })
+    .await
+    .unwrap();
+
+    if images.is_empty() {
+        tracing::info!("No new images found in directory {directory}");
+        return;
+    } else {
+        tracing::info!("Adding {} new images to the database.", images.len());
+    }
+
+    add_new_images(db, images).await.unwrap();
 }

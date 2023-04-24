@@ -45,7 +45,7 @@ pub(crate) async fn query_directory_pictures(
 
 pub(crate) async fn query_existing_pictures(
     db: &SqlitePool,
-    directory: String,
+    directory: &Utf8PathBuf,
 ) -> Result<Vec<Utf8PathBuf>, Error> {
     Ok(sqlx::query_as(
         r#"
@@ -56,7 +56,7 @@ pub(crate) async fn query_existing_pictures(
     )
     // This matches the current directory. There is no slash after
     // the directory so we just use the exact value.
-    .bind(&directory)
+    .bind(directory.to_string())
     // This matches all the subdirectories, which are needed since we
     // perform a recursive search when adding new directories.
     .bind(format!("{directory}/%"))
