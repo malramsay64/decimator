@@ -46,6 +46,7 @@ pub enum AppMsg {
     FilterPick(bool),
     FilterOrdinary(bool),
     FilterIgnore(bool),
+    FilterHidden(bool),
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
@@ -142,6 +143,9 @@ impl AsyncComponent for App {
                 "Hide Picked" => ActionFilterPick,
                 "Hide Ordinary" => ActionFilterOrdinary,
                 "Hide Ignored" => ActionFilterIgnore,
+            },
+            section!{
+                "Hidden Images" => ActionFilterHidden,
             }
         }
     }
@@ -277,6 +281,13 @@ impl AsyncComponent for App {
                     sender_filter_ignore.input(AppMsg::FilterIgnore(*state));
                 })
             };
+            let sender_filter_hidden = sender.clone();
+            let action_filter_hidden: RelmAction<ActionFilterHidden> = {
+                RelmAction::new_stateful(&true, move |_, state: &mut bool| {
+                    *state = !*state;
+                    sender_filter_hidden.input(AppMsg::FilterHidden(*state));
+                })
+            };
 
             group.add_action(action_update_thumbnail_all);
             group.add_action(action_update_thumbnail_new);
@@ -286,6 +297,7 @@ impl AsyncComponent for App {
             group.add_action(action_pick);
             group.add_action(action_ordinary);
             group.add_action(action_ignore);
+            group.add_action(action_filter_hidden);
 
             let actions = group.into_action_group();
 
@@ -370,6 +382,9 @@ impl AsyncComponent for App {
             AppMsg::FilterIgnore(value) => {
                 self.picture_view.emit(PictureViewMsg::FilterIgnore(value))
             }
+            AppMsg::FilterHidden(value) => {
+                self.picture_view.emit(PictureViewMsg::FilterHidden(value))
+            }
             AppMsg::SelectionPick => self.picture_view.emit(PictureViewMsg::SelectionPick),
             AppMsg::SelectionOrdinary => self.picture_view.emit(PictureViewMsg::SelectionOrdinary),
             AppMsg::SelectionIgnore => self.picture_view.emit(PictureViewMsg::SelectionIgnore),
@@ -411,6 +426,13 @@ relm4::new_stateful_action!(
     ActionFilterIgnore,
     WindowActionGroup,
     "ignore_filter",
+    (),
+    bool
+);
+relm4::new_stateful_action!(
+    ActionFilterHidden,
+    WindowActionGroup,
+    "hidden_filter",
     (),
     bool
 );

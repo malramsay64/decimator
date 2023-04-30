@@ -27,7 +27,7 @@ pub struct PictureData {
     pub selection: Selection,
     pub rating: Rating,
     pub flag: Flag,
-    pub hidden: Option<bool>,
+    pub hidden: bool,
     pub thumbnail: Option<DynamicImage>,
 }
 

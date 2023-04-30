@@ -31,6 +31,7 @@ pub enum PictureViewMsg {
     FilterPick(bool),
     FilterOrdinary(bool),
     FilterIgnore(bool),
+    FilterHidden(bool),
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
@@ -87,10 +88,12 @@ impl AsyncComponent for PictureView {
         thumbnails.add_filter(|item| item.picture.selection != Selection::Pick);
         thumbnails.add_filter(|item| item.picture.selection != Selection::Ordinary);
         thumbnails.add_filter(|item| item.picture.selection != Selection::Ignore);
+        thumbnails.add_filter(|item| item.picture.hidden != true);
 
         thumbnails.set_filter_status(0, false);
         thumbnails.set_filter_status(1, false);
         thumbnails.set_filter_status(2, false);
+        thumbnails.set_filter_status(3, true);
 
         thumbnails
             .selection_model
@@ -145,6 +148,10 @@ impl AsyncComponent for PictureView {
             }
             PictureViewMsg::FilterIgnore(value) => {
                 let index = 2;
+                self.thumbnails.set_filter_status(index, value);
+            }
+            PictureViewMsg::FilterHidden(value) => {
+                let index = 3;
                 self.thumbnails.set_filter_status(index, value);
             }
             PictureViewMsg::SelectionPick => {}
