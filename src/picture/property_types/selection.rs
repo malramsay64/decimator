@@ -1,18 +1,24 @@
 //! Modelling the picking of a picture
 
-use std::fmt::Display;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
+use sea_orm::{DeriveActiveEnum, EnumIter};
 use serde::{Deserialize, Serialize};
 
 // Collection of options for picking an image,
 // it can either be Rejected, Hidden or Selected.
-#[derive(Copy, Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(
+    Copy, Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq, EnumIter, DeriveActiveEnum,
+)]
+#[sea_orm(rs_type = "String", db_type = "String(None)")]
 pub enum Selection {
+    #[sea_orm(string_value = "Ignore")]
     Ignore,
     #[default]
+    #[sea_orm(string_value = "Ordinary")]
     Ordinary,
+    #[sea_orm(string_value = "Pick")]
     Pick,
 }
 
@@ -37,16 +43,5 @@ impl TryFrom<&str> for Selection {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::from_str(value)
-    }
-}
-
-impl Display for Selection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            Selection::Ignore => "Ignore",
-            Selection::Ordinary => "Ordinary",
-            Selection::Pick => "Pick",
-        };
-        write!(f, "{text}")
     }
 }

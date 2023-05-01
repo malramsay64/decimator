@@ -1,17 +1,37 @@
-use std::fmt::Display;
 use std::str::FromStr;
 
 use anyhow::{Error, Result};
+use sea_orm::{DeriveActiveEnum, EnumIter};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    DeriveActiveEnum,
+)]
+#[sea_orm(rs_type = "String", db_type = "String(None)")]
 pub enum Rating {
     #[default]
+    #[sea_orm(string_value = "Zero")]
     Zero,
+    #[sea_orm(string_value = "One")]
     One,
+    #[sea_orm(string_value = "Two")]
     Two,
+    #[sea_orm(string_value = "Three")]
     Three,
+    #[sea_orm(string_value = "Four")]
     Four,
+    #[sea_orm(string_value = "Five")]
     Five,
 }
 
@@ -36,19 +56,5 @@ impl TryFrom<&str> for Rating {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::from_str(value)
-    }
-}
-
-impl Display for Rating {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            Rating::Zero => "Zero",
-            Rating::One => "One",
-            Rating::Two => "Two",
-            Rating::Three => "Three",
-            Rating::Four => "Four",
-            Rating::Five => "Five",
-        };
-        write!(f, "{text}")
     }
 }

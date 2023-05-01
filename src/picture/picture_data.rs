@@ -1,24 +1,21 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader, Seek};
+use std::io::{BufReader, Cursor, Seek};
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use exif::{In, Tag};
-use futures::io::Cursor;
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
-use image::{DynamicImage, ImageBuffer, ImageFormat, RgbaImage};
+use image::{DynamicImage, ImageFormat, RgbaImage};
 use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
-use sqlx::sqlite::SqliteRow;
-use sqlx::{FromRow, Row};
-use time::PrimitiveDateTime;
+use sea_orm::ActiveValue;
 use uuid::Uuid;
 use walkdir::DirEntry;
 
+use crate::data::picture;
 use crate::picture::{DateTime, Flag, Rating, Selection};
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
@@ -126,6 +123,46 @@ impl PictureData {
     }
 }
 
+impl From<picture::Model> for PictureData {
+    fn from(value: picture::Model) -> Self {
+        let thumbnail = value.thumbnail.as_ref().and_then(|data| {
+            image::load_from_memory_with_format(data, image::ImageFormat::Jpeg).ok()
+        });
+        Self {
+            id: value.id,
+            filepath: value.filepath(),
+            raw_extension: value.raw_extension,
+            capture_time: value.capture_time.map(DateTime::from),
+            selection: value.selection,
+            rating: value.rating,
+            flag: value.flag,
+            hidden: value.hidden,
+            thumbnail,
+        }
+    }
+}
+impl From<PictureData> for picture::ActiveModel {
+    fn from(value: PictureData) -> Self {
+        let mut thumbnail = Cursor::new(vec![]);
+        value
+            .thumbnail
+            .as_ref()
+            .map(|f| f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap());
+        Self {
+            id: ActiveValue::Unchanged(value.id),
+            directory: ActiveValue::Set(value.directory()),
+            filename: ActiveValue::Set(value.filename()),
+            raw_extension: ActiveValue::Set(value.raw_extension),
+            capture_time: ActiveValue::Set(value.capture_time.map(|t| t.datetime())),
+            selection: ActiveValue::Set(value.selection),
+            rating: ActiveValue::Set(value.rating),
+            flag: ActiveValue::Set(value.flag),
+            hidden: ActiveValue::Set(value.hidden),
+            thumbnail: ActiveValue::Set(Some(thumbnail.into_inner())),
+        }
+    }
+}
+
 impl From<Utf8PathBuf> for PictureData {
     fn from(path: Utf8PathBuf) -> Self {
         Self {
@@ -143,45 +180,6 @@ impl From<DirEntry> for PictureData {
             filepath: p,
             ..Default::default()
         }
-    }
-}
-
-impl FromRow<'_, SqliteRow> for PictureData {
-    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
-        let directory: &str = row.try_get("directory")?;
-        let filename: &str = row.try_get("filename")?;
-        let filepath: Utf8PathBuf = [directory, filename].iter().collect();
-        let capture_time: Option<DateTime> = row
-            // We need to ensure we get the Option.
-            .try_get::<Option<PrimitiveDateTime>, _>("capture_time")?
-            .map(|t| t.into());
-
-        let thumbnail_data: Option<Vec<u8>> = row.try_get("thumbnail")?;
-        let thumbnail: Option<DynamicImage> = thumbnail_data.map(|data| {
-            image::load_from_memory_with_format(&data, ImageFormat::Jpeg)
-                .expect("Unable to load image from database")
-        });
-
-        Ok(Self {
-            id: row.try_get("id")?,
-            filepath,
-            raw_extension: None,
-            capture_time,
-            selection: row
-                .try_get::<&str, _>("selection")?
-                .try_into()
-                .unwrap_or_default(),
-            rating: row
-                .try_get::<&str, _>("rating")?
-                .try_into()
-                .unwrap_or_default(),
-            flag: row
-                .try_get::<&str, _>("flag")?
-                .try_into()
-                .unwrap_or_default(),
-            hidden: row.try_get("hidden")?,
-            thumbnail,
-        })
     }
 }
 

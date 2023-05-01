@@ -12,6 +12,7 @@ use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
 use relm4::typed_list_view::{TypedListItem, TypedListView};
 use relm4::{gtk, AsyncComponentSender};
+use time::PrimitiveDateTime;
 use walkdir::DirEntry;
 
 use crate::AppMsg;
@@ -52,7 +53,7 @@ impl AsyncComponent for PictureView {
 
     view! {
         gtk::Box {
-            set_orientation: gtk::Orientation::Horizontal,
+            set_orientation: gtk::Orientation::Vertical,
             gtk::Box {
                 set_vexpand: true,
                 set_hexpand: true,
@@ -63,15 +64,15 @@ impl AsyncComponent for PictureView {
                 }
             },
             gtk::ScrolledWindow {
-                set_propagate_natural_width: true,
+                set_propagate_natural_height: true,
                 set_has_frame: true,
 
                 #[local_ref]
                 thumbnail_list -> gtk::ListView {
-                    set_width_request: 260,
+                    set_height_request: 260,
                     set_show_separators: true,
                     set_enable_rubberband: true,
-
+                    set_orientation: gtk::Orientation::Horizontal,
                 }
             }
         }

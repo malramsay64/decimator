@@ -2,16 +2,26 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
+use sea_orm::{DeriveActiveEnum, EnumIter};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, EnumIter, DeriveActiveEnum,
+)]
+#[sea_orm(rs_type = "String", db_type = "String(None)")]
 pub enum Flag {
     #[default]
+    #[sea_orm(string_value = "None")]
     None,
+    #[sea_orm(string_value = "Red")]
     Red,
+    #[sea_orm(string_value = "Green")]
     Green,
+    #[sea_orm(string_value = "Blue")]
     Blue,
+    #[sea_orm(string_value = "Yellow")]
     Yellow,
+    #[sea_orm(string_value = "Purple")]
     Purple,
 }
 
@@ -36,19 +46,5 @@ impl TryFrom<&str> for Flag {
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         Self::from_str(value)
-    }
-}
-
-impl Display for Flag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            Flag::None => "None",
-            Flag::Red => "Red",
-            Flag::Green => "Green",
-            Flag::Blue => "Blue",
-            Flag::Yellow => "Yellow",
-            Flag::Purple => "Purple",
-        };
-        write!(f, "{text}")
     }
 }

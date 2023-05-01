@@ -10,14 +10,13 @@ use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
-use relm4::factory::AsyncFactoryVecDeque;
 use relm4::prelude::*;
+use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
 use relm4_components::open_dialog::*;
-use sqlx::SqlitePool;
+use sea_orm::{Database, DatabaseConnection};
 
-use crate::data::{add_new_images, query_existing_pictures};
-use crate::import::{import, map_directory_images};
+use crate::import::import;
 
 mod data;
 mod directory;
@@ -27,7 +26,7 @@ mod picture;
 mod telemetry;
 // mod window;
 
-use directory::Directory;
+use directory::DirectoryData;
 use picture::{PictureView, PictureViewMsg};
 use telemetry::{get_subscriber_terminal, init_subscriber};
 
@@ -42,7 +41,7 @@ pub enum AppMsg {
     UpdateDirectories,
     UpdateThumbnailsAll,
     UpdateThumbnailsNew,
-    SelectDirectory(Option<i32>),
+    SelectDirectories(Vec<u32>),
     FilterPick(bool),
     FilterOrdinary(bool),
     FilterIgnore(bool),
@@ -55,8 +54,8 @@ pub enum AppMsg {
 
 #[derive(Debug)]
 struct App {
-    database: SqlitePool,
-    directories: AsyncFactoryVecDeque<Directory>,
+    database: DatabaseConnection,
+    directories: TypedListView<DirectoryData, gtk::MultiSelection>,
     picture_view: AsyncController<PictureView>,
     dialog_import: Controller<OpenDialog>,
     dialog_add: Controller<OpenDialog>,
@@ -98,14 +97,7 @@ impl AsyncComponent for App {
                         set_vexpand: true,
                         set_width_request: 325,
                         #[local_ref]
-                        directory_list -> gtk::ListBox {
-                            set_selection_mode: gtk::SelectionMode::Single,
-
-                            connect_row_selected[sender] => move |_, row| {
-                                let index = row.map(|r| r.index());
-                                sender.input(AppMsg::SelectDirectory(index));
-                            }
-                        }
+                        directory_list -> gtk::ListView {}
                     }
                 },
                 #[wrap(Some)]
@@ -156,20 +148,29 @@ impl AsyncComponent for App {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let database = SqlitePool::connect(&database_path)
+        let database = Database::connect(&database_path)
             .await
             .expect("Unable to initialise sqlite database");
 
-        let mut directories =
-            AsyncFactoryVecDeque::new(gtk::ListBox::default(), sender.input_sender());
+        let directories: TypedListView<DirectoryData, gtk::MultiSelection> =
+            TypedListView::with_sorting();
 
-        {
-            let mut directory_guard = directories.guard();
-            let directory_vec = query_unique_directories(&database).await.unwrap();
-            for dir in directory_vec {
-                directory_guard.push_back(Utf8PathBuf::from(dir));
-            }
-        }
+        let directory_sender = sender.clone();
+        directories.selection_model.connect_selection_changed(
+            move |selection, _position, _n_items| {
+                let mut indicies = vec![];
+                let bitvec = selection.selection();
+                if let Some((iter, value)) = gtk::BitsetIter::init_first(&bitvec) {
+                    indicies.push(value);
+                    for value in iter {
+                        indicies.push(value);
+                    }
+                    dbg!(&indicies);
+                    directory_sender.input(AppMsg::SelectDirectories(indicies))
+                }
+            },
+        );
+
         let picture_view = PictureView::builder()
             .launch(())
             .forward(sender.input_sender(), identity);
@@ -213,7 +214,7 @@ impl AsyncComponent for App {
             dialog_import,
             dialog_add,
         };
-        let directory_list = model.directories.widget();
+        let directory_list = &model.directories.view;
 
         let widgets = view_output!();
 
@@ -306,6 +307,8 @@ impl AsyncComponent for App {
                 .insert_action_group(WindowActionGroup::NAME, Some(&actions));
         }
 
+        // Get all the directories from the database
+        sender.input(AppMsg::UpdateDirectories);
         widgets
             .flap_status
             .bind_property("active", &widgets.flap, "reveal-flap")
@@ -335,12 +338,9 @@ impl AsyncComponent for App {
                 sender.input(AppMsg::UpdateDirectories)
             }
             AppMsg::UpdateDirectories => {
-                let mut directory_guard = self.directories.guard();
                 let directories = query_unique_directories(&self.database).await.unwrap();
-                directory_guard.clear();
-                for dir in directories {
-                    directory_guard.push_back(Utf8PathBuf::from(dir));
-                }
+                self.directories.clear();
+                self.directories.extend_from_iter(directories.into_iter());
             }
             AppMsg::UpdateThumbnailsAll => {
                 // TODO: Add a dialog confirmation box
@@ -363,15 +363,21 @@ impl AsyncComponent for App {
                 .await
                 .unwrap();
             }
-            AppMsg::SelectDirectory(index) => {
-                let pictures =
-                    if let Some(directory) = index.and_then(|i| self.directories.get(i as usize)) {
-                        query_directory_pictures(&self.database, directory.path.clone().into())
-                            .await
+            AppMsg::SelectDirectories(indicies) => {
+                let directories: Vec<String> = indicies
+                    .into_iter()
+                    .map(|i| {
+                        self.directories
+                            .get(i)
                             .unwrap()
-                    } else {
-                        vec![]
-                    };
+                            .borrow()
+                            .directory
+                            .to_string()
+                    })
+                    .collect();
+                let pictures = query_directory_pictures(&self.database, &directories)
+                    .await
+                    .unwrap();
                 self.picture_view
                     .emit(PictureViewMsg::SelectPictures(pictures))
             }

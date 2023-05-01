@@ -5,7 +5,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use glib::{user_special_dir, UserDirectory};
 use itertools::Itertools;
 use relm4::gtk::glib;
-use sqlx::SqlitePool;
+use sea_orm::DatabaseConnection;
 use walkdir::WalkDir;
 
 use crate::data::{add_new_images, query_existing_pictures};
@@ -89,7 +89,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-pub async fn import(db: &SqlitePool, directory: &Utf8PathBuf) -> Result<(), Error> {
+pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<(), Error> {
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
     // The list of all the pictures that currently exist within the database.
@@ -183,7 +183,7 @@ pub async fn import(db: &SqlitePool, directory: &Utf8PathBuf) -> Result<(), Erro
     Ok(())
 }
 
-pub async fn find_new_images(db: &SqlitePool, directory: &Utf8PathBuf) {
+pub async fn find_new_images(db: &DatabaseConnection, directory: &Utf8PathBuf) {
     let existing_pictures = query_existing_pictures(db, directory).await.unwrap();
 
     tracing::info!(

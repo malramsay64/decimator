@@ -82,7 +82,7 @@ impl RelmListItem for PictureThumbnail {
     type Root = gtk::Box;
     type Widgets = Widgets;
 
-    fn setup(_item: &gtk::ListItem) -> (gtk::Box, Widgets) {
+    fn setup(_item: &gtk::ListItem) -> (Self::Root, Self::Widgets) {
         view! {
             root = gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
