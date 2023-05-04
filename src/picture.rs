@@ -2,7 +2,6 @@ mod picture_data;
 mod picture_thumbnail;
 mod property_types;
 
-use gtk::glib;
 use gtk::prelude::*;
 pub use picture_data::*;
 pub use picture_thumbnail::*;
@@ -12,9 +11,10 @@ use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
 use relm4::typed_list_view::{TypedListItem, TypedListView};
 use relm4::{gtk, AsyncComponentSender};
-use time::PrimitiveDateTime;
+use sea_orm::DatabaseConnection;
 use walkdir::DirEntry;
 
+use crate::data::update_selection_state;
 use crate::AppMsg;
 
 pub fn is_image(entry: &DirEntry) -> bool {
@@ -36,17 +36,27 @@ pub enum PictureViewMsg {
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
+    ImageNext,
+    ImagePrev,
 }
 
 #[derive(Debug)]
 pub struct PictureView {
     thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection>,
     preview_image: Option<Texture>,
+    database: DatabaseConnection,
+}
+
+impl PictureView {
+    pub fn get_selected(&self) -> Option<TypedListItem<PictureThumbnail>> {
+        let index = self.thumbnails.selection_model.selected();
+        self.thumbnails.get_visible(index)
+    }
 }
 
 #[relm4::component(async, pub)]
 impl AsyncComponent for PictureView {
-    type Init = ();
+    type Init = DatabaseConnection;
     type Input = PictureViewMsg;
     type Output = AppMsg;
     type CommandOutput = ();
@@ -79,17 +89,17 @@ impl AsyncComponent for PictureView {
     }
 
     async fn init(
-        _: (),
+        database: DatabaseConnection,
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let mut thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection> =
             TypedListView::with_sorting();
 
-        thumbnails.add_filter(|item| item.picture.selection != Selection::Pick);
-        thumbnails.add_filter(|item| item.picture.selection != Selection::Ordinary);
-        thumbnails.add_filter(|item| item.picture.selection != Selection::Ignore);
-        thumbnails.add_filter(|item| item.picture.hidden != true);
+        thumbnails.add_filter(|item| item.selection.value() != String::from(Selection::Pick));
+        thumbnails.add_filter(|item| item.selection.value() != String::from(Selection::Ordinary));
+        thumbnails.add_filter(|item| item.selection.value() != String::from(Selection::Ignore));
+        thumbnails.add_filter(|item| !item.hidden.value());
 
         thumbnails.set_filter_status(0, false);
         thumbnails.set_filter_status(1, false);
@@ -105,6 +115,7 @@ impl AsyncComponent for PictureView {
         let model = Self {
             thumbnails,
             preview_image: Default::default(),
+            database,
         };
         let thumbnail_list = &model.thumbnails.view;
         let widgets = view_output!();
@@ -125,11 +136,11 @@ impl AsyncComponent for PictureView {
                     .extend_from_iter(pictures.into_iter().map(PictureThumbnail::from));
             }
             PictureViewMsg::SelectPreview(index) => {
-                let picture_data =
-                    index.and_then(|i| self.thumbnails.get(i).map(|t| t.borrow().picture.clone()));
+                let filepath =
+                    index.and_then(|i| self.thumbnails.get(i).map(|t| t.borrow().filepath.clone()));
                 self.preview_image = relm4::spawn_blocking(|| {
-                    picture_data.map(|p| {
-                        let image = Pixbuf::from_file(p.filepath)
+                    filepath.map(|p| {
+                        let image = Pixbuf::from_file(p)
                             .expect("Image not found.")
                             .apply_embedded_orientation()
                             .expect("Unable to apply orientation.");
@@ -155,9 +166,62 @@ impl AsyncComponent for PictureView {
                 let index = 3;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PictureViewMsg::SelectionPick => {}
-            PictureViewMsg::SelectionOrdinary => {}
-            PictureViewMsg::SelectionIgnore => {}
+            PictureViewMsg::SelectionPick => {
+                if let Some(thumbnail_item) = self.get_selected() {
+                    let id = {
+                        let thumbnail = thumbnail_item.borrow();
+                        thumbnail.selection.set_value(String::from(Selection::Pick));
+                        thumbnail.id
+                    };
+                    update_selection_state(&self.database, id, Selection::Pick)
+                        .await
+                        .unwrap();
+                }
+            }
+            PictureViewMsg::SelectionOrdinary => {
+                if let Some(thumbnail_item) = self.get_selected() {
+                    let id = {
+                        let thumbnail = thumbnail_item.borrow();
+                        thumbnail
+                            .selection
+                            .set_value(String::from(Selection::Ordinary));
+                        thumbnail.id
+                    };
+                    update_selection_state(&self.database, id, Selection::Ordinary)
+                        .await
+                        .unwrap();
+                }
+            }
+            PictureViewMsg::SelectionIgnore => {
+                if let Some(thumbnail_item) = self.get_selected() {
+                    let id = {
+                        let thumbnail = thumbnail_item.borrow();
+                        thumbnail
+                            .selection
+                            .set_value(String::from(Selection::Ignore));
+                        thumbnail.id
+                    };
+                    update_selection_state(&self.database, id, Selection::Ignore)
+                        .await
+                        .unwrap();
+                }
+            }
+            PictureViewMsg::ImageNext => {
+                dbg!("next");
+                let model = &self.thumbnails.selection_model;
+                let index = model.selected();
+                if index < model.n_items() {
+                    model.set_selected(index + 1)
+                }
+            }
+            PictureViewMsg::ImagePrev => {
+                dbg!("prev");
+                let model = &self.thumbnails.selection_model;
+                let index = model.selected();
+                if index > 0 {
+                    model.set_selected(index - 1)
+                }
+            }
         }
     }
 }

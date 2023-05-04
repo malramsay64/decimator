@@ -1158,9 +1158,9 @@ checksum = "03087c2bad5e1034e8cace5926dec053fb3790248370865f5117a7d0213354c8"
 
 [[package]]
 name = "libadwaita"
-version = "0.3.1"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1c4efd2020a4fcedbad2c4a97de97bf6045e5dc49d61d5a5d0cfd753db60700"
+checksum = "e82776542b73ac5691b2bddf3e2aaf0157d34f35193fb522de2fc258006c1785"
 dependencies = [
  "bitflags",
  "futures-channel",
@@ -1177,9 +1177,9 @@ dependencies = [
 
 [[package]]
 name = "libadwaita-sys"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0727b85b4fe2b1bed5ac90df6343de15cbf8118bfb96d7c3cc1512681a4b34ac"
+checksum = "91be74a61f26efa6946c02dad76eb4cd3021addb0ff85dde445c1cd41d2eca2d"
 dependencies = [
  "gdk4-sys",
  "gio-sys",
@@ -1515,9 +1515,9 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pkg-config"
-version = "0.3.26"
+version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
+checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 
 [[package]]
 name = "png"
@@ -1721,8 +1721,8 @@ checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 
 [[package]]
 name = "relm4"
-version = "0.6.0-alpha.2"
-source = "git+https://github.com/malramsay64/Relm4?branch=list-view-wrapper#efd5e04c410cf7685a2faa8a7ffe934ba6720ca7"
+version = "0.6.0-beta.1"
+source = "git+https://github.com/Relm4/Relm4?branch=list-view-wrapper#8ed04ccb601cf6a52ba1749f06b650faf895ee19"
 dependencies = [
  "async-trait",
  "flume",
@@ -1738,8 +1738,8 @@ dependencies = [
 
 [[package]]
 name = "relm4-components"
-version = "0.6.0-alpha.2"
-source = "git+https://github.com/malramsay64/Relm4?branch=list-view-wrapper#efd5e04c410cf7685a2faa8a7ffe934ba6720ca7"
+version = "0.6.0-beta.1"
+source = "git+https://github.com/Relm4/Relm4?branch=list-view-wrapper#8ed04ccb601cf6a52ba1749f06b650faf895ee19"
 dependencies = [
  "once_cell",
  "relm4",
@@ -1748,12 +1748,12 @@ dependencies = [
 
 [[package]]
 name = "relm4-macros"
-version = "0.6.0-alpha.2"
-source = "git+https://github.com/malramsay64/Relm4?branch=list-view-wrapper#efd5e04c410cf7685a2faa8a7ffe934ba6720ca7"
+version = "0.6.0-beta.1"
+source = "git+https://github.com/Relm4/Relm4?branch=list-view-wrapper#8ed04ccb601cf6a52ba1749f06b650faf895ee19"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -2913,9 +2913,9 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winnow"
-version = "0.4.4"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5617da7e1f97bf363947d767b91aaf3c2bbc19db7fda9c65af1278713d58e0a2"
+checksum = "61de7bac303dc551fe038e2b3cef0f571087a47571ea6e79a87692ac99b99699"
 dependencies = [
  "memchr",
 ]

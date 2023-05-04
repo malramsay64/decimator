@@ -37,9 +37,9 @@ where
 /// We are using `impl Subscriber` as return type to avoid having to spell out the actual
 /// type of the returned subscriber, which is indeed quite complex.
 pub fn get_subscriber_terminal<Sink>(
-    name: String,
+    _name: String,
     env_filter: String,
-    sink: Sink,
+    _sink: Sink,
 ) -> impl Subscriber + Sync + Send
 where
     Sink: for<'a> MakeWriter<'a> + Send + Sync + 'static,

@@ -144,10 +144,9 @@ impl From<picture::Model> for PictureData {
 impl From<PictureData> for picture::ActiveModel {
     fn from(value: PictureData) -> Self {
         let mut thumbnail = Cursor::new(vec![]);
-        value
-            .thumbnail
-            .as_ref()
-            .map(|f| f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap());
+        if let Some(f) = value.thumbnail.as_ref() {
+            f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap();
+        }
         Self {
             id: ActiveValue::Unchanged(value.id),
             directory: ActiveValue::Set(value.directory()),

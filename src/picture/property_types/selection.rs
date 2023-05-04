@@ -45,3 +45,13 @@ impl TryFrom<&str> for Selection {
         Self::from_str(value)
     }
 }
+
+impl From<Selection> for String {
+    fn from(value: Selection) -> Self {
+        match value {
+            Selection::Ignore => "Ignore".into(),
+            Selection::Ordinary => "Ordinary".into(),
+            Selection::Pick => "Pick".into(),
+        }
+    }
+}

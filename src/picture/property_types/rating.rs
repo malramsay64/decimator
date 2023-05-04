@@ -58,3 +58,16 @@ impl TryFrom<&str> for Rating {
         Self::from_str(value)
     }
 }
+
+impl From<Rating> for String {
+    fn from(value: Rating) -> Self {
+        match value {
+            Rating::Zero => "Zero".into(),
+            Rating::One => "One".into(),
+            Rating::Two => "Two".into(),
+            Rating::Three => "Three".into(),
+            Rating::Four => "Four".into(),
+            Rating::Five => "Five".into(),
+        }
+    }
+}

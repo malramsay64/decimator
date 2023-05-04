@@ -1,23 +1,33 @@
+use camino::Utf8PathBuf;
 use glib::Bytes;
 use gtk::gdk::Texture;
 use gtk::glib;
 use gtk::prelude::*;
 use image::DynamicImage;
+use relm4::binding::{BoolBinding, StringBinding};
 use relm4::gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use relm4::typed_list_view::RelmListItem;
-use relm4::{gtk, view};
+use relm4::{gtk, view, RelmObjectExt};
+use uuid::Uuid;
 
-use super::PictureData;
+use super::{DateTime, PictureData};
 
 #[derive(Debug)]
 pub struct PictureThumbnail {
-    pub picture: PictureData,
+    pub id: Uuid,
+    pub filepath: Utf8PathBuf,
+    pub raw_extension: Option<String>,
+    pub capture_time: Option<DateTime>,
+    pub selection: StringBinding,
+    pub rating: StringBinding,
+    pub flag: StringBinding,
+    pub hidden: BoolBinding,
     thumbnail: Option<Texture>,
 }
 
 impl PartialEq for PictureThumbnail {
     fn eq(&self, other: &Self) -> bool {
-        self.picture.id == other.picture.id
+        self.id == other.id
     }
 }
 
@@ -25,15 +35,13 @@ impl Eq for PictureThumbnail {}
 
 impl PartialOrd for PictureThumbnail {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.picture
-            .capture_time?
-            .partial_cmp(&other.picture.capture_time?)
+        self.capture_time?.partial_cmp(&other.capture_time?)
     }
 }
 
 impl Ord for PictureThumbnail {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match (self.picture.capture_time, other.picture.capture_time) {
+        match (self.capture_time, other.capture_time) {
             (Some(s), Some(o)) => s.cmp(&o),
             (None, Some(_)) => std::cmp::Ordering::Less,
             (Some(_), None) => std::cmp::Ordering::Greater,
@@ -68,7 +76,17 @@ impl From<PictureData> for PictureThumbnail {
                 rowstride as i32,
             ))
         });
-        PictureThumbnail { picture, thumbnail }
+        PictureThumbnail {
+            id: picture.id,
+            filepath: picture.filepath,
+            raw_extension: picture.raw_extension,
+            capture_time: picture.capture_time,
+            selection: StringBinding::new(String::from(picture.selection)),
+            rating: StringBinding::new(String::from(picture.rating)),
+            flag: StringBinding::new(String::from(picture.flag)),
+            hidden: BoolBinding::new(picture.hidden),
+            thumbnail,
+        }
     }
 }
 
@@ -136,8 +154,8 @@ impl RelmListItem for PictureThumbnail {
             selection,
         } = widgets;
 
-        rating.set_label(&format!("{}", self.picture.rating));
-        selection.set_label(&format!("{}", self.picture.selection));
+        rating.add_write_only_binding(&self.rating, "label");
+        selection.add_write_only_binding(&self.selection, "label");
         thumbnail.set_paintable(self.thumbnail.as_ref());
     }
 

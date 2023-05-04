@@ -49,6 +49,8 @@ pub enum AppMsg {
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
+    ThumbnailNext,
+    ThumbnailPrev,
     Ignore,
 }
 
@@ -59,6 +61,7 @@ struct App {
     picture_view: AsyncController<PictureView>,
     dialog_import: Controller<OpenDialog>,
     dialog_add: Controller<OpenDialog>,
+    progress: gtk::ProgressBar,
 }
 
 #[relm4::component(async)]
@@ -82,15 +85,18 @@ impl AsyncComponent for App {
                     #[name = "sidebar_header"]
                     adw::HeaderBar {
                         set_show_end_title_buttons: false,
-                        pack_start = &gtk::Box {
-                            gtk::Button {
+                        set_show_start_title_buttons: false,
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: ""
+                        },
+                        pack_start = &gtk::Button {
                                 set_label: "Add Directory",
                                 connect_clicked => AppMsg::DirectoryAddRequest,
-                            },
-                            gtk::Button {
+                        },
+                        pack_end = &gtk::Button {
                                 set_label: "Import",
                                 connect_clicked => AppMsg::DirectoryImportRequest,
-                            }
                         },
                     },
                     gtk::ScrolledWindow {
@@ -98,7 +104,9 @@ impl AsyncComponent for App {
                         set_width_request: 325,
                         #[local_ref]
                         directory_list -> gtk::ListView {}
-                    }
+                    },
+                    #[local_ref]
+                    progress -> gtk::ProgressBar { }
                 },
                 #[wrap(Some)]
                 set_content = &gtk::Box {
@@ -172,7 +180,7 @@ impl AsyncComponent for App {
         );
 
         let picture_view = PictureView::builder()
-            .launch(())
+            .launch(database.clone())
             .forward(sender.input_sender(), identity);
 
         let dialog_settings = OpenDialogSettings {
@@ -207,18 +215,24 @@ impl AsyncComponent for App {
                 OpenDialogResponse::Cancel => AppMsg::Ignore,
             });
 
+        let progress = gtk::ProgressBar::new();
+
         let model = App {
             database,
             directories,
             picture_view,
             dialog_import,
             dialog_add,
+            progress: progress.clone(),
         };
         let directory_list = &model.directories.view;
 
         let widgets = view_output!();
 
         let app = relm4::main_application();
+
+        app.set_accelerators_for_action::<ActionPrev>(&["h"]);
+        app.set_accelerators_for_action::<ActionNext>(&["l"]);
 
         app.set_accelerators_for_action::<ActionPick>(&["p"]);
         app.set_accelerators_for_action::<ActionOrdinary>(&["o"]);
@@ -261,6 +275,19 @@ impl AsyncComponent for App {
                 })
             };
 
+            let sender_next = sender.clone();
+            let action_next: RelmAction<ActionNext> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_next.input(AppMsg::ThumbnailNext);
+                })
+            };
+            let sender_prev = sender.clone();
+            let action_prev: RelmAction<ActionPrev> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_prev.input(AppMsg::ThumbnailPrev);
+                })
+            };
+
             let sender_filter_pick = sender.clone();
             let action_filter_pick: RelmAction<ActionFilterPick> = {
                 RelmAction::new_stateful(&false, move |_, state: &mut bool| {
@@ -298,6 +325,8 @@ impl AsyncComponent for App {
             group.add_action(action_pick);
             group.add_action(action_ordinary);
             group.add_action(action_ignore);
+            group.add_action(action_next);
+            group.add_action(action_prev);
             group.add_action(action_filter_hidden);
 
             let actions = group.into_action_group();
@@ -327,15 +356,21 @@ impl AsyncComponent for App {
         match msg {
             AppMsg::DirectoryImportRequest => self.dialog_import.emit(OpenDialogMsg::Open),
             AppMsg::DirectoryImport(dir) => {
-                let db = self.database.clone();
-                relm4::spawn(async move { import(&db, &dir).await });
-                sender.input(AppMsg::UpdateDirectories)
+                // let db = self.database.clone();
+                import(&self.database, &dir, &self.progress).await.unwrap();
+                // relm4::spawn(async move { import(&db, &dir).await })
+                //     .await
+                //     .unwrap();
+                sender.input(AppMsg::UpdateDirectories);
             }
             AppMsg::DirectoryAddRequest => self.dialog_add.emit(OpenDialogMsg::Open),
             AppMsg::DirectoryAdd(dir) => {
-                let db = self.database.clone();
-                relm4::spawn(async move { find_new_images(&db, &dir).await });
-                sender.input(AppMsg::UpdateDirectories)
+                // let db = self.database.clone();
+                find_new_images(&self.database, &dir).await;
+                // relm4::spawn(async move { find_new_images(&db, &dir).await })
+                //     .await
+                //     .unwrap();
+                sender.input(AppMsg::UpdateDirectories);
             }
             AppMsg::UpdateDirectories => {
                 let directories = query_unique_directories(&self.database).await.unwrap();
@@ -394,6 +429,8 @@ impl AsyncComponent for App {
             AppMsg::SelectionPick => self.picture_view.emit(PictureViewMsg::SelectionPick),
             AppMsg::SelectionOrdinary => self.picture_view.emit(PictureViewMsg::SelectionOrdinary),
             AppMsg::SelectionIgnore => self.picture_view.emit(PictureViewMsg::SelectionIgnore),
+            AppMsg::ThumbnailNext => self.picture_view.emit(PictureViewMsg::ImageNext),
+            AppMsg::ThumbnailPrev => self.picture_view.emit(PictureViewMsg::ImagePrev),
             AppMsg::Ignore => {}
         }
     }
@@ -414,7 +451,7 @@ relm4::new_stateless_action!(
 );
 
 relm4::new_stateless_action!(ActionNext, WindowActionGroup, "next");
-relm4::new_stateless_action!(ActionPrevious, WindowActionGroup, "previous");
+relm4::new_stateless_action!(ActionPrev, WindowActionGroup, "previous");
 
 relm4::new_stateless_action!(ActionPick, WindowActionGroup, "pick");
 relm4::new_stateless_action!(ActionOrdinary, WindowActionGroup, "ordinary");

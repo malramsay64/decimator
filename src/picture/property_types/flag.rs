@@ -1,4 +1,4 @@
-use std::fmt::Display;
+
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
@@ -46,5 +46,18 @@ impl TryFrom<&str> for Flag {
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         Self::from_str(value)
+    }
+}
+
+impl From<Flag> for String {
+    fn from(value: Flag) -> Self {
+        match value {
+            Flag::None => "None".into(),
+            Flag::Red => "Red".into(),
+            Flag::Green => "Green".into(),
+            Flag::Blue => "Blue".into(),
+            Flag::Yellow => "Yellow".into(),
+            Flag::Purple => "Purple".into(),
+        }
     }
 }

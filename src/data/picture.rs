@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
 use sea_orm::entity::prelude::*;
-use sea_orm::prelude::*;
+
 use time::PrimitiveDateTime;
 
 use crate::picture::{Flag, Rating, Selection};

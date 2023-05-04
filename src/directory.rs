@@ -1,10 +1,10 @@
 use camino::Utf8PathBuf;
 use gtk::prelude::*;
-use relm4::prelude::DynamicIndex;
-use relm4::typed_list_view::RelmListItem;
-use relm4::{gtk, view, AsyncFactorySender};
 
-use crate::AppMsg;
+use relm4::typed_list_view::RelmListItem;
+use relm4::{gtk, view};
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirectoryData {
