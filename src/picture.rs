@@ -70,6 +70,8 @@ impl AsyncComponent for PictureView {
                 gtk::Picture {
                     #[watch]
                     set_paintable: model.preview_image.as_ref(),
+                    set_halign: gtk::Align::Center,
+                    set_hexpand: true,
 
                 }
             },
@@ -136,8 +138,11 @@ impl AsyncComponent for PictureView {
                     .extend_from_iter(pictures.into_iter().map(PictureThumbnail::from));
             }
             PictureViewMsg::SelectPreview(index) => {
-                let filepath =
-                    index.and_then(|i| self.thumbnails.get(i).map(|t| t.borrow().filepath.clone()));
+                let filepath = index.and_then(|i| {
+                    self.thumbnails
+                        .get_visible(i)
+                        .map(|t| t.borrow().filepath.clone())
+                });
                 self.preview_image = relm4::spawn_blocking(|| {
                     filepath.map(|p| {
                         let image = Pixbuf::from_file(p)
@@ -207,7 +212,6 @@ impl AsyncComponent for PictureView {
                 }
             }
             PictureViewMsg::ImageNext => {
-                dbg!("next");
                 let model = &self.thumbnails.selection_model;
                 let index = model.selected();
                 if index < model.n_items() {
@@ -215,7 +219,6 @@ impl AsyncComponent for PictureView {
                 }
             }
             PictureViewMsg::ImagePrev => {
-                dbg!("prev");
                 let model = &self.thumbnails.selection_model;
                 let index = model.selected();
                 if index > 0 {

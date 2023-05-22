@@ -6,8 +6,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-relm4 = { git="https://github.com/Relm4/Relm4", branch="list-view-wrapper", features = ["macros", "gnome_43", "libadwaita"] }
-relm4-components = { git="https://github.com/Relm4/Relm4", branch="list-view-wrapper" }
+relm4 = { git="https://github.com/Relm4/Relm4", features = ["macros", "gnome_43", "libadwaita"] }
+relm4-components = { git="https://github.com/Relm4/Relm4" }
 image = "~0.24.6"
 kamadak-exif = "~0.5.5"
 sea-orm = {version="~0.11.3", features = ["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}

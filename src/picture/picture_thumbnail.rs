@@ -53,7 +53,7 @@ impl Ord for PictureThumbnail {
 impl From<PictureData> for PictureThumbnail {
     #[tracing::instrument(name = "Converting PictureData to PictureThumbnail")]
     fn from(picture: PictureData) -> Self {
-        let thumbnail = picture.thumbnail.clone().map(|t| {
+        let thumbnail = picture.thumbnail.map(|t| {
             let (colorspace, has_alpha, bits_per_sample) = match &t {
                 DynamicImage::ImageRgb8(_) => (Colorspace::Rgb, false, 8_u32),
                 DynamicImage::ImageRgba8(_) => (Colorspace::Rgb, true, 8_u32),

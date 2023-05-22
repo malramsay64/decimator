@@ -1,10 +1,7 @@
 use camino::Utf8PathBuf;
 use gtk::prelude::*;
-
 use relm4::typed_list_view::RelmListItem;
 use relm4::{gtk, view};
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirectoryData {
@@ -40,6 +37,9 @@ impl RelmListItem for DirectoryData {
                 gtk::Label {
                     set_hexpand: true,
                     set_halign: gtk::Align::Start,
+                    set_width_request: 320,
+                    set_justify: gtk::Justification::Left,
+                    set_ellipsize: gtk::pango::EllipsizeMode::Start,
                 }
             }
         }

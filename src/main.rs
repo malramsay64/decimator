@@ -403,7 +403,7 @@ impl AsyncComponent for App {
                     .into_iter()
                     .map(|i| {
                         self.directories
-                            .get(i)
+                            .get_visible(i)
                             .unwrap()
                             .borrow()
                             .directory
