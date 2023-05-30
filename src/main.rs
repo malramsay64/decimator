@@ -49,6 +49,8 @@ pub enum AppMsg {
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
+    SelectionExportRequest,
+    SelectionExport(Utf8PathBuf),
     ThumbnailNext,
     ThumbnailPrev,
     Ignore,
@@ -61,6 +63,7 @@ struct App {
     picture_view: AsyncController<PictureView>,
     dialog_import: Controller<OpenDialog>,
     dialog_add: Controller<OpenDialog>,
+    dialog_export: Controller<OpenDialog>,
     progress: gtk::ProgressBar,
 }
 
@@ -137,8 +140,11 @@ impl AsyncComponent for App {
 
     menu! {
         main_menu: {
-            "Generate New Thumbnails" => ActionUpdateThumbnailNew,
-            "Update All Thumbnails" => ActionUpdateThumbnailAll,
+            "Export" => ActionExport,
+            section! {
+                "Generate New Thumbnails" => ActionUpdateThumbnailNew,
+                "Update All Thumbnails" => ActionUpdateThumbnailAll,
+            },
             section! {
                 "Hide Picked" => ActionFilterPick,
                 "Hide Ordinary" => ActionFilterOrdinary,
@@ -215,6 +221,23 @@ impl AsyncComponent for App {
                 OpenDialogResponse::Cancel => AppMsg::Ignore,
             });
 
+        let dialog_settings = OpenDialogSettings {
+            folder_mode: true,
+            create_folders: true,
+            accept_label: String::from("Export"),
+            ..Default::default()
+        };
+
+        let dialog_export = OpenDialog::builder()
+            .transient_for_native(&root)
+            .launch(dialog_settings)
+            .forward(sender.input_sender(), |response| match response {
+                OpenDialogResponse::Accept(path) => {
+                    AppMsg::SelectionExport(path.try_into().unwrap())
+                }
+                OpenDialogResponse::Cancel => AppMsg::Ignore,
+            });
+
         let progress = gtk::ProgressBar::new();
 
         let model = App {
@@ -223,6 +246,7 @@ impl AsyncComponent for App {
             picture_view,
             dialog_import,
             dialog_add,
+            dialog_export,
             progress: progress.clone(),
         };
         let directory_list = &model.directories.view;
@@ -272,6 +296,12 @@ impl AsyncComponent for App {
             let action_ignore: RelmAction<ActionIgnore> = {
                 RelmAction::new_stateless(move |_| {
                     sender_ignore.input(AppMsg::SelectionIgnore);
+                })
+            };
+            let sender_export = sender.clone();
+            let action_export: RelmAction<ActionExport> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_export.input(AppMsg::SelectionExportRequest);
                 })
             };
 
@@ -325,6 +355,7 @@ impl AsyncComponent for App {
             group.add_action(action_pick);
             group.add_action(action_ordinary);
             group.add_action(action_ignore);
+            group.add_action(action_export);
             group.add_action(action_next);
             group.add_action(action_prev);
             group.add_action(action_filter_hidden);
@@ -429,6 +460,10 @@ impl AsyncComponent for App {
             AppMsg::SelectionPick => self.picture_view.emit(PictureViewMsg::SelectionPick),
             AppMsg::SelectionOrdinary => self.picture_view.emit(PictureViewMsg::SelectionOrdinary),
             AppMsg::SelectionIgnore => self.picture_view.emit(PictureViewMsg::SelectionIgnore),
+            AppMsg::SelectionExportRequest => self.dialog_export.emit(OpenDialogMsg::Open),
+            AppMsg::SelectionExport(dir) => {
+                self.picture_view.emit(PictureViewMsg::SelectionExport(dir))
+            }
             AppMsg::ThumbnailNext => self.picture_view.emit(PictureViewMsg::ImageNext),
             AppMsg::ThumbnailPrev => self.picture_view.emit(PictureViewMsg::ImagePrev),
             AppMsg::Ignore => {}
@@ -456,6 +491,7 @@ relm4::new_stateless_action!(ActionPrev, WindowActionGroup, "previous");
 relm4::new_stateless_action!(ActionPick, WindowActionGroup, "pick");
 relm4::new_stateless_action!(ActionOrdinary, WindowActionGroup, "ordinary");
 relm4::new_stateless_action!(ActionIgnore, WindowActionGroup, "ignore");
+relm4::new_stateless_action!(ActionExport, WindowActionGroup, "export");
 
 relm4::new_stateful_action!(ActionFilterPick, WindowActionGroup, "pick_filter", (), bool);
 relm4::new_stateful_action!(

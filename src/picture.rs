@@ -2,6 +2,7 @@ mod picture_data;
 mod picture_thumbnail;
 mod property_types;
 
+use camino::Utf8PathBuf;
 use gtk::prelude::*;
 pub use picture_data::*;
 pub use picture_thumbnail::*;
@@ -10,7 +11,7 @@ use relm4::component::{AsyncComponent, AsyncComponentParts};
 use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
 use relm4::typed_list_view::{TypedListItem, TypedListView};
-use relm4::{gtk, AsyncComponentSender};
+use relm4::{gtk, tokio, AsyncComponentSender};
 use sea_orm::DatabaseConnection;
 use walkdir::DirEntry;
 
@@ -36,6 +37,7 @@ pub enum PictureViewMsg {
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
+    SelectionExport(Utf8PathBuf),
     ImageNext,
     ImagePrev,
 }
@@ -209,6 +211,16 @@ impl AsyncComponent for PictureView {
                     update_selection_state(&self.database, id, Selection::Ignore)
                         .await
                         .unwrap();
+                }
+            }
+            PictureViewMsg::SelectionExport(dir) => {
+                if let Some(pic) = self.get_selected() {
+                    let origin = pic.borrow().filepath.clone();
+                    let destination = dir.join(origin.file_name().unwrap());
+                    tracing::info!("Copying file from {origin} to {destination}");
+                    tokio::fs::copy(&origin, destination)
+                        .await
+                        .expect("Unable to copy image from {path}");
                 }
             }
             PictureViewMsg::ImageNext => {
