@@ -1,6 +1,8 @@
 # TODO
 
-- Create a grid view, allowing the export of a selection
+- Perform the conversion from an image to a pixbuf when binding to a widget
+- Simplify implementation of grid and list
+  - I want to be able to merge them into a single implementation with a configurable parameter
 - Update file location
   - Instead of crashing when directory is not found, prompt for dialog to find again
   - Update all images, not just those shown (that is, the hidden ones)
@@ -28,6 +30,7 @@
 - Item recognition
 
 ## DONE
+- Create a grid view, allowing the export of a selection
 - Export
   - Copy all the selected / open files to another directory
 - Implement filtering of files based on criteria (pick / unpick)

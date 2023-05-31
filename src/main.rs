@@ -15,19 +15,22 @@ use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
 use relm4_components::open_dialog::*;
 use sea_orm::{Database, DatabaseConnection};
+use tracing_subscriber::fmt::format;
 
 use crate::import::import;
+use crate::picture::PictureGrid;
 
 mod data;
 mod directory;
 mod import;
+mod relm_ext;
 // mod menu;
 mod picture;
 mod telemetry;
 // mod window;
 
 use directory::DirectoryData;
-use picture::{PictureView, PictureViewMsg};
+use picture::{PictureGridMsg, PicturePreview, PicturePreviewMsg};
 use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
@@ -51,16 +54,40 @@ pub enum AppMsg {
     SelectionIgnore,
     SelectionExportRequest,
     SelectionExport(Utf8PathBuf),
+    UpdatePictureView(PictureView),
     ThumbnailNext,
     ThumbnailPrev,
     Ignore,
+}
+
+#[derive(Debug, Default)]
+pub enum PictureView {
+    #[default]
+    Preview,
+    Grid,
+}
+
+impl TryFrom<&str> for PictureView {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "Preview" => Ok(Self::Preview),
+            "Grid" => Ok(Self::Grid),
+            _ => Err(anyhow::anyhow!(
+                "Unable to convert pictureview from {value}"
+            )),
+        }
+    }
 }
 
 #[derive(Debug)]
 struct App {
     database: DatabaseConnection,
     directories: TypedListView<DirectoryData, gtk::MultiSelection>,
-    picture_view: AsyncController<PictureView>,
+    picture_view: PictureView,
+    picture_preview: AsyncController<PicturePreview>,
+    picture_grid: AsyncController<PictureGrid>,
     dialog_import: Controller<OpenDialog>,
     dialog_add: Controller<OpenDialog>,
     dialog_export: Controller<OpenDialog>,
@@ -132,7 +159,18 @@ impl AsyncComponent for App {
                             set_title: "Decimator"
                         }
                     },
-                    model.picture_view.widget(),
+
+                    #[name = "picture_view"]
+                    adw::ViewStack {
+                        connect_visible_child_notify[sender] => move |stack| {
+                            sender.input(AppMsg::UpdatePictureView(stack.visible_child_name().unwrap().as_str().try_into().unwrap()));
+                        }
+                    },
+
+                    adw::ViewSwitcherBar{
+                        set_stack: Some(&picture_view),
+                        set_reveal: true,
+                    }
                  }
             }
         }
@@ -185,10 +223,6 @@ impl AsyncComponent for App {
             },
         );
 
-        let picture_view = PictureView::builder()
-            .launch(database.clone())
-            .forward(sender.input_sender(), identity);
-
         let dialog_settings = OpenDialogSettings {
             folder_mode: true,
             create_folders: false,
@@ -238,12 +272,22 @@ impl AsyncComponent for App {
                 OpenDialogResponse::Cancel => AppMsg::Ignore,
             });
 
+        let picture_preview = PicturePreview::builder()
+            .launch(database.clone())
+            .forward(sender.input_sender(), identity);
+
+        let picture_grid = PictureGrid::builder()
+            .launch(database.clone())
+            .forward(sender.input_sender(), identity);
+
         let progress = gtk::ProgressBar::new();
 
         let model = App {
             database,
             directories,
-            picture_view,
+            picture_view: PictureView::default(),
+            picture_preview,
+            picture_grid,
             dialog_import,
             dialog_add,
             dialog_export,
@@ -252,6 +296,15 @@ impl AsyncComponent for App {
         let directory_list = &model.directories.view;
 
         let widgets = view_output!();
+
+        widgets
+            .picture_view
+            .add_titled(model.picture_preview.widget(), Some("Preview"), "Preview")
+            .set_icon_name(Some("window-scrolling"));
+        widgets
+            .picture_view
+            .add_titled(model.picture_grid.widget(), Some("Grid"), "Grid")
+            .set_icon_name(Some("grid-large"));
 
         let app = relm4::main_application();
 
@@ -444,29 +497,43 @@ impl AsyncComponent for App {
                 let pictures = query_directory_pictures(&self.database, &directories)
                     .await
                     .unwrap();
-                self.picture_view
-                    .emit(PictureViewMsg::SelectPictures(pictures))
+                self.picture_preview
+                    .emit(PicturePreviewMsg::SelectPictures(pictures.clone()));
+                self.picture_grid
+                    .emit(PictureGridMsg::SelectPictures(pictures));
             }
-            AppMsg::FilterPick(value) => self.picture_view.emit(PictureViewMsg::FilterPick(value)),
+            AppMsg::FilterPick(value) => self
+                .picture_preview
+                .emit(PicturePreviewMsg::FilterPick(value)),
             AppMsg::FilterOrdinary(value) => self
-                .picture_view
-                .emit(PictureViewMsg::FilterOrdinary(value)),
-            AppMsg::FilterIgnore(value) => {
-                self.picture_view.emit(PictureViewMsg::FilterIgnore(value))
-            }
-            AppMsg::FilterHidden(value) => {
-                self.picture_view.emit(PictureViewMsg::FilterHidden(value))
-            }
-            AppMsg::SelectionPick => self.picture_view.emit(PictureViewMsg::SelectionPick),
-            AppMsg::SelectionOrdinary => self.picture_view.emit(PictureViewMsg::SelectionOrdinary),
-            AppMsg::SelectionIgnore => self.picture_view.emit(PictureViewMsg::SelectionIgnore),
+                .picture_preview
+                .emit(PicturePreviewMsg::FilterOrdinary(value)),
+            AppMsg::FilterIgnore(value) => self
+                .picture_preview
+                .emit(PicturePreviewMsg::FilterIgnore(value)),
+            AppMsg::FilterHidden(value) => self
+                .picture_preview
+                .emit(PicturePreviewMsg::FilterHidden(value)),
+            AppMsg::SelectionPick => self.picture_preview.emit(PicturePreviewMsg::SelectionPick),
+            AppMsg::SelectionOrdinary => self
+                .picture_preview
+                .emit(PicturePreviewMsg::SelectionOrdinary),
+            AppMsg::SelectionIgnore => self
+                .picture_preview
+                .emit(PicturePreviewMsg::SelectionIgnore),
             AppMsg::SelectionExportRequest => self.dialog_export.emit(OpenDialogMsg::Open),
-            AppMsg::SelectionExport(dir) => {
-                self.picture_view.emit(PictureViewMsg::SelectionExport(dir))
-            }
-            AppMsg::ThumbnailNext => self.picture_view.emit(PictureViewMsg::ImageNext),
-            AppMsg::ThumbnailPrev => self.picture_view.emit(PictureViewMsg::ImagePrev),
+            AppMsg::SelectionExport(dir) => match self.picture_view {
+                PictureView::Preview => self
+                    .picture_preview
+                    .emit(PicturePreviewMsg::SelectionExport(dir)),
+                PictureView::Grid => self.picture_grid.emit(PictureGridMsg::SelectionExport(dir)),
+            },
+            AppMsg::ThumbnailNext => self.picture_preview.emit(PicturePreviewMsg::ImageNext),
+            AppMsg::ThumbnailPrev => self.picture_preview.emit(PicturePreviewMsg::ImagePrev),
             AppMsg::Ignore => {}
+            AppMsg::UpdatePictureView(view) => {
+                self.picture_view = view;
+            }
         }
     }
 }
@@ -533,5 +600,6 @@ fn main() {
 
     // Starting the Relm Application Service
     let app = RelmApp::new(APP_ID);
+    relm4_icons::initialize_icons();
     app.run_async::<App>(database_path)
 }

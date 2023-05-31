@@ -6,11 +6,11 @@ use gtk::prelude::*;
 use image::DynamicImage;
 use relm4::binding::{BoolBinding, StringBinding};
 use relm4::gtk::gdk_pixbuf::{Colorspace, Pixbuf};
-use relm4::typed_list_view::RelmListItem;
 use relm4::{gtk, view, RelmObjectExt};
 use uuid::Uuid;
 
 use super::{DateTime, PictureData};
+use crate::relm_ext::RelmListItem;
 
 #[derive(Debug)]
 pub struct PictureThumbnail {

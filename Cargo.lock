@@ -395,7 +395,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
-name = "decimator-gtk4"
+name = "decimator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -408,6 +408,7 @@ dependencies = [
  "num_cpus",
  "relm4",
  "relm4-components",
+ "relm4-icons",
  "sea-orm",
  "serde",
  "serde_json",
@@ -908,6 +909,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "gvdb"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00421b382029e13501f36b7243dd05c3e7caa92d252790c3492e5fc7caca165b"
+dependencies = [
+ "byteorder",
+ "flate2",
+ "lazy_static",
+ "memmap2",
+ "quick-xml",
+ "safe-transmute",
+ "serde",
+ "serde_json",
+ "walkdir",
+ "zvariant",
+]
+
+[[package]]
 name = "half"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,6 +1205,15 @@ name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
+
+[[package]]
+name = "memmap2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "memoffset"
@@ -1556,6 +1584,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffc053f057dd768a56f62cd7e434c42c831d296968997e9ac1f76ea7c2d14c41"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1658,7 +1696,7 @@ checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 [[package]]
 name = "relm4"
 version = "0.6.0-beta.1"
-source = "git+https://github.com/Relm4/Relm4#fe25c76345bab09f61e2cdaa54851c8f0415640a"
+source = "git+https://github.com/Relm4/Relm4#c8fb23908ce1978edd8e4295c74ad6c44170e4c5"
 dependencies = [
  "async-trait",
  "flume",
@@ -1675,7 +1713,7 @@ dependencies = [
 [[package]]
 name = "relm4-components"
 version = "0.6.0-beta.1"
-source = "git+https://github.com/Relm4/Relm4#fe25c76345bab09f61e2cdaa54851c8f0415640a"
+source = "git+https://github.com/Relm4/Relm4#c8fb23908ce1978edd8e4295c74ad6c44170e4c5"
 dependencies = [
  "once_cell",
  "relm4",
@@ -1683,9 +1721,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "relm4-icons"
+version = "0.6.0-beta.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd05546941477772bd6b7430d5b0ce7fd2b4b95ff73907cc657f86f0c387a02"
+dependencies = [
+ "gtk4",
+ "gvdb",
+]
+
+[[package]]
 name = "relm4-macros"
 version = "0.6.0-beta.1"
-source = "git+https://github.com/Relm4/Relm4#fe25c76345bab09f61e2cdaa54851c8f0415640a"
+source = "git+https://github.com/Relm4/Relm4#c8fb23908ce1978edd8e4295c74ad6c44170e4c5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1800,6 +1848,12 @@ name = "ryu"
 version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f91339c0467de62360649f8d3e185ca8de4224ff281f66000de5eb2a77a79041"
+
+[[package]]
+name = "safe-transmute"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98a01dab6acf992653be49205bdd549f32f17cb2803e8eacf1560bf97259aae8"
 
 [[package]]
 name = "same-file"
@@ -2148,6 +2202,12 @@ dependencies = [
  "tokio",
  "tokio-rustls",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stringprep"
@@ -2842,4 +2902,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02"
 dependencies = [
  "simd-adler32",
+]
+
+[[package]]
+name = "zvariant"
+version = "3.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622cc473f10cef1b0d73b7b34a266be30ebdcfaea40ec297dd8cbda088f9f93c"
+dependencies = [
+ "byteorder",
+ "libc",
+ "serde",
+ "static_assertions",
+ "zvariant_derive",
+]
+
+[[package]]
+name = "zvariant_derive"
+version = "3.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d9c1b57352c25b778257c661f3c4744b7cefb7fc09dd46909a153cce7773da2"
+dependencies = [
+ "proc-macro-crate 1.3.1",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+ "zvariant_utils",
+]
+
+[[package]]
+name = "zvariant_utils"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7234f0d811589db492d16893e3f21e8e2fd282e6d01b0cddee310322062cc200"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]

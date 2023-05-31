@@ -1,5 +1,5 @@
 [package]
-name = "decimator-gtk4"
+name = "decimator"
 version = "0.1.0"
 authors = ["Malcolm Ramsay <m@malramsay.com>"]
 edition = "2021"
@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 relm4 = { git="https://github.com/Relm4/Relm4", features = ["macros", "gnome_43", "libadwaita"] }
 relm4-components = { git="https://github.com/Relm4/Relm4" }
+relm4-icons = { version = "0.6.0-beta.6", features = ["window-scrolling", "grid-large"] }
 image = "~0.24.6"
 kamadak-exif = "~0.5.5"
 sea-orm = {version="~0.11.3", features = ["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
