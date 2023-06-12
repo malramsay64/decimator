@@ -14,7 +14,7 @@ use crate::relm_ext::{TypedListItem, TypedListView};
 use crate::AppMsg;
 
 #[derive(Debug)]
-pub enum PicturePreviewMsg {
+pub enum ViewPreviewMsg {
     SelectPictures(Vec<PictureData>),
     SelectPreview(Option<u32>),
     FilterPick(bool),
@@ -30,13 +30,13 @@ pub enum PicturePreviewMsg {
 }
 
 #[derive(Debug)]
-pub struct PicturePreview {
+pub struct ViewPreview {
     thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection>,
     preview_image: Option<Texture>,
     database: DatabaseConnection,
 }
 
-impl PicturePreview {
+impl ViewPreview {
     pub fn get_selected(&self) -> Option<TypedListItem<PictureThumbnail>> {
         let index = self.thumbnails.selection_model.selected();
         self.thumbnails.get_visible(index)
@@ -44,9 +44,9 @@ impl PicturePreview {
 }
 
 #[relm4::component(async, pub)]
-impl AsyncComponent for PicturePreview {
+impl AsyncComponent for ViewPreview {
     type Init = DatabaseConnection;
-    type Input = PicturePreviewMsg;
+    type Input = ViewPreviewMsg;
     type Output = AppMsg;
     type CommandOutput = ();
 
@@ -100,7 +100,7 @@ impl AsyncComponent for PicturePreview {
         thumbnails
             .selection_model
             .connect_selected_notify(move |s| {
-                sender.input(PicturePreviewMsg::SelectPreview(Some(s.selected())))
+                sender.input(ViewPreviewMsg::SelectPreview(Some(s.selected())))
             });
 
         let model = Self {
@@ -121,12 +121,12 @@ impl AsyncComponent for PicturePreview {
         _root: &Self::Root,
     ) {
         match msg {
-            PicturePreviewMsg::SelectPictures(pictures) => {
+            ViewPreviewMsg::SelectPictures(pictures) => {
                 self.thumbnails.clear();
                 self.thumbnails
                     .extend_from_iter(pictures.into_iter().map(PictureThumbnail::from));
             }
-            PicturePreviewMsg::SelectPreview(index) => {
+            ViewPreviewMsg::SelectPreview(index) => {
                 let filepath = index.and_then(|i| {
                     self.thumbnails
                         .get_visible(i)
@@ -144,23 +144,23 @@ impl AsyncComponent for PicturePreview {
                 .await
                 .unwrap();
             }
-            PicturePreviewMsg::FilterPick(value) => {
+            ViewPreviewMsg::FilterPick(value) => {
                 let index = 0;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PicturePreviewMsg::FilterOrdinary(value) => {
+            ViewPreviewMsg::FilterOrdinary(value) => {
                 let index = 1;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PicturePreviewMsg::FilterIgnore(value) => {
+            ViewPreviewMsg::FilterIgnore(value) => {
                 let index = 2;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PicturePreviewMsg::FilterHidden(value) => {
+            ViewPreviewMsg::FilterHidden(value) => {
                 let index = 3;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PicturePreviewMsg::SelectionPick => {
+            ViewPreviewMsg::SelectionPick => {
                 if let Some(thumbnail_item) = self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
@@ -172,7 +172,7 @@ impl AsyncComponent for PicturePreview {
                         .unwrap();
                 }
             }
-            PicturePreviewMsg::SelectionOrdinary => {
+            ViewPreviewMsg::SelectionOrdinary => {
                 if let Some(thumbnail_item) = self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
@@ -186,7 +186,7 @@ impl AsyncComponent for PicturePreview {
                         .unwrap();
                 }
             }
-            PicturePreviewMsg::SelectionIgnore => {
+            ViewPreviewMsg::SelectionIgnore => {
                 if let Some(thumbnail_item) = self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
@@ -200,7 +200,7 @@ impl AsyncComponent for PicturePreview {
                         .unwrap();
                 }
             }
-            PicturePreviewMsg::SelectionExport(dir) => {
+            ViewPreviewMsg::SelectionExport(dir) => {
                 if let Some(pic) = self.get_selected() {
                     let origin = pic.borrow().filepath.clone();
                     let destination = dir.join(origin.file_name().unwrap());
@@ -210,14 +210,14 @@ impl AsyncComponent for PicturePreview {
                         .expect("Unable to copy image from {path}");
                 }
             }
-            PicturePreviewMsg::ImageNext => {
+            ViewPreviewMsg::ImageNext => {
                 let model = &self.thumbnails.selection_model;
                 let index = model.selected();
                 if index < model.n_items() {
                     model.set_selected(index + 1)
                 }
             }
-            PicturePreviewMsg::ImagePrev => {
+            ViewPreviewMsg::ImagePrev => {
                 let model = &self.thumbnails.selection_model;
                 let index = model.selected();
                 if index > 0 {

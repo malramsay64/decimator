@@ -10,6 +10,7 @@ use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
+use relm4::gtk::{PrintOperation, PrintOperationAction};
 use relm4::prelude::*;
 use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
@@ -17,7 +18,7 @@ use relm4_components::open_dialog::*;
 use sea_orm::{Database, DatabaseConnection};
 
 use crate::import::import;
-use crate::picture::PictureGrid;
+use crate::picture::ViewGrid;
 
 mod data;
 mod directory;
@@ -29,7 +30,7 @@ mod telemetry;
 // mod window;
 
 use directory::DirectoryData;
-use picture::{PictureGridMsg, PicturePreview, PicturePreviewMsg};
+use picture::{ViewGridMsg, ViewPreview, ViewPreviewMsg};
 use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
@@ -51,8 +52,11 @@ pub enum AppMsg {
     SelectionPick,
     SelectionOrdinary,
     SelectionIgnore,
+    // Signal to emit when we want to export, this creates the export dialog
     SelectionExportRequest,
+    // Contains the path where the files are being exported to
     SelectionExport(Utf8PathBuf),
+    SelectionPrintRequest,
     UpdatePictureView(PictureView),
     ThumbnailNext,
     ThumbnailPrev,
@@ -85,8 +89,8 @@ struct App {
     database: DatabaseConnection,
     directories: TypedListView<DirectoryData, gtk::MultiSelection>,
     picture_view: PictureView,
-    picture_preview: AsyncController<PicturePreview>,
-    picture_grid: AsyncController<PictureGrid>,
+    view_preview: AsyncController<ViewPreview>,
+    view_grid: AsyncController<ViewGrid>,
     dialog_import: Controller<OpenDialog>,
     dialog_add: Controller<OpenDialog>,
     dialog_export: Controller<OpenDialog>,
@@ -178,6 +182,7 @@ impl AsyncComponent for App {
     menu! {
         main_menu: {
             "Export" => ActionExport,
+            "Print" => ActionPrint,
             section! {
                 "Generate New Thumbnails" => ActionUpdateThumbnailNew,
                 "Update All Thumbnails" => ActionUpdateThumbnailAll,
@@ -271,11 +276,11 @@ impl AsyncComponent for App {
                 OpenDialogResponse::Cancel => AppMsg::Ignore,
             });
 
-        let picture_preview = PicturePreview::builder()
+        let view_preview = ViewPreview::builder()
             .launch(database.clone())
             .forward(sender.input_sender(), identity);
 
-        let picture_grid = PictureGrid::builder()
+        let view_grid = ViewGrid::builder()
             .launch(database.clone())
             .forward(sender.input_sender(), identity);
 
@@ -285,8 +290,8 @@ impl AsyncComponent for App {
             database,
             directories,
             picture_view: PictureView::default(),
-            picture_preview,
-            picture_grid,
+            view_preview,
+            view_grid,
             dialog_import,
             dialog_add,
             dialog_export,
@@ -298,14 +303,16 @@ impl AsyncComponent for App {
 
         widgets
             .picture_view
-            .add_titled(model.picture_preview.widget(), Some("Preview"), "Preview")
+            .add_titled(model.view_preview.widget(), Some("Preview"), "Preview")
             .set_icon_name(Some("window-scrolling"));
         widgets
             .picture_view
-            .add_titled(model.picture_grid.widget(), Some("Grid"), "Grid")
+            .add_titled(model.view_grid.widget(), Some("Grid"), "Grid")
             .set_icon_name(Some("grid-large"));
 
         let app = relm4::main_application();
+
+        app.set_accelerators_for_action::<ActionPrint>(&["<Ctrl>P"]);
 
         app.set_accelerators_for_action::<ActionPrev>(&["h"]);
         app.set_accelerators_for_action::<ActionNext>(&["l"]);
@@ -354,6 +361,12 @@ impl AsyncComponent for App {
             let action_export: RelmAction<ActionExport> = {
                 RelmAction::new_stateless(move |_| {
                     sender_export.input(AppMsg::SelectionExportRequest);
+                })
+            };
+            let sender_print = sender.clone();
+            let action_print: RelmAction<ActionPrint> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_print.input(AppMsg::SelectionPrintRequest);
                 })
             };
 
@@ -408,6 +421,7 @@ impl AsyncComponent for App {
             group.add_action(action_ordinary);
             group.add_action(action_ignore);
             group.add_action(action_export);
+            group.add_action(action_print);
             group.add_action(action_next);
             group.add_action(action_prev);
             group.add_action(action_filter_hidden);
@@ -429,12 +443,12 @@ impl AsyncComponent for App {
         AsyncComponentParts { model, widgets }
     }
 
-    #[tracing::instrument(name = "Updating App", level = "debug", skip(self, sender, _root))]
+    #[tracing::instrument(name = "Updating App", level = "debug", skip(self, sender, root))]
     async fn update(
         &mut self,
         msg: Self::Input,
         sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match msg {
             AppMsg::DirectoryImportRequest => self.dialog_import.emit(OpenDialogMsg::Open),
@@ -496,39 +510,37 @@ impl AsyncComponent for App {
                 let pictures = query_directory_pictures(&self.database, &directories)
                     .await
                     .unwrap();
-                self.picture_preview
-                    .emit(PicturePreviewMsg::SelectPictures(pictures.clone()));
-                self.picture_grid
-                    .emit(PictureGridMsg::SelectPictures(pictures));
+                self.view_preview
+                    .emit(ViewPreviewMsg::SelectPictures(pictures.clone()));
+                self.view_grid.emit(ViewGridMsg::SelectPictures(pictures));
             }
-            AppMsg::FilterPick(value) => self
-                .picture_preview
-                .emit(PicturePreviewMsg::FilterPick(value)),
+            AppMsg::FilterPick(value) => self.view_preview.emit(ViewPreviewMsg::FilterPick(value)),
             AppMsg::FilterOrdinary(value) => self
-                .picture_preview
-                .emit(PicturePreviewMsg::FilterOrdinary(value)),
-            AppMsg::FilterIgnore(value) => self
-                .picture_preview
-                .emit(PicturePreviewMsg::FilterIgnore(value)),
-            AppMsg::FilterHidden(value) => self
-                .picture_preview
-                .emit(PicturePreviewMsg::FilterHidden(value)),
-            AppMsg::SelectionPick => self.picture_preview.emit(PicturePreviewMsg::SelectionPick),
-            AppMsg::SelectionOrdinary => self
-                .picture_preview
-                .emit(PicturePreviewMsg::SelectionOrdinary),
-            AppMsg::SelectionIgnore => self
-                .picture_preview
-                .emit(PicturePreviewMsg::SelectionIgnore),
+                .view_preview
+                .emit(ViewPreviewMsg::FilterOrdinary(value)),
+            AppMsg::FilterIgnore(value) => {
+                self.view_preview.emit(ViewPreviewMsg::FilterIgnore(value))
+            }
+            AppMsg::FilterHidden(value) => {
+                self.view_preview.emit(ViewPreviewMsg::FilterHidden(value))
+            }
+            AppMsg::SelectionPick => self.view_preview.emit(ViewPreviewMsg::SelectionPick),
+            AppMsg::SelectionOrdinary => self.view_preview.emit(ViewPreviewMsg::SelectionOrdinary),
+            AppMsg::SelectionIgnore => self.view_preview.emit(ViewPreviewMsg::SelectionIgnore),
             AppMsg::SelectionExportRequest => self.dialog_export.emit(OpenDialogMsg::Open),
             AppMsg::SelectionExport(dir) => match self.picture_view {
-                PictureView::Preview => self
-                    .picture_preview
-                    .emit(PicturePreviewMsg::SelectionExport(dir)),
-                PictureView::Grid => self.picture_grid.emit(PictureGridMsg::SelectionExport(dir)),
+                PictureView::Preview => {
+                    self.view_preview.emit(ViewPreviewMsg::SelectionExport(dir))
+                }
+                PictureView::Grid => self.view_grid.emit(ViewGridMsg::SelectionExport(dir)),
             },
-            AppMsg::ThumbnailNext => self.picture_preview.emit(PicturePreviewMsg::ImageNext),
-            AppMsg::ThumbnailPrev => self.picture_preview.emit(PicturePreviewMsg::ImagePrev),
+            AppMsg::SelectionPrintRequest => {
+                PrintOperation::new()
+                    .run(PrintOperationAction::PrintDialog, Some(root))
+                    .expect("Error with print operation");
+            }
+            AppMsg::ThumbnailNext => self.view_preview.emit(ViewPreviewMsg::ImageNext),
+            AppMsg::ThumbnailPrev => self.view_preview.emit(ViewPreviewMsg::ImagePrev),
             AppMsg::Ignore => {}
             AppMsg::UpdatePictureView(view) => {
                 self.picture_view = view;
@@ -557,7 +569,9 @@ relm4::new_stateless_action!(ActionPrev, WindowActionGroup, "previous");
 relm4::new_stateless_action!(ActionPick, WindowActionGroup, "pick");
 relm4::new_stateless_action!(ActionOrdinary, WindowActionGroup, "ordinary");
 relm4::new_stateless_action!(ActionIgnore, WindowActionGroup, "ignore");
+
 relm4::new_stateless_action!(ActionExport, WindowActionGroup, "export");
+relm4::new_stateless_action!(ActionPrint, WindowActionGroup, "print");
 
 relm4::new_stateful_action!(ActionFilterPick, WindowActionGroup, "pick_filter", (), bool);
 relm4::new_stateful_action!(

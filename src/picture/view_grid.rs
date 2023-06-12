@@ -12,7 +12,7 @@ use crate::relm_ext::{TypedGridView, TypedListItem};
 use crate::AppMsg;
 
 #[derive(Debug)]
-pub enum PictureGridMsg {
+pub enum ViewGridMsg {
     SelectPictures(Vec<PictureData>),
     FilterPick(bool),
     FilterOrdinary(bool),
@@ -25,12 +25,12 @@ pub enum PictureGridMsg {
 }
 
 #[derive(Debug)]
-pub struct PictureGrid {
+pub struct ViewGrid {
     thumbnails: TypedGridView<PictureThumbnail, gtk::MultiSelection>,
     database: DatabaseConnection,
 }
 
-impl PictureGrid {
+impl ViewGrid {
     pub fn get_selected(&self) -> Vec<TypedListItem<PictureThumbnail>> {
         let bitvec = self.thumbnails.selection_model.selection();
         let mut indicies = vec![];
@@ -48,9 +48,9 @@ impl PictureGrid {
 }
 
 #[relm4::component(async, pub)]
-impl AsyncComponent for PictureGrid {
+impl AsyncComponent for ViewGrid {
     type Init = DatabaseConnection;
-    type Input = PictureGridMsg;
+    type Input = ViewGridMsg;
     type Output = AppMsg;
     type CommandOutput = ();
 
@@ -107,28 +107,28 @@ impl AsyncComponent for PictureGrid {
         _root: &Self::Root,
     ) {
         match msg {
-            PictureGridMsg::SelectPictures(pictures) => {
+            ViewGridMsg::SelectPictures(pictures) => {
                 self.thumbnails.clear();
                 self.thumbnails
                     .extend_from_iter(pictures.into_iter().map(PictureThumbnail::from));
             }
-            PictureGridMsg::FilterPick(value) => {
+            ViewGridMsg::FilterPick(value) => {
                 let index = 0;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PictureGridMsg::FilterOrdinary(value) => {
+            ViewGridMsg::FilterOrdinary(value) => {
                 let index = 1;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PictureGridMsg::FilterIgnore(value) => {
+            ViewGridMsg::FilterIgnore(value) => {
                 let index = 2;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PictureGridMsg::FilterHidden(value) => {
+            ViewGridMsg::FilterHidden(value) => {
                 let index = 3;
                 self.thumbnails.set_filter_status(index, value);
             }
-            PictureGridMsg::SelectionPick => {
+            ViewGridMsg::SelectionPick => {
                 for thumbnail_item in self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
@@ -140,7 +140,7 @@ impl AsyncComponent for PictureGrid {
                         .unwrap();
                 }
             }
-            PictureGridMsg::SelectionOrdinary => {
+            ViewGridMsg::SelectionOrdinary => {
                 for thumbnail_item in self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
@@ -154,7 +154,7 @@ impl AsyncComponent for PictureGrid {
                         .unwrap();
                 }
             }
-            PictureGridMsg::SelectionIgnore => {
+            ViewGridMsg::SelectionIgnore => {
                 for thumbnail_item in self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
@@ -168,7 +168,7 @@ impl AsyncComponent for PictureGrid {
                         .unwrap();
                 }
             }
-            PictureGridMsg::SelectionExport(dir) => {
+            ViewGridMsg::SelectionExport(dir) => {
                 for thumbnail_item in self.get_selected() {
                     let origin = thumbnail_item.borrow().filepath.clone();
                     let destination = dir.join(origin.file_name().unwrap());
