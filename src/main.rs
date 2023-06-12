@@ -15,7 +15,6 @@ use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
 use relm4_components::open_dialog::*;
 use sea_orm::{Database, DatabaseConnection};
-use tracing_subscriber::fmt::format;
 
 use crate::import::import;
 use crate::picture::PictureGrid;

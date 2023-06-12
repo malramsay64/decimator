@@ -75,7 +75,7 @@ impl AsyncComponent for PictureGrid {
     async fn init(
         database: DatabaseConnection,
         root: Self::Root,
-        sender: AsyncComponentSender<Self>,
+        _sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let mut thumbnails: TypedGridView<PictureThumbnail, gtk::MultiSelection> =
             TypedGridView::with_sorting();
