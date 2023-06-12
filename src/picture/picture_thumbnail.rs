@@ -23,6 +23,7 @@ pub struct PictureThumbnail {
     pub flag: StringBinding,
     pub hidden: BoolBinding,
     thumbnail: Option<Texture>,
+    thumbnail_data: Option<DynamicImage>,
 }
 
 impl PartialEq for PictureThumbnail {
@@ -53,29 +54,6 @@ impl Ord for PictureThumbnail {
 impl From<PictureData> for PictureThumbnail {
     #[tracing::instrument(name = "Converting PictureData to PictureThumbnail")]
     fn from(picture: PictureData) -> Self {
-        let thumbnail = picture.thumbnail.map(|t| {
-            let (colorspace, has_alpha, bits_per_sample) = match &t {
-                DynamicImage::ImageRgb8(_) => (Colorspace::Rgb, false, 8_u32),
-                DynamicImage::ImageRgba8(_) => (Colorspace::Rgb, true, 8_u32),
-                _ => unimplemented!(),
-            };
-            let width = t.width();
-            let height = t.height();
-            let rowstride = if has_alpha {
-                bits_per_sample * 4 * width / 8
-            } else {
-                bits_per_sample * 3 * width / 8
-            };
-            Texture::for_pixbuf(&Pixbuf::from_bytes(
-                &Bytes::from(&t.into_bytes()),
-                colorspace,
-                has_alpha,
-                bits_per_sample as i32,
-                width as i32,
-                height as i32,
-                rowstride as i32,
-            ))
-        });
         PictureThumbnail {
             id: picture.id,
             filepath: picture.filepath,
@@ -85,7 +63,8 @@ impl From<PictureData> for PictureThumbnail {
             rating: StringBinding::new(String::from(picture.rating)),
             flag: StringBinding::new(String::from(picture.flag)),
             hidden: BoolBinding::new(picture.hidden),
-            thumbnail,
+            thumbnail: None,
+            thumbnail_data: picture.thumbnail,
         }
     }
 }
@@ -153,6 +132,32 @@ impl RelmListItem for PictureThumbnail {
             rating,
             selection,
         } = widgets;
+
+        if self.thumbnail.is_none() {
+            self.thumbnail = self.thumbnail_data.as_ref().map(|data| {
+                let (colorspace, has_alpha, bits_per_sample) = match &data {
+                    DynamicImage::ImageRgb8(_) => (Colorspace::Rgb, false, 8_u32),
+                    DynamicImage::ImageRgba8(_) => (Colorspace::Rgb, true, 8_u32),
+                    _ => unimplemented!(),
+                };
+                let width = data.width();
+                let height = data.height();
+                let rowstride = if has_alpha {
+                    bits_per_sample * 4 * width / 8
+                } else {
+                    bits_per_sample * 3 * width / 8
+                };
+                Texture::for_pixbuf(&Pixbuf::from_bytes(
+                    &Bytes::from(&data.clone().into_bytes()),
+                    colorspace,
+                    has_alpha,
+                    bits_per_sample as i32,
+                    width as i32,
+                    height as i32,
+                    rowstride as i32,
+                ))
+            })
+        }
 
         rating.add_write_only_binding(&self.rating, "label");
         selection.add_write_only_binding(&self.selection, "label");
