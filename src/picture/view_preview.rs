@@ -1,11 +1,12 @@
 use camino::Utf8PathBuf;
 use gtk::prelude::*;
+use relm4::adw::Window;
 use relm4::component::{AsyncComponent, AsyncComponentParts};
-use relm4::gtk::gdk::Texture;
-use relm4::gtk::gdk_pixbuf::Pixbuf;
+use relm4::gtk::{PrintOperation, PrintSettings};
 use relm4::{gtk, tokio, AsyncComponentSender};
 use sea_orm::DatabaseConnection;
 
+use super::Image;
 use crate::data::update_selection_state;
 use crate::picture::picture_data::*;
 use crate::picture::picture_thumbnail::*;
@@ -25,6 +26,7 @@ pub enum ViewPreviewMsg {
     SelectionOrdinary,
     SelectionIgnore,
     SelectionExport(Utf8PathBuf),
+    SelectionPrint(Window),
     ImageNext,
     ImagePrev,
 }
@@ -32,7 +34,7 @@ pub enum ViewPreviewMsg {
 #[derive(Debug)]
 pub struct ViewPreview {
     thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection>,
-    preview_image: Option<Texture>,
+    preview_image: Image,
     database: DatabaseConnection,
 }
 
@@ -58,7 +60,7 @@ impl AsyncComponent for ViewPreview {
                 set_hexpand: true,
                 gtk::Picture {
                     #[watch]
-                    set_paintable: model.preview_image.as_ref(),
+                    set_paintable: model.preview_image.preview.as_ref(),
                     set_halign: gtk::Align::Center,
                     set_hexpand: true,
 
@@ -118,7 +120,7 @@ impl AsyncComponent for ViewPreview {
         &mut self,
         msg: Self::Input,
         _sender: AsyncComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match msg {
             ViewPreviewMsg::SelectPictures(pictures) => {
@@ -132,17 +134,11 @@ impl AsyncComponent for ViewPreview {
                         .get_visible(i)
                         .map(|t| t.borrow().filepath.clone())
                 });
-                self.preview_image = relm4::spawn_blocking(|| {
-                    filepath.map(|p| {
-                        let image = Pixbuf::from_file(p)
-                            .expect("Image not found.")
-                            .apply_embedded_orientation()
-                            .expect("Unable to apply orientation.");
-                        Texture::for_pixbuf(&image)
-                    })
+                self.preview_image = relm4::spawn_local(async {
+                    filepath.map_or_else(Image::default, |f| Image::from_file(f, None).unwrap())
                 })
                 .await
-                .unwrap();
+                .unwrap()
             }
             ViewPreviewMsg::FilterPick(value) => {
                 let index = 0;
@@ -224,6 +220,38 @@ impl AsyncComponent for ViewPreview {
                     model.set_selected(index - 1)
                 }
             }
+            ViewPreviewMsg::SelectionPrint(window) => self.print(&window),
         }
+    }
+}
+impl ViewPreview {
+    fn print(&self, window: &Window) {
+        let settings = PrintSettings::new();
+        settings.set_quality(gtk::PrintQuality::High);
+        settings.set_media_type(&"photographic");
+        let print_operation = PrintOperation::new();
+        print_operation.set_print_settings(Some(&settings));
+
+        let preview_image = self.preview_image.clone();
+        print_operation.connect_draw_page(move |_, print_context, _| {
+            if let Some(image) = preview_image
+                .scale_to_fit(print_context.width() as u32, print_context.height() as u32)
+            {
+                let cairo_context = print_context.cairo_context();
+                cairo_context.set_source_pixbuf(
+                    &image,
+                    (print_context.width() - image.width() as f64) / 2.0,
+                    (print_context.height() - image.height() as f64) / 2.0,
+                );
+                if let Err(error) = cairo_context.paint() {
+                    tracing::error!("Couldn't print current image: {}", error);
+                }
+            }
+        });
+
+        print_operation.set_allow_async(true);
+        print_operation
+            .run(gtk::PrintOperationAction::PrintDialog, Some(window))
+            .unwrap();
     }
 }

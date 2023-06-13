@@ -1,11 +1,10 @@
 use camino::Utf8PathBuf;
-use glib::Bytes;
 use gtk::gdk::Texture;
-use gtk::glib;
 use gtk::prelude::*;
-use image::DynamicImage;
+use image::RgbaImage;
 use relm4::binding::{BoolBinding, StringBinding};
 use relm4::gtk::gdk_pixbuf::{Colorspace, Pixbuf};
+use relm4::gtk::glib::Bytes;
 use relm4::{gtk, view, RelmObjectExt};
 use uuid::Uuid;
 
@@ -23,7 +22,7 @@ pub struct PictureThumbnail {
     pub flag: StringBinding,
     pub hidden: BoolBinding,
     thumbnail: Option<Texture>,
-    thumbnail_data: Option<DynamicImage>,
+    thumbnail_data: Option<RgbaImage>,
 }
 
 impl PartialEq for PictureThumbnail {
@@ -135,20 +134,14 @@ impl RelmListItem for PictureThumbnail {
 
         if self.thumbnail.is_none() {
             self.thumbnail = self.thumbnail_data.as_ref().map(|data| {
-                let (colorspace, has_alpha, bits_per_sample) = match &data {
-                    DynamicImage::ImageRgb8(_) => (Colorspace::Rgb, false, 8_u32),
-                    DynamicImage::ImageRgba8(_) => (Colorspace::Rgb, true, 8_u32),
-                    _ => unimplemented!(),
-                };
+                let colorspace = Colorspace::Rgb;
+                let has_alpha = true;
+                let bits_per_sample = 8_u32;
                 let width = data.width();
                 let height = data.height();
-                let rowstride = if has_alpha {
-                    bits_per_sample * 4 * width / 8
-                } else {
-                    bits_per_sample * 3 * width / 8
-                };
+                let rowstride = bits_per_sample * 4 * width / 8;
                 Texture::for_pixbuf(&Pixbuf::from_bytes(
-                    &Bytes::from(&data.clone().into_bytes()),
+                    &Bytes::from(data.as_ref()),
                     colorspace,
                     has_alpha,
                     bits_per_sample as i32,

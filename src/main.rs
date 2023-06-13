@@ -1,4 +1,3 @@
-#![feature(let_chains)]
 use std::convert::identity;
 
 use adw::prelude::*;
@@ -7,6 +6,7 @@ use data::{query_directory_pictures, query_unique_directories, update_thumbnails
 use gtk::glib;
 use import::find_new_images;
 use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
+use relm4::adw::Window;
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
@@ -534,11 +534,9 @@ impl AsyncComponent for App {
                 }
                 PictureView::Grid => self.view_grid.emit(ViewGridMsg::SelectionExport(dir)),
             },
-            AppMsg::SelectionPrintRequest => {
-                PrintOperation::new()
-                    .run(PrintOperationAction::PrintDialog, Some(root))
-                    .expect("Error with print operation");
-            }
+            AppMsg::SelectionPrintRequest => self
+                .view_preview
+                .emit(ViewPreviewMsg::SelectionPrint(root.clone())),
             AppMsg::ThumbnailNext => self.view_preview.emit(ViewPreviewMsg::ImageNext),
             AppMsg::ThumbnailPrev => self.view_preview.emit(ViewPreviewMsg::ImagePrev),
             AppMsg::Ignore => {}

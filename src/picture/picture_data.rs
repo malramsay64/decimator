@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
-use image::{DynamicImage, ImageFormat, RgbaImage};
+use image::{ImageFormat, RgbaImage};
 use relm4::gtk::gdk::Texture;
 use relm4::gtk::gdk_pixbuf::Pixbuf;
 use sea_orm::ActiveValue;
@@ -25,7 +25,7 @@ pub struct PictureData {
     pub rating: Rating,
     pub flag: Flag,
     pub hidden: bool,
-    pub thumbnail: Option<DynamicImage>,
+    pub thumbnail: Option<RgbaImage>,
 }
 
 impl PictureData {
@@ -126,7 +126,9 @@ impl PictureData {
 impl From<picture::Model> for PictureData {
     fn from(value: picture::Model) -> Self {
         let thumbnail = value.thumbnail.as_ref().and_then(|data| {
-            image::load_from_memory_with_format(data, image::ImageFormat::Jpeg).ok()
+            image::load_from_memory_with_format(data, image::ImageFormat::Jpeg)
+                .ok()
+                .map(|i| i.into_rgba8())
         });
         Self {
             id: value.id,

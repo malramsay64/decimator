@@ -1,10 +1,12 @@
 mod picture_data;
+mod picture_preview;
 mod picture_thumbnail;
 mod property_types;
 mod view_grid;
 mod view_preview;
 
 pub use picture_data::*;
+pub use picture_preview::*;
 pub use picture_thumbnail::*;
 pub use property_types::*;
 pub use view_grid::*;
