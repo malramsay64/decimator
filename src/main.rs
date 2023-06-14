@@ -6,11 +6,9 @@ use data::{query_directory_pictures, query_unique_directories, update_thumbnails
 use gtk::glib;
 use import::find_new_images;
 use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
-use relm4::adw::Window;
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
-use relm4::gtk::{PrintOperation, PrintOperationAction};
 use relm4::prelude::*;
 use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
@@ -57,6 +55,7 @@ pub enum AppMsg {
     // Contains the path where the files are being exported to
     SelectionExport(Utf8PathBuf),
     SelectionPrintRequest,
+    SelectionZoom(u32),
     UpdatePictureView(PictureView),
     ThumbnailNext,
     ThumbnailPrev,
@@ -183,6 +182,7 @@ impl AsyncComponent for App {
         main_menu: {
             "Export" => ActionExport,
             "Print" => ActionPrint,
+            "Zoom" => ActionZoom,
             section! {
                 "Generate New Thumbnails" => ActionUpdateThumbnailNew,
                 "Update All Thumbnails" => ActionUpdateThumbnailAll,
@@ -317,6 +317,8 @@ impl AsyncComponent for App {
         app.set_accelerators_for_action::<ActionPrev>(&["h"]);
         app.set_accelerators_for_action::<ActionNext>(&["l"]);
 
+        app.set_accelerators_for_action::<ActionZoom>(&["<Ctrl><Plus>"]);
+
         app.set_accelerators_for_action::<ActionPick>(&["p"]);
         app.set_accelerators_for_action::<ActionOrdinary>(&["o"]);
         app.set_accelerators_for_action::<ActionIgnore>(&["i"]);
@@ -367,6 +369,12 @@ impl AsyncComponent for App {
             let action_print: RelmAction<ActionPrint> = {
                 RelmAction::new_stateless(move |_| {
                     sender_print.input(AppMsg::SelectionPrintRequest);
+                })
+            };
+            let sender_zoom = sender.clone();
+            let action_zoom: RelmAction<ActionZoom> = {
+                RelmAction::new_stateless(move |_| {
+                    sender_zoom.input(AppMsg::SelectionZoom(50));
                 })
             };
 
@@ -421,6 +429,7 @@ impl AsyncComponent for App {
             group.add_action(action_ordinary);
             group.add_action(action_ignore);
             group.add_action(action_export);
+            group.add_action(action_zoom);
             group.add_action(action_print);
             group.add_action(action_next);
             group.add_action(action_prev);
@@ -543,6 +552,9 @@ impl AsyncComponent for App {
             AppMsg::UpdatePictureView(view) => {
                 self.picture_view = view;
             }
+            AppMsg::SelectionZoom(scale) => {
+                self.view_preview.emit(ViewPreviewMsg::SelectionZoom(scale))
+            }
         }
     }
 }
@@ -570,6 +582,8 @@ relm4::new_stateless_action!(ActionIgnore, WindowActionGroup, "ignore");
 
 relm4::new_stateless_action!(ActionExport, WindowActionGroup, "export");
 relm4::new_stateless_action!(ActionPrint, WindowActionGroup, "print");
+
+relm4::new_stateless_action!(ActionZoom, WindowActionGroup, "zoom");
 
 relm4::new_stateful_action!(ActionFilterPick, WindowActionGroup, "pick_filter", (), bool);
 relm4::new_stateful_action!(

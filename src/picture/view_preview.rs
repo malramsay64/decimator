@@ -1,12 +1,16 @@
+use std::convert::identity;
+
 use camino::Utf8PathBuf;
 use gtk::prelude::*;
 use relm4::adw::Window;
-use relm4::component::{AsyncComponent, AsyncComponentParts};
-use relm4::gtk::{PrintOperation, PrintSettings};
+use relm4::component::{
+    AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
+};
+use relm4::gtk::gdk_pixbuf::Pixbuf;
 use relm4::{gtk, tokio, AsyncComponentSender};
 use sea_orm::DatabaseConnection;
 
-use super::Image;
+use super::{ImageMsg, ImageWidget};
 use crate::data::update_selection_state;
 use crate::picture::picture_data::*;
 use crate::picture::picture_thumbnail::*;
@@ -27,6 +31,7 @@ pub enum ViewPreviewMsg {
     SelectionIgnore,
     SelectionExport(Utf8PathBuf),
     SelectionPrint(Window),
+    SelectionZoom(u32),
     ImageNext,
     ImagePrev,
 }
@@ -34,7 +39,7 @@ pub enum ViewPreviewMsg {
 #[derive(Debug)]
 pub struct ViewPreview {
     thumbnails: TypedListView<PictureThumbnail, gtk::SingleSelection>,
-    preview_image: Image,
+    preview_image: AsyncController<ImageWidget>,
     database: DatabaseConnection,
 }
 
@@ -55,17 +60,10 @@ impl AsyncComponent for ViewPreview {
     view! {
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
-            gtk::Box {
-                set_vexpand: true,
-                set_hexpand: true,
-                gtk::Picture {
-                    #[watch]
-                    set_paintable: model.preview_image.preview.as_ref(),
-                    set_halign: gtk::Align::Center,
-                    set_hexpand: true,
 
-                }
-            },
+            #[local_ref]
+            preview -> gtk::Box {},
+
             gtk::ScrolledWindow {
                 set_propagate_natural_height: true,
                 set_has_frame: true,
@@ -99,19 +97,28 @@ impl AsyncComponent for ViewPreview {
         thumbnails.set_filter_status(2, false);
         thumbnails.set_filter_status(3, true);
 
+        let thumbnail_sender = sender.clone();
         thumbnails
             .selection_model
             .connect_selected_notify(move |s| {
-                sender.input(ViewPreviewMsg::SelectPreview(Some(s.selected())))
+                thumbnail_sender.input(ViewPreviewMsg::SelectPreview(Some(s.selected())))
             });
+
+        let thumbnail_list = &thumbnails.view;
+
+        let image_sender = sender;
+        let preview_image = ImageWidget::builder()
+            .launch(())
+            .forward(image_sender.input_sender(), identity);
+        let preview = preview_image.widget();
+
+        let widgets = view_output!();
 
         let model = Self {
             thumbnails,
-            preview_image: Default::default(),
+            preview_image,
             database,
         };
-        let thumbnail_list = &model.thumbnails.view;
-        let widgets = view_output!();
 
         AsyncComponentParts { model, widgets }
     }
@@ -120,7 +127,7 @@ impl AsyncComponent for ViewPreview {
         &mut self,
         msg: Self::Input,
         _sender: AsyncComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match msg {
             ViewPreviewMsg::SelectPictures(pictures) => {
@@ -134,11 +141,18 @@ impl AsyncComponent for ViewPreview {
                         .get_visible(i)
                         .map(|t| t.borrow().filepath.clone())
                 });
-                self.preview_image = relm4::spawn_local(async {
-                    filepath.map_or_else(Image::default, |f| Image::from_file(f, None).unwrap())
-                })
-                .await
-                .unwrap()
+                self.preview_image.emit(ImageMsg::SetImage(
+                    relm4::spawn_local(async {
+                        filepath.map(|f| {
+                            Pixbuf::from_file(f)
+                                .expect("Unable to load file")
+                                .apply_embedded_orientation()
+                                .expect("Unable to apply orientation")
+                        })
+                    })
+                    .await
+                    .unwrap(),
+                ))
             }
             ViewPreviewMsg::FilterPick(value) => {
                 let index = 0;
@@ -220,38 +234,12 @@ impl AsyncComponent for ViewPreview {
                     model.set_selected(index - 1)
                 }
             }
-            ViewPreviewMsg::SelectionPrint(window) => self.print(&window),
-        }
-    }
-}
-impl ViewPreview {
-    fn print(&self, window: &Window) {
-        let settings = PrintSettings::new();
-        settings.set_quality(gtk::PrintQuality::High);
-        settings.set_media_type(&"photographic");
-        let print_operation = PrintOperation::new();
-        print_operation.set_print_settings(Some(&settings));
-
-        let preview_image = self.preview_image.clone();
-        print_operation.connect_draw_page(move |_, print_context, _| {
-            if let Some(image) = preview_image
-                .scale_to_fit(print_context.width() as u32, print_context.height() as u32)
-            {
-                let cairo_context = print_context.cairo_context();
-                cairo_context.set_source_pixbuf(
-                    &image,
-                    (print_context.width() - image.width() as f64) / 2.0,
-                    (print_context.height() - image.height() as f64) / 2.0,
-                );
-                if let Err(error) = cairo_context.paint() {
-                    tracing::error!("Couldn't print current image: {}", error);
-                }
+            ViewPreviewMsg::SelectionPrint(window) => {
+                self.preview_image.emit(ImageMsg::Print(window))
             }
-        });
-
-        print_operation.set_allow_async(true);
-        print_operation
-            .run(gtk::PrintOperationAction::PrintDialog, Some(window))
-            .unwrap();
+            ViewPreviewMsg::SelectionZoom(scale) => {
+                self.preview_image.emit(ImageMsg::Scale(scale));
+            }
+        }
     }
 }
