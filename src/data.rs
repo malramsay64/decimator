@@ -72,17 +72,15 @@ pub(crate) async fn update_thumbnails(
         .for_each_concurrent(num_cpus::get(), |r| async move {
             let picture = r.unwrap();
             let filepath = picture.filepath();
-            let _span = tracing::debug_span!("Updating thumbnail");
-            tracing::debug!("loading file from {}", &filepath);
+            let _span = tracing::info_span!("Updating thumbnail");
+            tracing::info!("loading file from {}", &filepath);
             let mut buffer = Cursor::new(vec![]);
-            let thumbnail =
-                relm4::spawn_blocking(move || PictureData::load_thumbnail(&filepath, 240, 240))
-                    .await
-                    .unwrap()
-                    .map(|f| f.write_to(&mut buffer, ImageFormat::Jpeg).unwrap());
+            let thumbnail = PictureData::load_thumbnail(&filepath, 240, 240)
+                    .map(|f| f.write_to(&mut buffer, ImageFormat::Jpeg)).unwrap();
             if thumbnail.is_ok() {
                 let mut picture: picture::ActiveModel = picture.into();
                 picture.set(picture::Column::Thumbnail, buffer.into_inner().into());
+                tracing::info!("{picture:?}");
                 picture.update(db).await.unwrap();
             } else {
                 tracing::info!("Unable to read file {}", &picture.filepath());

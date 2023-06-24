@@ -55,7 +55,7 @@ pub enum AppMsg {
     // Contains the path where the files are being exported to
     SelectionExport(Utf8PathBuf),
     SelectionPrintRequest,
-    SelectionZoom(u32),
+    SelectionZoom(Option<u32>),
     UpdatePictureView(PictureView),
     ThumbnailNext,
     ThumbnailPrev,
@@ -317,7 +317,7 @@ impl AsyncComponent for App {
         app.set_accelerators_for_action::<ActionPrev>(&["h"]);
         app.set_accelerators_for_action::<ActionNext>(&["l"]);
 
-        app.set_accelerators_for_action::<ActionZoom>(&["<Ctrl><Plus>"]);
+        app.set_accelerators_for_action::<ActionZoom>(&["<Ctrl>+<Plus>"]);
 
         app.set_accelerators_for_action::<ActionPick>(&["p"]);
         app.set_accelerators_for_action::<ActionOrdinary>(&["o"]);
@@ -374,7 +374,7 @@ impl AsyncComponent for App {
             let sender_zoom = sender.clone();
             let action_zoom: RelmAction<ActionZoom> = {
                 RelmAction::new_stateless(move |_| {
-                    sender_zoom.input(AppMsg::SelectionZoom(50));
+                    sender_zoom.input(AppMsg::SelectionZoom(Some(50)));
                 })
             };
 

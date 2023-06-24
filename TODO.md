@@ -1,5 +1,7 @@
 # TODO
 
+- Zoom in on preview image
+  - This will require storing both the original image and the zoomed paintable
 - Perform the conversion from an image to a pixbuf when binding to a widget
 - Simplify implementation of grid and list
   - I want to be able to merge them into a single implementation with a configurable parameter
@@ -21,8 +23,6 @@
   in chronological order to begin with, sorted from the datbase. 
   This will be the fallback sorting, with the ability to sort by filename
   and to reverse the sort order.
-- Zoom in on preview image
-  - This will require storing both the original image and the zoomed paintable
 
 ## Ideas
 

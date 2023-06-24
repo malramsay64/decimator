@@ -31,7 +31,7 @@ pub enum ViewPreviewMsg {
     SelectionIgnore,
     SelectionExport(Utf8PathBuf),
     SelectionPrint(Window),
-    SelectionZoom(u32),
+    SelectionZoom(Option<u32>),
     ImageNext,
     ImagePrev,
 }

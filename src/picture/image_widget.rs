@@ -16,13 +16,14 @@ pub struct ImageWidget {
     pub preview: Option<Pixbuf>,
     view_width: u32,
     view_height: u32,
+    zoom: u32,
     handler: DrawHandler,
 }
 
 #[derive(Debug)]
 pub enum ImageMsg {
     Resize((u32, u32)),
-    Scale(u32),
+    Scale(Option<u32>),
     SetImage(Option<Pixbuf>),
     UpdatePreview,
     Print(Window),
@@ -103,7 +104,15 @@ impl AsyncComponent for ImageWidget {
                 sender.input(ImageMsg::UpdatePreview);
             }
             ImageMsg::Scale(scale) => {
-                self.view_scale(scale);
+                if let Some(s) = scale {
+                    self.view_scale(s);
+                } else {
+                    // Resize to fit in the available space
+                    self.preview.replace(
+                        self.scale_to_fit(self.view_width, self.view_height)
+                            .unwrap(),
+                    );
+                }
                 sender.input(ImageMsg::UpdatePreview);
             }
             ImageMsg::SetImage(image) => {
@@ -133,7 +142,7 @@ impl ImageWidget {
     }
 
     pub fn view_scale(&mut self, scale: u32) {
-        tracing::info!("Zooming image to {scale}.");
+        tracing::info!("Zooming image to {scale:?}.");
         if let Some(i) = &self.original {
             self.preview.replace(
                 i.scale_simple(
