@@ -130,14 +130,12 @@ impl ImageWidget {
     pub fn update_preview(&mut self) {
         if self.view_width == 0 && self.view_height == 0 {
             self.preview = self.original.clone();
-        } else {
-            if self.original.is_some() {
-                tracing::info!("Resizing to {} x {}.", self.view_width, self.view_height);
-                self.preview.replace(
-                    self.scale_to_fit(self.view_width, self.view_height)
-                        .expect("Unable to resize image"),
-                );
-            }
+        } else if self.original.is_some() {
+            tracing::info!("Resizing to {} x {}.", self.view_width, self.view_height);
+            self.preview.replace(
+                self.scale_to_fit(self.view_width, self.view_height)
+                    .expect("Unable to resize image"),
+            );
         }
     }
 

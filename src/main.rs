@@ -13,7 +13,7 @@ use relm4::prelude::*;
 use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
 use relm4_components::open_dialog::*;
-use sea_orm::{Database, DatabaseConnection};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
 use crate::import::import;
 use crate::picture::ViewGrid;
@@ -28,7 +28,7 @@ mod telemetry;
 // mod window;
 
 use directory::DirectoryData;
-use picture::{ViewGridMsg, ViewPreview, ViewPreviewMsg};
+use picture::{Selection, ViewGridMsg, ViewPreview, ViewPreviewMsg};
 use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
@@ -40,16 +40,13 @@ pub enum AppMsg {
     DirectoryImportRequest,
     DirectoryImport(Utf8PathBuf),
     UpdateDirectories,
-    UpdateThumbnailsAll,
-    UpdateThumbnailsNew,
+    UpdateThumbnails(bool),
     SelectDirectories(Vec<u32>),
     FilterPick(bool),
     FilterOrdinary(bool),
     FilterIgnore(bool),
     FilterHidden(bool),
-    SelectionPick,
-    SelectionOrdinary,
-    SelectionIgnore,
+    SetSelection(Selection),
     // Signal to emit when we want to export, this creates the export dialog
     SelectionExportRequest,
     // Contains the path where the files are being exported to
@@ -93,7 +90,6 @@ struct App {
     dialog_import: Controller<OpenDialog>,
     dialog_add: Controller<OpenDialog>,
     dialog_export: Controller<OpenDialog>,
-    progress: gtk::ProgressBar,
 }
 
 #[relm4::component(async)]
@@ -137,8 +133,8 @@ impl AsyncComponent for App {
                         #[local_ref]
                         directory_list -> gtk::ListView {}
                     },
-                    #[local_ref]
-                    progress -> gtk::ProgressBar { }
+                    // #[local_ref]
+                    // progress_bars -> gtk::Box{ }
                 },
                 #[wrap(Some)]
                 set_content = &gtk::Box {
@@ -204,7 +200,14 @@ impl AsyncComponent for App {
         root: Self::Root,
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
-        let database = Database::connect(&database_path)
+        let mut connection_options = ConnectOptions::new(database_path);
+        // The minimum number of connections is rather important. There are cases within the application where
+        // we have multiple connections open simultaneously to handle the streaming of data from the database
+        // while performing operations on the data. This doesn't work if we don't increase the minimum number
+        // of connections resulting in a lock on the connections.
+        connection_options.max_connections(20).min_connections(4);
+        tracing::debug!("Connection Options: {:?}", connection_options);
+        let database = Database::connect(connection_options)
             .await
             .expect("Unable to initialise sqlite database");
 
@@ -284,7 +287,7 @@ impl AsyncComponent for App {
             .launch(database.clone())
             .forward(sender.input_sender(), identity);
 
-        let progress = gtk::ProgressBar::new();
+        // let progress_bars = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
         let model = App {
             database,
@@ -295,7 +298,7 @@ impl AsyncComponent for App {
             dialog_import,
             dialog_add,
             dialog_export,
-            progress: progress.clone(),
+            // progress_bars,
         };
         let directory_list = &model.directories.view;
 
@@ -331,32 +334,32 @@ impl AsyncComponent for App {
             let sender_update_thumbnail_all = sender.clone();
             let action_update_thumbnail_all: RelmAction<ActionUpdateThumbnailAll> = {
                 RelmAction::new_stateless(move |_| {
-                    sender_update_thumbnail_all.input(AppMsg::UpdateThumbnailsAll);
+                    sender_update_thumbnail_all.input(AppMsg::UpdateThumbnails(true));
                 })
             };
             let sender_update_thumbnail_new = sender.clone();
             let action_update_thumbnail_new: RelmAction<ActionUpdateThumbnailNew> = {
                 RelmAction::new_stateless(move |_| {
-                    sender_update_thumbnail_new.input(AppMsg::UpdateThumbnailsNew);
+                    sender_update_thumbnail_new.input(AppMsg::UpdateThumbnails(false));
                 })
             };
 
             let sender_pick = sender.clone();
             let action_pick: RelmAction<ActionPick> = {
                 RelmAction::new_stateless(move |_| {
-                    sender_pick.input(AppMsg::SelectionPick);
+                    sender_pick.input(AppMsg::SetSelection(Selection::Pick));
                 })
             };
             let sender_ordinary = sender.clone();
             let action_ordinary: RelmAction<ActionOrdinary> = {
                 RelmAction::new_stateless(move |_| {
-                    sender_ordinary.input(AppMsg::SelectionOrdinary);
+                    sender_ordinary.input(AppMsg::SetSelection(Selection::Ordinary));
                 })
             };
             let sender_ignore = sender.clone();
             let action_ignore: RelmAction<ActionIgnore> = {
                 RelmAction::new_stateless(move |_| {
-                    sender_ignore.input(AppMsg::SelectionIgnore);
+                    sender_ignore.input(AppMsg::SetSelection(Selection::Ignore));
                 })
             };
             let sender_export = sender.clone();
@@ -462,20 +465,12 @@ impl AsyncComponent for App {
         match msg {
             AppMsg::DirectoryImportRequest => self.dialog_import.emit(OpenDialogMsg::Open),
             AppMsg::DirectoryImport(dir) => {
-                // let db = self.database.clone();
-                import(&self.database, &dir, &self.progress).await.unwrap();
-                // relm4::spawn(async move { import(&db, &dir).await })
-                //     .await
-                //     .unwrap();
+                import(&self.database, &dir).await.unwrap();
                 sender.input(AppMsg::UpdateDirectories);
             }
             AppMsg::DirectoryAddRequest => self.dialog_add.emit(OpenDialogMsg::Open),
             AppMsg::DirectoryAdd(dir) => {
-                // let db = self.database.clone();
                 find_new_images(&self.database, &dir).await;
-                // relm4::spawn(async move { find_new_images(&db, &dir).await })
-                //     .await
-                //     .unwrap();
                 sender.input(AppMsg::UpdateDirectories);
             }
             AppMsg::UpdateDirectories => {
@@ -483,26 +478,11 @@ impl AsyncComponent for App {
                 self.directories.clear();
                 self.directories.extend_from_iter(directories.into_iter());
             }
-            AppMsg::UpdateThumbnailsAll => {
+            AppMsg::UpdateThumbnails(all) => {
                 // TODO: Add a dialog confirmation box
-                let db = self.database.clone();
-                relm4::spawn(async move {
-                    update_thumbnails(&db, true)
-                        .await
-                        .expect("Unable to update thumbnails");
-                })
-                .await
-                .unwrap();
-            }
-            AppMsg::UpdateThumbnailsNew => {
-                let db = self.database.clone();
-                relm4::spawn(async move {
-                    update_thumbnails(&db, false)
-                        .await
-                        .expect("Unable to update thumbnails");
-                })
-                .await
-                .unwrap();
+                update_thumbnails(&self.database, all)
+                    .await
+                    .expect("Unable to update thumbnails");
             }
             AppMsg::SelectDirectories(indicies) => {
                 let directories: Vec<String> = indicies
@@ -533,9 +513,7 @@ impl AsyncComponent for App {
             AppMsg::FilterHidden(value) => {
                 self.view_preview.emit(ViewPreviewMsg::FilterHidden(value))
             }
-            AppMsg::SelectionPick => self.view_preview.emit(ViewPreviewMsg::SelectionPick),
-            AppMsg::SelectionOrdinary => self.view_preview.emit(ViewPreviewMsg::SelectionOrdinary),
-            AppMsg::SelectionIgnore => self.view_preview.emit(ViewPreviewMsg::SelectionIgnore),
+            AppMsg::SetSelection(s) => self.view_preview.emit(ViewPreviewMsg::SetSelection(s)),
             AppMsg::SelectionExportRequest => self.dialog_export.emit(OpenDialogMsg::Open),
             AppMsg::SelectionExport(dir) => match self.picture_view {
                 PictureView::Preview => {

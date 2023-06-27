@@ -5,11 +5,13 @@
 // the understanding and separation.
 
 use std::io::Cursor;
+use std::ops::Not;
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use futures::stream::StreamExt;
+use futures::{Stream, TryStreamExt};
 use image::ImageFormat;
+use relm4::gtk;
 use sea_orm::{sea_query, DatabaseConnection};
 use sea_query::{Condition, Expr};
 use uuid::Uuid;
@@ -62,31 +64,44 @@ pub(crate) async fn update_thumbnails(
     db: &DatabaseConnection,
     update_all: bool,
 ) -> Result<(), Error> {
+    let query = picture::Entity::find().apply_if(update_all.not().then_some(()), |q, _| {
+        q.filter(picture::Column::Thumbnail.is_null())
+    });
+    let num_items = query.clone().count(db).await?;
+
+    tracing::info!("{} {:?}", update_all, num_items);
+
     // TODO: Improve the performance of this query. Not entirely sure where the bottlenecks are
-    picture::Entity::find()
-        .apply_if(update_all.then_some(()), |query, _| {
-            query.filter(picture::Column::Thumbnail.is_null())
-        })
-        .stream(db)
-        .await?
-        .for_each_concurrent(num_cpus::get(), |r| async move {
-            let picture = r.unwrap();
-            let filepath = picture.filepath();
+    let stream = query.stream(db).await?;
+
+    stream
+        .try_for_each_concurrent(num_cpus::get(), |picture| async move {
+            let filepath = picture.filepath().clone();
             let _span = tracing::info_span!("Updating thumbnail");
-            tracing::info!("loading file from {}", &filepath);
-            let mut buffer = Cursor::new(vec![]);
-            let thumbnail = PictureData::load_thumbnail(&filepath, 240, 240)
-                    .map(|f| f.write_to(&mut buffer, ImageFormat::Jpeg)).unwrap();
-            if thumbnail.is_ok() {
+            let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> =
+                relm4::spawn_blocking(move || {
+                    let mut buffer = Cursor::new(vec![]);
+                    tracing::info!("loading file from {}", &filepath);
+                    PictureData::load_thumbnail(&filepath, 240, 240).map(|f| {
+                        f.write_to(&mut buffer, ImageFormat::Jpeg)
+                            .expect("Error writing image to buffer");
+                        buffer
+                    })
+                })
+                .await
+                .expect("Unable to join");
+            if let Ok(thumbnail) = thumbnail_buffer {
                 let mut picture: picture::ActiveModel = picture.into();
-                picture.set(picture::Column::Thumbnail, buffer.into_inner().into());
-                tracing::info!("{picture:?}");
-                picture.update(db).await.unwrap();
+                picture.set(picture::Column::Thumbnail, thumbnail.into_inner().into());
+                tracing::trace!("{picture:?}");
+                picture.update(db).await?;
             } else {
-                tracing::info!("Unable to read file {}", &picture.filepath());
+                tracing::warn!("Unable to read file {}", &picture.filepath());
             }
+            Ok(())
         })
-        .await;
+        .await
+        .expect("Error updating thumbnails");
     Ok(())
 }
 

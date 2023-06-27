@@ -14,7 +14,7 @@ use super::{ImageMsg, ImageWidget};
 use crate::data::update_selection_state;
 use crate::picture::picture_data::*;
 use crate::picture::picture_thumbnail::*;
-use crate::picture::property_types::*;
+use crate::picture::Selection;
 use crate::relm_ext::{TypedListItem, TypedListView};
 use crate::AppMsg;
 
@@ -26,9 +26,7 @@ pub enum ViewPreviewMsg {
     FilterOrdinary(bool),
     FilterIgnore(bool),
     FilterHidden(bool),
-    SelectionPick,
-    SelectionOrdinary,
-    SelectionIgnore,
+    SetSelection(Selection),
     SelectionExport(Utf8PathBuf),
     SelectionPrint(Window),
     SelectionZoom(Option<u32>),
@@ -170,44 +168,14 @@ impl AsyncComponent for ViewPreview {
                 let index = 3;
                 self.thumbnails.set_filter_status(index, value);
             }
-            ViewPreviewMsg::SelectionPick => {
+            ViewPreviewMsg::SetSelection(s) => {
                 if let Some(thumbnail_item) = self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
-                        thumbnail.selection.set_value(String::from(Selection::Pick));
+                        thumbnail.selection.set_value(String::from(s));
                         thumbnail.id
                     };
-                    update_selection_state(&self.database, id, Selection::Pick)
-                        .await
-                        .unwrap();
-                }
-            }
-            ViewPreviewMsg::SelectionOrdinary => {
-                if let Some(thumbnail_item) = self.get_selected() {
-                    let id = {
-                        let thumbnail = thumbnail_item.borrow();
-                        thumbnail
-                            .selection
-                            .set_value(String::from(Selection::Ordinary));
-                        thumbnail.id
-                    };
-                    update_selection_state(&self.database, id, Selection::Ordinary)
-                        .await
-                        .unwrap();
-                }
-            }
-            ViewPreviewMsg::SelectionIgnore => {
-                if let Some(thumbnail_item) = self.get_selected() {
-                    let id = {
-                        let thumbnail = thumbnail_item.borrow();
-                        thumbnail
-                            .selection
-                            .set_value(String::from(Selection::Ignore));
-                        thumbnail.id
-                    };
-                    update_selection_state(&self.database, id, Selection::Ignore)
-                        .await
-                        .unwrap();
+                    update_selection_state(&self.database, id, s).await.unwrap();
                 }
             }
             ViewPreviewMsg::SelectionExport(dir) => {

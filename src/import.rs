@@ -4,7 +4,6 @@ use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
 use glib::{user_special_dir, UserDirectory};
 use itertools::Itertools;
-use relm4::gtk;
 use relm4::gtk::glib;
 use sea_orm::DatabaseConnection;
 use walkdir::WalkDir;
@@ -90,13 +89,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-pub async fn import(
-    db: &DatabaseConnection,
-    directory: &Utf8PathBuf,
-    progress: &gtk::ProgressBar,
-) -> Result<(), Error> {
-    progress.set_text(Some("Checking for existing images."));
-    progress.set_show_text(true);
+pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<(), Error> {
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
     // The list of all the pictures that currently exist within the database.
@@ -107,7 +100,6 @@ pub async fn import(
         .map(PictureData::from)
         .collect::<Vec<_>>();
 
-    progress.pulse();
     // To make the lookup process simpler, we first want to convert to a hashmap to make the
     // act of looking up whether a picture already exists withih the database a quick proces.
     // Currently this is only using the filename, that is the name given to the file by the camera
@@ -121,7 +113,6 @@ pub async fn import(
             hash_existing.insert(picture.filename(), vec![picture]);
         }
     }
-    progress.pulse();
 
     // Determine whether the new images we are importing already exist within the database.
     let mut new_images: Vec<_> = map_directory_images(directory)
@@ -130,11 +121,7 @@ pub async fn import(
         .filter(|p| !hash_existing.contains_key(&p.filename()))
         .collect();
 
-    progress.pulse();
-    progress.set_text(Some("Importing new images"));
-    progress.set_fraction(0.);
-
-    let total_images = new_images.len();
+    let total_images = &new_images.len();
 
     // Parallel map -> Will need to be careful about the directory creation
     // Spawn async tasks to do the copying?
@@ -178,17 +165,10 @@ pub async fn import(
         }
 
         image.filepath = new_path;
-
-        progress.set_fraction(index as f64 / total_images as f64);
     }
 
-    progress.set_fraction(1.);
-
-    progress.set_text(Some("Adding images to database"));
-    progress.set_fraction(0.);
     // Create entry in the database / import
     add_new_images(db, new_images).await.unwrap();
-    progress.pulse();
     // Check the filename
     // Check the capture time
     // Full Method
