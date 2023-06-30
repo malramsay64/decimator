@@ -230,6 +230,12 @@ impl AsyncComponent for App {
                  }
             },
 
+            add_action = &gio::SimpleAction::new_safe::<Next>() {
+                connect_activate_safe[sender] => move |Next, _| sender.input(AppMsg::ThumbnailNext),
+            },
+            add_action = &gio::SimpleAction::new_safe::<Previous>() {
+                connect_activate_safe[sender] => move |Previous, _| sender.input(AppMsg::ThumbnailPrev),
+            },
             add_action = &gio::SimpleAction::new_safe::<Export>() {
                 connect_activate_safe[sender] => move |Export, _| sender.input(AppMsg::SelectionExportRequest),
             },
@@ -404,8 +410,13 @@ impl AsyncComponent for App {
 
         app.set_accels_for_action_safe(Print, &["<Ctrl>P"]);
 
+<<<<<<< HEAD
         app.set_accels_for_action_safe(Next, &["h"]);
         app.set_accels_for_action_safe(Previous, &["l"]);
+=======
+        app.set_accels_for_action_safe(Next, &["l"]);
+        app.set_accels_for_action_safe(Previous, &["h"]);
+>>>>>>> a76dce1 (Use relm4 safe actions for actions and menus)
 
         app.set_accels_for_action_safe(SetSelection::Pick, &["p"]);
         app.set_accels_for_action_safe(SetSelection::Ordinary, &["o"]);
