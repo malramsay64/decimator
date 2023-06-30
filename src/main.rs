@@ -410,13 +410,8 @@ impl AsyncComponent for App {
 
         app.set_accels_for_action_safe(Print, &["<Ctrl>P"]);
 
-<<<<<<< HEAD
-        app.set_accels_for_action_safe(Next, &["h"]);
-        app.set_accels_for_action_safe(Previous, &["l"]);
-=======
         app.set_accels_for_action_safe(Next, &["l"]);
         app.set_accels_for_action_safe(Previous, &["h"]);
->>>>>>> a76dce1 (Use relm4 safe actions for actions and menus)
 
         app.set_accels_for_action_safe(SetSelection::Pick, &["p"]);
         app.set_accels_for_action_safe(SetSelection::Ordinary, &["o"]);
