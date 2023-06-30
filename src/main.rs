@@ -3,9 +3,8 @@ use std::convert::identity;
 use adw::prelude::*;
 use camino::Utf8PathBuf;
 use data::{query_directory_pictures, query_unique_directories, update_thumbnails};
-use gtk::glib;
+use gtk::{gio, glib};
 use import::find_new_images;
-use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup, *};
 use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
@@ -33,6 +32,49 @@ use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
 
+use relm4::safe_settings_and_actions::extensions::*;
+
+relm4::safe_settings_and_actions! {
+    #[derive(Debug)]
+    @value(param: &'a str, map: <str>)
+    UpdateThumbnails(group:"win", name: "update-thumbnails") {
+        All = ("All"),
+        New = ("New"),
+    }
+
+    Export(group: "win", name: "export");
+    Print(group: "win", name: "print");
+
+    // Interactions with the pictures
+
+    Next(group: "win", name: "next");
+    Previous(group: "win", name: "previous");
+
+    @value(param: u32)
+    @state(param: u32, owned: u32)
+    Zoom(group: "win", name: "previous");
+
+    #[derive(Debug)]
+    @value(param: &'a str, map: <str>)
+    SetSelection(group: "win", name: "set-selection") {
+        Pick = ("pick"),
+        Ordinary = ("ordinary"),
+        Ignore = ("ignore"),
+    }
+
+    @state(param: bool, owned: bool)
+    DisplayPick(group: "win", name: "filter_pick");
+
+    @state(param: bool, owned: bool)
+    DisplayOrdinary(group: "win", name: "filter_ordinary");
+
+    @state(param: bool, owned: bool)
+    DisplayIgnore(group: "win", name: "filter_ignore");
+
+    @state(param: bool, owned: bool)
+    DisplayHidden(group: "win", name: "filter_hidden");
+}
+
 #[derive(Debug)]
 pub enum AppMsg {
     DirectoryAddRequest,
@@ -42,10 +84,10 @@ pub enum AppMsg {
     UpdateDirectories,
     UpdateThumbnails(bool),
     SelectDirectories(Vec<u32>),
-    FilterPick(bool),
-    FilterOrdinary(bool),
-    FilterIgnore(bool),
-    FilterHidden(bool),
+    DisplayPick(bool),
+    DisplayOrdinary(bool),
+    DisplayIgnore(bool),
+    DisplayHidden(bool),
     SetSelection(Selection),
     // Signal to emit when we want to export, this creates the export dialog
     SelectionExportRequest,
@@ -100,8 +142,9 @@ impl AsyncComponent for App {
     type CommandOutput = ();
 
     view! {
+        #[root]
         #[name = "main_window"]
-        adw::Window {
+        adw::ApplicationWindow {
             set_default_size: (960, 540),
             #[name = "flap"]
             adw::Flap {
@@ -149,7 +192,22 @@ impl AsyncComponent for App {
                         },
                         pack_end = &gtk::MenuButton {
                             set_icon_name: "open-menu-symbolic",
-                            set_menu_model: Some(&main_menu),
+                            #[wrap(Some)]
+                            set_menu_model = &gio::Menu {
+                                action["Export"]: Export,
+                                section["Thumbnails"] = &gio::Menu {
+                                    action["Create New"]: UpdateThumbnails::New,
+                                    action["Update All"]: UpdateThumbnails::All,
+                                },
+                                section["Filters"] = &gio::Menu {
+                                    action["Picked"]: DisplayPick,
+                                    action["Ordinary"]: DisplayOrdinary,
+                                    action["Ignore"]: DisplayIgnore,
+                                },
+                                section["Hidden Images"] = &gio::Menu {
+                                    action["Hidden"]: DisplayHidden,
+                                },
+                            },
                         },
 
                         #[wrap(Some)]
@@ -170,28 +228,57 @@ impl AsyncComponent for App {
                         set_reveal: true,
                     }
                  }
-            }
-        }
-    }
+            },
 
-    menu! {
-        main_menu: {
-            "Export" => ActionExport,
-            "Print" => ActionPrint,
-            "Zoom" => ActionZoom,
-            section! {
-                "Generate New Thumbnails" => ActionUpdateThumbnailNew,
-                "Update All Thumbnails" => ActionUpdateThumbnailAll,
+            add_action = &gio::SimpleAction::new_safe::<Export>() {
+                connect_activate_safe[sender] => move |Export, _| sender.input(AppMsg::SelectionExportRequest),
             },
-            section! {
-                "Hide Picked" => ActionFilterPick,
-                "Hide Ordinary" => ActionFilterOrdinary,
-                "Hide Ignored" => ActionFilterIgnore,
+            add_action = &gio::SimpleAction::new_safe::<UpdateThumbnails>() {
+                connect_activate_safe_enum[sender] => move |_, value| sender.input(AppMsg::UpdateThumbnails(match value {
+                    UpdateThumbnails::New => false,
+                    UpdateThumbnails::All => true,
+                })),
             },
-            section!{
-                "Hidden Images" => ActionFilterHidden,
-            }
-        }
+            add_action = &gio::SimpleAction::new_safe::<SetSelection>() {
+                connect_activate_safe_enum[sender] =>
+                    move | _, value| sender.input(AppMsg::SetSelection(match value {
+                    SetSelection::Pick => Selection::Pick,
+                    SetSelection::Ordinary => Selection::Ordinary,
+                    SetSelection::Ignore => Selection::Ignore,
+                })),
+            },
+            add_action = &gio::SimpleAction::new_stateful_safe::<DisplayPick>(true) {
+                connect_activate_safe_with_mut_state[sender] =>
+                    move |DisplayPick, _, state| {
+                        *state = !*state;
+                        sender.input(AppMsg::DisplayPick(*state));
+                },
+            },
+            add_action = &gio::SimpleAction::new_stateful_safe::<DisplayOrdinary>(true) {
+                connect_activate_safe_with_mut_state[sender] =>
+                    move |DisplayOrdinary, _, state| {
+                        *state = !*state;
+                        sender.input(AppMsg::DisplayOrdinary(*state));
+
+                },
+            },
+            add_action = &gio::SimpleAction::new_stateful_safe::<DisplayIgnore>(true) {
+                connect_activate_safe_with_mut_state[sender] =>
+                    move |DisplayIgnore, _, state| {
+                        *state = !*state;
+                        sender.input(AppMsg::DisplayIgnore(*state));
+                },
+            },
+            add_action = &gio::SimpleAction::new_stateful_safe::<DisplayHidden>(false) {
+                connect_activate_safe_with_mut_state[sender] =>
+                    move |DisplayHidden, _, state| {
+                        *state = !*state;
+                        sender.input(AppMsg::DisplayHidden(*state));
+                },
+            },
+
+        },
+
     }
 
     #[tracing::instrument(name = "Initialising App", skip(root, sender))]
@@ -315,135 +402,14 @@ impl AsyncComponent for App {
 
         let app = relm4::main_application();
 
-        app.set_accelerators_for_action::<ActionPrint>(&["<Ctrl>P"]);
+        app.set_accels_for_action_safe(Print, &["<Ctrl>P"]);
 
-        app.set_accelerators_for_action::<ActionPrev>(&["h"]);
-        app.set_accelerators_for_action::<ActionNext>(&["l"]);
+        app.set_accels_for_action_safe(Next, &["h"]);
+        app.set_accels_for_action_safe(Previous, &["l"]);
 
-        app.set_accelerators_for_action::<ActionZoom>(&["<Ctrl>+<Plus>"]);
-
-        app.set_accelerators_for_action::<ActionPick>(&["p"]);
-        app.set_accelerators_for_action::<ActionOrdinary>(&["o"]);
-        app.set_accelerators_for_action::<ActionIgnore>(&["i"]);
-
-        {
-            // TODO: Write a send message action macro and a toggle state action macro
-
-            let mut group = RelmActionGroup::<WindowActionGroup>::new();
-
-            let sender_update_thumbnail_all = sender.clone();
-            let action_update_thumbnail_all: RelmAction<ActionUpdateThumbnailAll> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_update_thumbnail_all.input(AppMsg::UpdateThumbnails(true));
-                })
-            };
-            let sender_update_thumbnail_new = sender.clone();
-            let action_update_thumbnail_new: RelmAction<ActionUpdateThumbnailNew> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_update_thumbnail_new.input(AppMsg::UpdateThumbnails(false));
-                })
-            };
-
-            let sender_pick = sender.clone();
-            let action_pick: RelmAction<ActionPick> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_pick.input(AppMsg::SetSelection(Selection::Pick));
-                })
-            };
-            let sender_ordinary = sender.clone();
-            let action_ordinary: RelmAction<ActionOrdinary> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_ordinary.input(AppMsg::SetSelection(Selection::Ordinary));
-                })
-            };
-            let sender_ignore = sender.clone();
-            let action_ignore: RelmAction<ActionIgnore> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_ignore.input(AppMsg::SetSelection(Selection::Ignore));
-                })
-            };
-            let sender_export = sender.clone();
-            let action_export: RelmAction<ActionExport> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_export.input(AppMsg::SelectionExportRequest);
-                })
-            };
-            let sender_print = sender.clone();
-            let action_print: RelmAction<ActionPrint> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_print.input(AppMsg::SelectionPrintRequest);
-                })
-            };
-            let sender_zoom = sender.clone();
-            let action_zoom: RelmAction<ActionZoom> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_zoom.input(AppMsg::SelectionZoom(Some(50)));
-                })
-            };
-
-            let sender_next = sender.clone();
-            let action_next: RelmAction<ActionNext> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_next.input(AppMsg::ThumbnailNext);
-                })
-            };
-            let sender_prev = sender.clone();
-            let action_prev: RelmAction<ActionPrev> = {
-                RelmAction::new_stateless(move |_| {
-                    sender_prev.input(AppMsg::ThumbnailPrev);
-                })
-            };
-
-            let sender_filter_pick = sender.clone();
-            let action_filter_pick: RelmAction<ActionFilterPick> = {
-                RelmAction::new_stateful(&false, move |_, state: &mut bool| {
-                    *state = !*state;
-                    sender_filter_pick.input(AppMsg::FilterPick(*state));
-                })
-            };
-            let sender_filter_ordinary = sender.clone();
-            let action_filter_ordinary: RelmAction<ActionFilterOrdinary> = {
-                RelmAction::new_stateful(&false, move |_, state: &mut bool| {
-                    *state = !*state;
-                    sender_filter_ordinary.input(AppMsg::FilterOrdinary(*state));
-                })
-            };
-            let sender_filter_ignore = sender.clone();
-            let action_filter_ignore: RelmAction<ActionFilterIgnore> = {
-                RelmAction::new_stateful(&false, move |_, state: &mut bool| {
-                    *state = !*state;
-                    sender_filter_ignore.input(AppMsg::FilterIgnore(*state));
-                })
-            };
-            let sender_filter_hidden = sender.clone();
-            let action_filter_hidden: RelmAction<ActionFilterHidden> = {
-                RelmAction::new_stateful(&true, move |_, state: &mut bool| {
-                    *state = !*state;
-                    sender_filter_hidden.input(AppMsg::FilterHidden(*state));
-                })
-            };
-
-            group.add_action(action_update_thumbnail_all);
-            group.add_action(action_update_thumbnail_new);
-            group.add_action(action_filter_pick);
-            group.add_action(action_filter_ordinary);
-            group.add_action(action_filter_ignore);
-            group.add_action(action_pick);
-            group.add_action(action_ordinary);
-            group.add_action(action_ignore);
-            group.add_action(action_export);
-            group.add_action(action_zoom);
-            group.add_action(action_print);
-            group.add_action(action_next);
-            group.add_action(action_prev);
-            group.add_action(action_filter_hidden);
-
-            let actions = group.into_action_group();
-
-            widgets
-                .main_window
-                .insert_action_group(WindowActionGroup::NAME, Some(&actions));
-        }
+        app.set_accels_for_action_safe(SetSelection::Pick, &["p"]);
+        app.set_accels_for_action_safe(SetSelection::Ordinary, &["o"]);
+        app.set_accels_for_action_safe(SetSelection::Ignore, &["i"]);
 
         // Get all the directories from the database
         sender.input(AppMsg::UpdateDirectories);
@@ -455,13 +421,14 @@ impl AsyncComponent for App {
         AsyncComponentParts { model, widgets }
     }
 
-    #[tracing::instrument(name = "Updating App", level = "debug", skip(self, sender, root))]
+    #[tracing::instrument(name = "Updating App", level = "info", skip(self, sender, root))]
     async fn update(
         &mut self,
         msg: Self::Input,
         sender: AsyncComponentSender<Self>,
         root: &Self::Root,
     ) {
+        tracing::info!("{:?}", &msg);
         match msg {
             AppMsg::DirectoryImportRequest => self.dialog_import.emit(OpenDialogMsg::Open),
             AppMsg::DirectoryImport(dir) => {
@@ -503,17 +470,27 @@ impl AsyncComponent for App {
                     .emit(ViewPreviewMsg::SelectPictures(pictures.clone()));
                 self.view_grid.emit(ViewGridMsg::SelectPictures(pictures));
             }
-            AppMsg::FilterPick(value) => self.view_preview.emit(ViewPreviewMsg::FilterPick(value)),
-            AppMsg::FilterOrdinary(value) => self
-                .view_preview
-                .emit(ViewPreviewMsg::FilterOrdinary(value)),
-            AppMsg::FilterIgnore(value) => {
-                self.view_preview.emit(ViewPreviewMsg::FilterIgnore(value))
+            AppMsg::DisplayPick(value) => {
+                self.view_preview.emit(ViewPreviewMsg::DisplayPick(value));
+                self.view_grid.emit(ViewGridMsg::DisplayPick(value));
             }
-            AppMsg::FilterHidden(value) => {
-                self.view_preview.emit(ViewPreviewMsg::FilterHidden(value))
+            AppMsg::DisplayOrdinary(value) => {
+                self.view_preview
+                    .emit(ViewPreviewMsg::DisplayOrdinary(value));
+                self.view_grid.emit(ViewGridMsg::DisplayOrdinary(value));
             }
-            AppMsg::SetSelection(s) => self.view_preview.emit(ViewPreviewMsg::SetSelection(s)),
+            AppMsg::DisplayIgnore(value) => {
+                self.view_preview.emit(ViewPreviewMsg::DisplayIgnore(value));
+                self.view_grid.emit(ViewGridMsg::DisplayIgnore(value));
+            }
+            AppMsg::DisplayHidden(value) => {
+                self.view_preview.emit(ViewPreviewMsg::DisplayHidden(value));
+                self.view_grid.emit(ViewGridMsg::DisplayHidden(value));
+            }
+            AppMsg::SetSelection(s) => match self.picture_view {
+                PictureView::Preview => self.view_preview.emit(ViewPreviewMsg::SetSelection(s)),
+                PictureView::Grid => self.view_grid.emit(ViewGridMsg::SetSelection(s)),
+            },
             AppMsg::SelectionExportRequest => self.dialog_export.emit(OpenDialogMsg::Open),
             AppMsg::SelectionExport(dir) => match self.picture_view {
                 PictureView::Preview => {
@@ -521,12 +498,12 @@ impl AsyncComponent for App {
                 }
                 PictureView::Grid => self.view_grid.emit(ViewGridMsg::SelectionExport(dir)),
             },
-            AppMsg::SelectionPrintRequest => self
-                .view_preview
-                .emit(ViewPreviewMsg::SelectionPrint(root.clone())),
+            AppMsg::SelectionPrintRequest => self.view_preview.emit(
+                ViewPreviewMsg::SelectionPrint(root.clone().upcast::<gtk::Window>()),
+            ),
+            AppMsg::Ignore => {}
             AppMsg::ThumbnailNext => self.view_preview.emit(ViewPreviewMsg::ImageNext),
             AppMsg::ThumbnailPrev => self.view_preview.emit(ViewPreviewMsg::ImagePrev),
-            AppMsg::Ignore => {}
             AppMsg::UpdatePictureView(view) => {
                 self.picture_view = view;
             }
@@ -537,58 +514,9 @@ impl AsyncComponent for App {
     }
 }
 
-relm4::new_action_group!(WindowActionGroup, "win");
-
-relm4::new_stateless_action!(
-    ActionUpdateThumbnailAll,
-    WindowActionGroup,
-    "update_thumbnails_all"
-);
-
-relm4::new_stateless_action!(
-    ActionUpdateThumbnailNew,
-    WindowActionGroup,
-    "update_thumbnails_new"
-);
-
-relm4::new_stateless_action!(ActionNext, WindowActionGroup, "next");
-relm4::new_stateless_action!(ActionPrev, WindowActionGroup, "previous");
-
-relm4::new_stateless_action!(ActionPick, WindowActionGroup, "pick");
-relm4::new_stateless_action!(ActionOrdinary, WindowActionGroup, "ordinary");
-relm4::new_stateless_action!(ActionIgnore, WindowActionGroup, "ignore");
-
-relm4::new_stateless_action!(ActionExport, WindowActionGroup, "export");
-relm4::new_stateless_action!(ActionPrint, WindowActionGroup, "print");
-
-relm4::new_stateless_action!(ActionZoom, WindowActionGroup, "zoom");
-
-relm4::new_stateful_action!(ActionFilterPick, WindowActionGroup, "pick_filter", (), bool);
-relm4::new_stateful_action!(
-    ActionFilterOrdinary,
-    WindowActionGroup,
-    "ordinary_filter",
-    (),
-    bool
-);
-relm4::new_stateful_action!(
-    ActionFilterIgnore,
-    WindowActionGroup,
-    "ignore_filter",
-    (),
-    bool
-);
-relm4::new_stateful_action!(
-    ActionFilterHidden,
-    WindowActionGroup,
-    "hidden_filter",
-    (),
-    bool
-);
-
 fn main() {
     // Configure tracing information
-    let subscriber = get_subscriber_terminal(APP_ID.into(), "info".into(), std::io::stdout);
+    let subscriber = get_subscriber_terminal(APP_ID.into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
 
     // Set up the database we are running from

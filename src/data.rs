@@ -93,7 +93,6 @@ pub(crate) async fn update_thumbnails(
             if let Ok(thumbnail) = thumbnail_buffer {
                 let mut picture: picture::ActiveModel = picture.into();
                 picture.set(picture::Column::Thumbnail, thumbnail.into_inner().into());
-                tracing::trace!("{picture:?}");
                 picture.update(db).await?;
             } else {
                 tracing::warn!("Unable to read file {}", &picture.filepath());

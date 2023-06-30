@@ -22,13 +22,13 @@ use crate::AppMsg;
 pub enum ViewPreviewMsg {
     SelectPictures(Vec<PictureData>),
     SelectPreview(Option<u32>),
-    FilterPick(bool),
-    FilterOrdinary(bool),
-    FilterIgnore(bool),
-    FilterHidden(bool),
+    DisplayPick(bool),
+    DisplayOrdinary(bool),
+    DisplayIgnore(bool),
+    DisplayHidden(bool),
     SetSelection(Selection),
     SelectionExport(Utf8PathBuf),
-    SelectionPrint(Window),
+    SelectionPrint(gtk::Window),
     SelectionZoom(Option<u32>),
     ImageNext,
     ImagePrev,
@@ -152,21 +152,21 @@ impl AsyncComponent for ViewPreview {
                     .unwrap(),
                 ))
             }
-            ViewPreviewMsg::FilterPick(value) => {
+            ViewPreviewMsg::DisplayPick(value) => {
                 let index = 0;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewPreviewMsg::FilterOrdinary(value) => {
+            ViewPreviewMsg::DisplayOrdinary(value) => {
                 let index = 1;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewPreviewMsg::FilterIgnore(value) => {
+            ViewPreviewMsg::DisplayIgnore(value) => {
                 let index = 2;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewPreviewMsg::FilterHidden(value) => {
+            ViewPreviewMsg::DisplayHidden(value) => {
                 let index = 3;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
             ViewPreviewMsg::SetSelection(s) => {
                 if let Some(thumbnail_item) = self.get_selected() {

@@ -14,13 +14,11 @@ use crate::AppMsg;
 #[derive(Debug)]
 pub enum ViewGridMsg {
     SelectPictures(Vec<PictureData>),
-    FilterPick(bool),
-    FilterOrdinary(bool),
-    FilterIgnore(bool),
-    FilterHidden(bool),
-    SelectionPick,
-    SelectionOrdinary,
-    SelectionIgnore,
+    DisplayPick(bool),
+    DisplayOrdinary(bool),
+    DisplayIgnore(bool),
+    DisplayHidden(bool),
+    SetSelection(Selection),
     SelectionExport(Utf8PathBuf),
 }
 
@@ -112,58 +110,30 @@ impl AsyncComponent for ViewGrid {
                 self.thumbnails
                     .extend_from_iter(pictures.into_iter().map(PictureThumbnail::from));
             }
-            ViewGridMsg::FilterPick(value) => {
+            ViewGridMsg::DisplayPick(value) => {
                 let index = 0;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewGridMsg::FilterOrdinary(value) => {
+            ViewGridMsg::DisplayOrdinary(value) => {
                 let index = 1;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewGridMsg::FilterIgnore(value) => {
+            ViewGridMsg::DisplayIgnore(value) => {
                 let index = 2;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewGridMsg::FilterHidden(value) => {
+            ViewGridMsg::DisplayHidden(value) => {
                 let index = 3;
-                self.thumbnails.set_filter_status(index, value);
+                self.thumbnails.set_filter_status(index, !value);
             }
-            ViewGridMsg::SelectionPick => {
+            ViewGridMsg::SetSelection(state) => {
                 for thumbnail_item in self.get_selected() {
                     let id = {
                         let thumbnail = thumbnail_item.borrow();
-                        thumbnail.selection.set_value(String::from(Selection::Pick));
+                        thumbnail.selection.set_value(String::from(state));
                         thumbnail.id
                     };
-                    update_selection_state(&self.database, id, Selection::Pick)
-                        .await
-                        .unwrap();
-                }
-            }
-            ViewGridMsg::SelectionOrdinary => {
-                for thumbnail_item in self.get_selected() {
-                    let id = {
-                        let thumbnail = thumbnail_item.borrow();
-                        thumbnail
-                            .selection
-                            .set_value(String::from(Selection::Ordinary));
-                        thumbnail.id
-                    };
-                    update_selection_state(&self.database, id, Selection::Ordinary)
-                        .await
-                        .unwrap();
-                }
-            }
-            ViewGridMsg::SelectionIgnore => {
-                for thumbnail_item in self.get_selected() {
-                    let id = {
-                        let thumbnail = thumbnail_item.borrow();
-                        thumbnail
-                            .selection
-                            .set_value(String::from(Selection::Ignore));
-                        thumbnail.id
-                    };
-                    update_selection_state(&self.database, id, Selection::Ignore)
+                    update_selection_state(&self.database, id, state)
                         .await
                         .unwrap();
                 }

@@ -26,7 +26,7 @@ pub enum ImageMsg {
     Scale(Option<u32>),
     SetImage(Option<Pixbuf>),
     UpdatePreview,
-    Print(Window),
+    Print(gtk::Window),
 }
 
 #[relm4::component(async, pub)]
@@ -172,7 +172,7 @@ impl ImageWidget {
         }
     }
 
-    fn print(&self, window: &Window) {
+    fn print(&self, window: &gtk::Window) {
         let settings = PrintSettings::new();
         settings.set_quality(gtk::PrintQuality::High);
         settings.set_media_type(&"photographic");
