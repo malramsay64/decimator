@@ -10,7 +10,7 @@ use relm4::gtk::gdk_pixbuf::Pixbuf;
 use relm4::{gtk, tokio, AsyncComponentSender};
 use sea_orm::DatabaseConnection;
 
-use super::{ImageMsg, ImageWidget};
+use super::{ImageMsg, ImageWidget, ZoomStates};
 use crate::data::update_selection_state;
 use crate::picture::picture_data::*;
 use crate::picture::picture_thumbnail::*;
@@ -29,7 +29,7 @@ pub enum ViewPreviewMsg {
     SetSelection(Selection),
     SelectionExport(Utf8PathBuf),
     SelectionPrint(gtk::Window),
-    SelectionZoom(Option<u32>),
+    SelectionZoom(ZoomStates),
     ImageNext,
     ImagePrev,
 }

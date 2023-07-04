@@ -9,13 +9,14 @@ use relm4::component::{
     AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController,
 };
 use relm4::prelude::*;
+use relm4::safe_settings_and_actions::extensions::*;
 use relm4::typed_list_view::TypedListView;
 use relm4::AsyncComponentSender;
 use relm4_components::open_dialog::*;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
 use crate::import::import;
-use crate::picture::ViewGrid;
+use crate::picture::{ViewGrid, ZoomStates};
 
 mod data;
 mod directory;
@@ -31,8 +32,6 @@ use picture::{Selection, ViewGridMsg, ViewPreview, ViewPreviewMsg};
 use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
-
-use relm4::safe_settings_and_actions::extensions::*;
 
 relm4::safe_settings_and_actions! {
     #[derive(Debug)]
@@ -50,9 +49,14 @@ relm4::safe_settings_and_actions! {
     Next(group: "win", name: "next");
     Previous(group: "win", name: "previous");
 
-    @value(param: u32)
-    @state(param: u32, owned: u32)
-    Zoom(group: "win", name: "previous");
+    #[derive(Debug)]
+    @value(param: &'a str, map: <str>)
+    Zoom(group: "win", name: "zoom") {
+        Increase = ("Increase"),
+        Decrease = ("Decrease"),
+        Fit = ("Fit"),
+        Native = ("Native"),
+    }
 
     #[derive(Debug)]
     @value(param: &'a str, map: <str>)
@@ -94,7 +98,7 @@ pub enum AppMsg {
     // Contains the path where the files are being exported to
     SelectionExport(Utf8PathBuf),
     SelectionPrintRequest,
-    SelectionZoom(Option<u32>),
+    SelectionZoom(ZoomStates),
     UpdatePictureView(PictureView),
     ThumbnailNext,
     ThumbnailPrev,
@@ -190,22 +194,26 @@ impl AsyncComponent for App {
                             set_icon_name: "sidebar-show-symbolic",
                             set_active: true,
                         },
-                        pack_end = &gtk::MenuButton {
-                            set_icon_name: "open-menu-symbolic",
-                            #[wrap(Some)]
-                            set_menu_model = &gio::Menu {
-                                action["Export"]: Export,
-                                section["Thumbnails"] = &gio::Menu {
-                                    action["Create New"]: UpdateThumbnails::New,
-                                    action["Update All"]: UpdateThumbnails::All,
-                                },
-                                section["Filters"] = &gio::Menu {
-                                    action["Picked"]: DisplayPick,
-                                    action["Ordinary"]: DisplayOrdinary,
-                                    action["Ignore"]: DisplayIgnore,
-                                },
-                                section["Hidden Images"] = &gio::Menu {
-                                    action["Hidden"]: DisplayHidden,
+                        pack_end = &gtk::Box{
+                            set_orientation: gtk::Orientation::Horizontal,
+
+                            gtk::MenuButton {
+                                set_icon_name: "open-menu-symbolic",
+                                #[wrap(Some)]
+                                set_menu_model = &gio::Menu {
+                                    action["Export"]: Export,
+                                    section["Thumbnails"] = &gio::Menu {
+                                        action["Create New"]: UpdateThumbnails::New,
+                                        action["Update All"]: UpdateThumbnails::All,
+                                    },
+                                    section["Filters"] = &gio::Menu {
+                                        action["Picked"]: DisplayPick,
+                                        action["Ordinary"]: DisplayOrdinary,
+                                        action["Ignore"]: DisplayIgnore,
+                                    },
+                                    section["Hidden Images"] = &gio::Menu {
+                                        action["Hidden"]: DisplayHidden,
+                                    },
                                 },
                             },
                         },
@@ -282,9 +290,16 @@ impl AsyncComponent for App {
                         sender.input(AppMsg::DisplayHidden(*state));
                 },
             },
-
+            add_action = &gio::SimpleAction::new_safe::<Zoom>() {
+                connect_activate_safe_enum[sender] =>
+                    move |_, value| sender.input(AppMsg::SelectionZoom(match value {
+                        Zoom::Increase => ZoomStates::Increase,
+                        Zoom::Decrease => ZoomStates::Decrease,
+                        Zoom::Fit => ZoomStates::Fit,
+                        Zoom::Native => ZoomStates::Native,
+                    }))
+            },
         },
-
     }
 
     #[tracing::instrument(name = "Initialising App", skip(root, sender))]

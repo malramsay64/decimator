@@ -1,14 +1,16 @@
 use gtk::prelude::*;
-use relm4::adw::Window;
 use relm4::component::{AsyncComponent, AsyncComponentParts};
 use relm4::drawing::{DrawContext, DrawHandler};
 use relm4::gtk::cairo::Operator;
-use relm4::gtk::gdk_pixbuf::{InterpType, Pixbuf};
+use relm4::gtk::gdk_pixbuf::{Colorspace, InterpType, Pixbuf};
 use relm4::gtk::prelude::GdkCairoContextExt;
-use relm4::gtk::{PrintOperation, PrintSettings};
+use relm4::gtk::{EventControllerScrollFlags, Inhibit, PrintOperation, PrintSettings};
+use relm4::safe_settings_and_actions::extensions::*;
 use relm4::{gtk, AsyncComponentSender};
+use relm4_icons::icon_name;
 
 use super::ViewPreviewMsg;
+use crate::Zoom;
 
 #[derive(Debug, Default)]
 pub struct ImageWidget {
@@ -16,14 +18,23 @@ pub struct ImageWidget {
     pub preview: Option<Pixbuf>,
     view_width: u32,
     view_height: u32,
-    zoom: u32,
+    zoom: f64,
     handler: DrawHandler,
+}
+
+#[derive(Debug)]
+pub enum ZoomStates {
+    Increase,
+    Decrease,
+    Fit,
+    Native,
+    Toggle(f64, f64),
 }
 
 #[derive(Debug)]
 pub enum ImageMsg {
     Resize((u32, u32)),
-    Scale(Option<u32>),
+    Scale(ZoomStates),
     SetImage(Option<Pixbuf>),
     UpdatePreview,
     Print(gtk::Window),
@@ -61,8 +72,31 @@ impl AsyncComponent for ImageWidget {
             ..Default::default()
         };
         let area = model.handler.drawing_area();
+        let controller_zoom = gtk::EventControllerScroll::new(EventControllerScrollFlags::VERTICAL);
+
+        let zoom_sender = sender.clone();
+        controller_zoom.connect_scroll(move |_, _, y| {
+            println!("{y}");
+            if y > 0. {
+                zoom_sender.input(ImageMsg::Scale(ZoomStates::Increase));
+            } else if y < 0. {
+                zoom_sender.input(ImageMsg::Scale(ZoomStates::Decrease));
+            }
+            Inhibit(false)
+        });
+
+        let click_zoom = gtk::GestureClick::new();
+        let zoom_sender = sender.clone();
+        click_zoom.connect_pressed(move |_gesture, n_press, x, y| {
+            if n_press == 2 {
+                zoom_sender.input(ImageMsg::Scale(ZoomStates::Toggle(x, y)));
+            }
+        });
+        area.add_controller(click_zoom);
+        area.add_controller(controller_zoom);
 
         let widgets = view_output!();
+
         AsyncComponentParts { model, widgets }
     }
 
@@ -98,25 +132,61 @@ impl AsyncComponent for ImageWidget {
             ImageMsg::Resize((x, y)) => {
                 self.view_width = x;
                 self.view_height = y;
-                if self.original.is_some() {
-                    self.preview.replace(self.scale_to_fit(x, y).unwrap());
-                }
                 sender.input(ImageMsg::UpdatePreview);
             }
             ImageMsg::Scale(scale) => {
-                if let Some(s) = scale {
-                    self.view_scale(s);
-                } else {
-                    // Resize to fit in the available space
-                    self.preview.replace(
-                        self.scale_to_fit(self.view_width, self.view_height)
-                            .unwrap(),
-                    );
-                }
+                let (x, y): (f64, f64) = match scale {
+                    ZoomStates::Increase => {
+                        self.zoom = self.zoom * 1.2;
+                        if self.zoom > 200. {
+                            self.zoom = 200.
+                        }
+                        (0., 0.)
+                    }
+                    ZoomStates::Decrease => {
+                        self.zoom = self.zoom / 1.2;
+                        if self.zoom < 10. {
+                            self.zoom = 10.
+                        }
+                        (0., 0.)
+                    }
+                    ZoomStates::Native => {
+                        self.zoom = 100.;
+                        (0., 0.)
+                    }
+                    ZoomStates::Fit => {
+                        self.zoom = self.scale_fit();
+                        (0., 0.)
+                    }
+                    ZoomStates::Toggle(x, y) => {
+                        if self.zoom == 100. {
+                            self.zoom = self.scale_fit();
+                            (0., 0.)
+                        } else {
+                            let prev_zoom = self.zoom as f64;
+                            self.zoom = 100.;
+                            let max_offset_x = (self.original.as_ref().unwrap().width() as f64
+                                - self.view_width as f64)
+                                / 2.;
+                            let max_offset_y = (self.original.as_ref().unwrap().height() as f64
+                                - self.view_height as f64)
+                                / 2.;
+                            let offset_x = -(x - self.view_width as f64 / 2.) * 100. / prev_zoom;
+                            let offset_y = -(y - self.view_height as f64 / 2.) * 100. / prev_zoom;
+
+                            (
+                                offset_x.clamp(-max_offset_x, max_offset_x),
+                                offset_y.clamp(-max_offset_y, max_offset_y),
+                            )
+                        }
+                    }
+                };
+                self.view_scale(self.zoom, x, y);
                 sender.input(ImageMsg::UpdatePreview);
             }
             ImageMsg::SetImage(image) => {
                 self.original = image;
+                self.zoom = self.scale_fit();
                 self.update_preview();
                 sender.input(ImageMsg::UpdatePreview);
             }
@@ -128,47 +198,50 @@ impl AsyncComponent for ImageWidget {
 impl ImageWidget {
     #[tracing::instrument(name = "Updating Preview from Original", level = "info", skip(self))]
     pub fn update_preview(&mut self) {
+        // TODO: Handle a None preview
         if self.view_width == 0 && self.view_height == 0 {
             self.preview = self.original.clone();
         } else if self.original.is_some() {
-            tracing::info!("Resizing to {} x {}.", self.view_width, self.view_height);
-            self.preview.replace(
-                self.scale_to_fit(self.view_width, self.view_height)
-                    .expect("Unable to resize image"),
-            );
+            // tracing::info!("Resizing to {} x {}.", self.view_width, self.view_height);
+            self.view_scale(self.zoom, 0., 0.);
         }
     }
 
-    pub fn view_scale(&mut self, scale: u32) {
+    #[tracing::instrument(name = "Changing scale of image", level = "info", skip(self))]
+    pub fn view_scale(&mut self, scale: f64, offset_x: f64, offset_y: f64) {
         tracing::info!("Zooming image to {scale:?}.");
         if let Some(i) = &self.original {
-            self.preview.replace(
-                i.scale_simple(
-                    (i.width() as f64 * (scale as f64 / 100.0)) as i32,
-                    (i.height() as f64 * (scale as f64 / 100.0)) as i32,
-                    InterpType::Bilinear,
-                )
-                .unwrap(),
+            let width = (i.width() as f64 * scale / 100.0) as i32;
+            let height = (i.height() as f64 * scale / 100.0) as i32;
+            tracing::debug!("Offsets: {offset_x} {offset_y}");
+            let dest = Pixbuf::new(Colorspace::Rgb, true, 8, width, height)
+                .expect("Unable to create new pixbuf");
+            i.scale(
+                &dest,
+                0,
+                0,
+                width,
+                height,
+                offset_x,
+                offset_y,
+                scale as f64 / 100.0,
+                scale as f64 / 100.0,
+                InterpType::Bilinear,
             );
+
+            self.preview = Some(dest);
         };
     }
 
-    pub fn scale_to_fit(&self, width: u32, height: u32) -> Option<Pixbuf> {
+    pub fn scale_fit(&self) -> f64 {
         if let Some(image) = &self.original {
             let image_width = image.width() as f64;
             let image_height = image.height() as f64;
-            let width_ratio = width as f64 / image_width;
-            let height_ratio = height as f64 / image_height;
-            let scale_ratio = width_ratio.min(height_ratio);
-            // Perform the calculations for the scale in f64 to
-            // remove as much of the rounding error as possible.
-            image.scale_simple(
-                (image_width * scale_ratio) as i32,
-                (image_height * scale_ratio) as i32,
-                InterpType::Nearest,
-            )
+            let width_ratio = self.view_width as f64 / image_width;
+            let height_ratio = self.view_height as f64 / image_height;
+            width_ratio.min(height_ratio) * 100.
         } else {
-            None
+            100.
         }
     }
 
