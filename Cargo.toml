@@ -6,7 +6,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-relm4 = { git="https://github.com/Relm4/Relm4", features = ["macros", "gnome_43", "libadwaita"] }
 relm4-components = { git="https://github.com/Relm4/Relm4" }
 relm4-icons = { version = "0.6.0-beta.6", features = ["window-scrolling", "grid-large", "plus", "minus"] }
 image = "~0.24.6"
@@ -27,3 +26,8 @@ serde_json = "1.0.89"
 futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "~0.10.5"
+iced = { version = "0.9.0", features = ["image", "tokio"] }
+dirs = "5.0.1"
+tokio = "1.29.1"
+diesel = { version = "2.1.0", features = ["sqlite", "uuid", "time"] }
+diesel-derive-enum = { version = "2.1.0", features = ["sqlite"] }

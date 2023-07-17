@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
+use diesel::SqliteConnection;
 use glib::{user_special_dir, UserDirectory};
 use itertools::Itertools;
 use relm4::gtk::glib;
@@ -89,7 +90,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<(), Error> {
+pub async fn import(db: &SqliteConnection, directory: &Utf8PathBuf) -> Result<(), Error> {
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
     // The list of all the pictures that currently exist within the database.

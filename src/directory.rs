@@ -1,7 +1,8 @@
 use camino::Utf8PathBuf;
-use gtk::prelude::*;
-use relm4::typed_list_view::RelmListItem;
-use relm4::{gtk, view};
+use iced::widget::{button, row, text};
+use iced::{Element, Renderer, Theme};
+
+use crate::AppMsg;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirectoryData {
@@ -22,38 +23,10 @@ impl From<String> for DirectoryData {
     }
 }
 
-pub struct Widgets {
-    directory: gtk::Label,
-}
-
-impl RelmListItem for DirectoryData {
-    type Root = gtk::Box;
-    type Widgets = Widgets;
-
-    fn setup(_list_item: &gtk::ListItem) -> (Self::Root, Self::Widgets) {
-        view! {
-            root = gtk::Box {
-                #[name(directory)]
-                gtk::Label {
-                    set_hexpand: true,
-                    set_halign: gtk::Align::Start,
-                    set_width_request: 320,
-                    set_justify: gtk::Justification::Left,
-                    set_ellipsize: gtk::pango::EllipsizeMode::Start,
-                }
-            }
-        }
-
-        let widgets = Widgets { directory };
-        (root, widgets)
+impl DirectoryData {
+    fn view(&self) -> Element<AppMsg, Renderer<Theme>> {
+        row![button(text(self.directory.clone()))
+            .on_press(AppMsg::SelectDirectories(self.directory.clone()))]
+        .into()
     }
-
-    #[tracing::instrument(name = "Binding Widget", level = "trace", skip(widgets, _root))]
-    fn bind(&mut self, widgets: &mut Self::Widgets, _root: &mut Self::Root) {
-        let Widgets { directory } = widgets;
-
-        directory.set_label(&format!("{}", self.directory));
-    }
-
-    fn unbind(&mut self, _widgets: &mut Self::Widgets, _root: &mut Self::Root) {}
 }
