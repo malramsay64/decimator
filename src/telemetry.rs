@@ -52,7 +52,7 @@ where
         .pretty()
         .with_filter(env_filter)
         .with_filter(filter::filter_fn(|metadata| {
-            metadata.target() != "relm4::component::r#async::builder"
+            metadata.module_path() == Some("wgpu_core")
         }));
     tracing_subscriber::registry().with(layer)
 }

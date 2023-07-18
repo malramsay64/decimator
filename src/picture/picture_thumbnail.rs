@@ -1,3 +1,4 @@
+use iced::widget::image::Handle;
 use iced::widget::{column, image, row, text};
 use iced::Element;
 
@@ -27,12 +28,20 @@ impl Ord for PictureThumbnail {
 
 impl PictureThumbnail {
     fn view(&self) -> Element<AppMsg> {
-        column![
-            image::Handle::from_memory(self.thumbnail.unwrap().to_vec()),
-            // .width(320)
-            // .height(320),
-            row![text(&self.rating), text(&self.selection)]
-        ]
-        .into()
+        if let Some(thumbnail) = &self.thumbnail {
+            column![
+                image::viewer(image::Handle::from_pixels(
+                    thumbnail.width(),
+                    thumbnail.height(),
+                    thumbnail.to_vec()
+                ))
+                .width(320)
+                .height(320),
+                row![text(&self.rating), text(&self.selection)]
+            ]
+            .into()
+        } else {
+            column![text("No image")].into()
+        }
     }
 }

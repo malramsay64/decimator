@@ -6,8 +6,6 @@ use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
 use image::{ImageFormat, RgbaImage};
-use relm4::gtk::gdk::Texture;
-use relm4::gtk::gdk_pixbuf::Pixbuf;
 use sea_orm::ActiveValue;
 use uuid::Uuid;
 use walkdir::DirEntry;
@@ -108,18 +106,6 @@ impl PictureData {
                 _ => image.into_rgba8(),
             },
         )
-    }
-
-    #[tracing::instrument(
-        name = "Loading thumbnail from file using gdk::Pixbuf",
-        level = "trace"
-    )]
-    pub fn load_thumbnail_gtk(filepath: Utf8PathBuf, scale_x: i32, scale_y: i32) -> Texture {
-        let image = Pixbuf::from_file_at_scale(filepath, scale_x, scale_y, true)
-            .expect("Image not found.")
-            .apply_embedded_orientation()
-            .expect("Unable to apply orientation.");
-        Texture::for_pixbuf(&image)
     }
 }
 

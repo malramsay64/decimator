@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
-use diesel::SqliteConnection;
-use glib::{user_special_dir, UserDirectory};
 use itertools::Itertools;
-use relm4::gtk::glib;
 use sea_orm::DatabaseConnection;
 use walkdir::WalkDir;
 
@@ -38,10 +35,7 @@ impl ImportStructure {
 impl Default for ImportStructure {
     fn default() -> Self {
         Self {
-            base_directory: user_special_dir(UserDirectory::Pictures)
-                .unwrap()
-                .try_into()
-                .unwrap(),
+            base_directory: dirs::picture_dir().unwrap().try_into().unwrap(),
             expansion: "{base_directory}/{year:04}/{year:04}-{month:02}-{day:02}/{filename}".into(),
         }
     }
@@ -90,7 +84,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
 
 // Copy the files from an exisiting location creating a new folder
 // structure.
-pub async fn import(db: &SqliteConnection, directory: &Utf8PathBuf) -> Result<(), Error> {
+pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<(), Error> {
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
     // The list of all the pictures that currently exist within the database.
@@ -194,14 +188,10 @@ pub async fn find_new_images(db: &DatabaseConnection, directory: &Utf8PathBuf) {
     );
 
     let dir = directory.clone();
-    let images: Vec<_> = relm4::spawn_blocking(move || {
-        map_directory_images(&dir)
-            .into_iter()
-            .filter(|p| !existing_pictures.contains(&p.filepath))
-            .collect()
-    })
-    .await
-    .unwrap();
+    let images: Vec<_> = map_directory_images(&dir)
+        .into_iter()
+        .filter(|p| !existing_pictures.contains(&p.filepath))
+        .collect();
 
     if images.is_empty() {
         tracing::info!("No new images found in directory {directory}");

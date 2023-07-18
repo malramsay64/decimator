@@ -9,11 +9,10 @@ use std::ops::Not;
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use futures::{Stream, TryStreamExt};
+use futures::TryStreamExt;
 use image::ImageFormat;
-use relm4::gtk;
 use sea_orm::{sea_query, DatabaseConnection};
-use sea_query::{Condition, Expr};
+use sea_query::Condition;
 use uuid::Uuid;
 
 pub mod picture;
@@ -27,11 +26,11 @@ use crate::picture::{PictureData, Selection};
 #[tracing::instrument(name = "Querying Picture from directories", skip(db))]
 pub(crate) async fn query_directory_pictures(
     db: &DatabaseConnection,
-    directories: &[String],
+    directory: String,
 ) -> Result<Vec<PictureData>, Error> {
-    dbg!(&directories);
+    dbg!(&directory);
     Ok(picture::Entity::find()
-        .filter(Expr::col(picture::Column::Directory).is_in(directories))
+        .filter(picture::Column::Directory.eq(directory))
         .all(db)
         .await?
         .into_iter()
@@ -78,18 +77,15 @@ pub(crate) async fn update_thumbnails(
         .try_for_each_concurrent(num_cpus::get(), |picture| async move {
             let filepath = picture.filepath().clone();
             let _span = tracing::info_span!("Updating thumbnail");
-            let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> =
-                relm4::spawn_blocking(move || {
-                    let mut buffer = Cursor::new(vec![]);
-                    tracing::info!("loading file from {}", &filepath);
-                    PictureData::load_thumbnail(&filepath, 240, 240).map(|f| {
-                        f.write_to(&mut buffer, ImageFormat::Jpeg)
-                            .expect("Error writing image to buffer");
-                        buffer
-                    })
+            let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> = {
+                let mut buffer = Cursor::new(vec![]);
+                tracing::info!("loading file from {}", &filepath);
+                PictureData::load_thumbnail(&filepath, 240, 240).map(|f| {
+                    f.write_to(&mut buffer, ImageFormat::Jpeg)
+                        .expect("Error writing image to buffer");
+                    buffer
                 })
-                .await
-                .expect("Unable to join");
+            };
             if let Ok(thumbnail) = thumbnail_buffer {
                 let mut picture: picture::ActiveModel = picture.into();
                 picture.set(picture::Column::Thumbnail, thumbnail.into_inner().into());

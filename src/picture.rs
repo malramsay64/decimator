@@ -20,7 +20,7 @@ pub use property_types::*;
 // pub use view_grid::*;
 // pub use view_preview::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ZoomStates {
     Increase,
     Decrease,

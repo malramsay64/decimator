@@ -25,8 +25,8 @@ impl From<String> for DirectoryData {
 
 impl DirectoryData {
     fn view(&self) -> Element<AppMsg, Renderer<Theme>> {
-        row![button(text(self.directory.clone()))
-            .on_press(AppMsg::SelectDirectories(self.directory.clone()))]
+        row![button(text(&self.directory))
+            .on_press(AppMsg::SelectDirectory(self.directory.clone()))]
         .into()
     }
 }
