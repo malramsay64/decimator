@@ -1,5 +1,5 @@
 use tracing::subscriber::set_global_default;
-use tracing::Subscriber;
+use tracing::{Level, Subscriber};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::MakeWriter;
@@ -46,14 +46,17 @@ where
 {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
+    let module_filter = filter::Targets::new()
+        // Enable the `INFO` level for anything in `my_crate`
+        .with_target("decimator", Level::DEBUG)
+        .with_target("wgpu_core", Level::WARN)
+        .with_default(Level::INFO);
     let layer = tracing_subscriber::fmt::layer()
         .with_thread_names(true)
         .with_target(true)
         .pretty()
         .with_filter(env_filter)
-        .with_filter(filter::filter_fn(|metadata| {
-            metadata.module_path() == Some("wgpu_core")
-        }));
+        .with_filter(module_filter);
     tracing_subscriber::registry().with(layer)
 }
 

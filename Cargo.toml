@@ -6,8 +6,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-relm4-components = { git="https://github.com/Relm4/Relm4" }
-relm4-icons = { version = "0.6.0-beta.6", features = ["window-scrolling", "grid-large", "plus", "minus"] }
 image = "~0.24.6"
 kamadak-exif = "~0.5.5"
 sea-orm = {version="~0.11.3", features = ["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
@@ -29,6 +27,5 @@ itertools = "~0.10.5"
 iced = { version = "0.9.0", features = ["image", "tokio"] }
 dirs = "5.0.1"
 tokio = "1.29.1"
-diesel = { version = "2.1.0", features = ["sqlite", "uuid", "time"] }
-diesel-derive-enum = { version = "2.1.0", features = ["sqlite"] }
-rust-analyzer = "0.0.1"
+rfd = { version = "0.11.4", default-features = false, features = ["xdg-portal"] }
+rayon = "1.7.0"

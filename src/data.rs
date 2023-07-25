@@ -70,11 +70,9 @@ pub(crate) async fn update_thumbnails(
 
     tracing::info!("{} {:?}", update_all, num_items);
 
-    // TODO: Improve the performance of this query. Not entirely sure where the bottlenecks are
-    let stream = query.stream(db).await?;
-
-    stream
-        .try_for_each_concurrent(num_cpus::get(), |picture| async move {
+    let mut paginated_results = query.paginate(db, 10);
+    while let Some(results) = paginated_results.fetch_and_next().await? {
+        for picture in results {
             let filepath = picture.filepath().clone();
             let _span = tracing::info_span!("Updating thumbnail");
             let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> = {
@@ -93,10 +91,8 @@ pub(crate) async fn update_thumbnails(
             } else {
                 tracing::warn!("Unable to read file {}", &picture.filepath());
             }
-            Ok(())
-        })
-        .await
-        .expect("Error updating thumbnails");
+        }
+    }
     Ok(())
 }
 

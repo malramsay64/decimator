@@ -3,7 +3,7 @@ use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
 use iced::widget::image::Handle;
-use iced::widget::{self, button, column, container, row, text};
+use iced::widget::{self, button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Application, Command, Element, Length, Settings, Theme};
 use image::RgbaImage;
 use import::find_new_images;
@@ -96,39 +96,56 @@ impl AppData {
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
-        column(
-            self.directories
-                .clone()
-                .into_iter()
-                .map(|item| {
-                    button(text(item.directory.clone().into_string()))
-                        .on_press(AppMsg::SelectDirectory(item.directory))
-                        .into()
-                })
-                .collect(),
-        )
+        column![
+            row![
+                button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
+                horizontal_space(Length::Fill),
+                button(text("Thumbnails")).on_press(AppMsg::UpdateThumbnails(true)),
+            ],
+            column(
+                self.directories
+                    .clone()
+                    .into_iter()
+                    .map(|item| {
+                        button(text(item.directory.clone().into_string()))
+                            .on_press(AppMsg::SelectDirectory(item.directory))
+                            .into()
+                    })
+                    .collect(),
+            )
+        ]
+        .width(240)
+        .height(Length::Fill)
         .into()
     }
 
     fn thumbnail_view(&self) -> Element<AppMsg> {
-        row(self
+        scrollable(row(self
             .thumbnails
             .clone()
             .into_iter()
             .map(|image| {
                 if let Some(thumbnail) = &image.thumbnail {
-                    button(iced::widget::image::viewer(Handle::from_pixels(
-                        thumbnail.width(),
-                        thumbnail.height(),
-                        thumbnail.clone().into_vec(),
-                    )))
+                    button(
+                        container(iced::widget::image(Handle::from_pixels(
+                            thumbnail.width(),
+                            thumbnail.height(),
+                            thumbnail.clone().into_vec(),
+                        )))
+                        .height(240)
+                        .width(240)
+                        .center_x()
+                        .center_y(),
+                    )
                     .on_press(AppMsg::UpdatePictureView(image.thumbnail.clone()))
                     .into()
                 } else {
                     text("No Thumbnail").into()
                 }
             })
-            .collect())
+            .collect()))
+        .width(Length::Fill)
+        .horizontal_scroll(scrollable::Properties::new())
         .into()
     }
 
@@ -139,9 +156,10 @@ impl AppData {
                 image.height(),
                 image.to_vec(),
             ))
+            .height(Length::Fill)
             .into()
         } else {
-            text("No image available").into()
+            text("No image available").height(Length::Fill).into()
         }
     }
 }
@@ -197,12 +215,36 @@ impl Application for App {
                 let database = inner.database.clone();
                 match msg {
                     AppMsg::Initialise(_) => panic!("App is already initialised"),
-                    AppMsg::DirectoryImportRequest => Command::none(),
+                    AppMsg::DirectoryImportRequest => Command::perform(
+                        async move {
+                            rfd::AsyncFileDialog::new()
+                                .pick_folder()
+                                .await
+                                .expect("No Directory found")
+                                .path()
+                                .to_str()
+                                .unwrap()
+                                .into()
+                        },
+                        AppMsg::DirectoryImport,
+                    ),
                     AppMsg::DirectoryImport(dir) => Command::perform(
                         async move { import(&database, &dir).await.unwrap() },
                         |_| AppMsg::QueryDirectories,
                     ),
-                    AppMsg::DirectoryAddRequest => Command::none(),
+                    AppMsg::DirectoryAddRequest => Command::perform(
+                        async move {
+                            rfd::AsyncFileDialog::new()
+                                .pick_folder()
+                                .await
+                                .expect("No Directory found")
+                                .path()
+                                .to_str()
+                                .unwrap()
+                                .into()
+                        },
+                        AppMsg::DirectoryAdd,
+                    ),
                     AppMsg::DirectoryAdd(dir) => Command::perform(
                         async move {
                             find_new_images(&database, &dir).await;
@@ -219,6 +261,7 @@ impl Application for App {
                     }
                     AppMsg::UpdateThumbnails(all) => Command::perform(
                         async move {
+                            println!("Thumbnail Update");
                             // TODO: Add a dialog confirmation box
                             update_thumbnails(&database, all)
                                 .await
@@ -246,7 +289,19 @@ impl Application for App {
                         async move { update_selection_state(&database, id, s).await.unwrap() },
                         |_| AppMsg::Ignore,
                     ),
-                    AppMsg::SelectionExportRequest => Command::none(),
+                    AppMsg::SelectionExportRequest => Command::perform(
+                        async move {
+                            rfd::AsyncFileDialog::new()
+                                .pick_folder()
+                                .await
+                                .expect("No Directory found")
+                                .path()
+                                .to_str()
+                                .unwrap()
+                                .into()
+                        },
+                        AppMsg::SelectionExport,
+                    ),
                     AppMsg::SelectionExport(dir) => Command::none(),
                     AppMsg::SelectionPrintRequest => Command::none(),
                     AppMsg::Ignore => Command::none(),
@@ -272,6 +327,8 @@ impl Application for App {
                     inner.preview_view(),
                     inner.thumbnail_view()
                 ]
+                .width(Length::Fill)
+                .height(Length::Fill)
             ]
             .into(),
         };
@@ -288,7 +345,7 @@ impl Application for App {
     }
 }
 
-fn main() {
+fn main() -> Result<(), iced::Error> {
     // Configure tracing information
     let subscriber = get_subscriber_terminal(APP_ID.into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
@@ -303,5 +360,5 @@ fn main() {
     App::run(Settings {
         flags: database_path,
         ..Default::default()
-    });
+    })
 }
