@@ -96,7 +96,7 @@ impl AppData {
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
-        column![
+        scrollable(column![
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
                 horizontal_space(Length::Fill),
@@ -109,11 +109,12 @@ impl AppData {
                     .map(|item| {
                         button(text(item.directory.clone().into_string()))
                             .on_press(AppMsg::SelectDirectory(item.directory))
+                            .width(240)
                             .into()
                     })
                     .collect(),
             )
-        ]
+        ])
         .width(240)
         .height(Length::Fill)
         .into()
@@ -151,15 +152,25 @@ impl AppData {
 
     fn preview_view(&self) -> Element<AppMsg> {
         if let Some(image) = &self.preview_image {
-            iced::widget::image::viewer(iced::widget::image::Handle::from_pixels(
-                image.width(),
-                image.height(),
-                image.to_vec(),
+            container(iced::widget::image::viewer(
+                iced::widget::image::Handle::from_pixels(
+                    image.width(),
+                    image.height(),
+                    image.to_vec(),
+                ),
             ))
+            .width(Length::Fill)
             .height(Length::Fill)
+            .center_x()
+            .center_y()
             .into()
         } else {
-            text("No image available").height(Length::Fill).into()
+            container(text("No image available"))
+                .height(Length::Fill)
+                .width(Length::Fill)
+                .center_x()
+                .center_y()
+                .into()
         }
     }
 }
@@ -323,7 +334,9 @@ impl Application for App {
             Self::Initialised(inner) => row![
                 inner.directory_view(),
                 column![
-                    text("Application"),
+                    container(text("Application"))
+                        .width(Length::Fill)
+                        .center_x(),
                     inner.preview_view(),
                     inner.thumbnail_view()
                 ]
