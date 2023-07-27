@@ -50,6 +50,7 @@ where
         // Enable the `INFO` level for anything in `my_crate`
         .with_target("decimator", Level::DEBUG)
         .with_target("wgpu_core", Level::WARN)
+        .with_target("iced_wgpu", Level::WARN)
         .with_default(Level::INFO);
     let layer = tracing_subscriber::fmt::layer()
         .with_thread_names(true)

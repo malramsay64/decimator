@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use camino::Utf8PathBuf;
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
 use iced::widget::image::Handle;
-use iced::widget::{self, button, column, container, horizontal_space, row, scrollable, text};
+use iced::widget::{
+    self, button, checkbox, column, container, horizontal_space, lazy, row, scrollable, text,
+};
 use iced::{Application, Command, Element, Length, Settings, Theme};
-use image::RgbaImage;
 use import::find_new_images;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use uuid::Uuid;
@@ -25,8 +28,10 @@ use telemetry::{get_subscriber_terminal, init_subscriber};
 
 const APP_ID: &str = "com.malramsay.Decimator";
 
+/// Messages for runnning the application
 #[derive(Debug, Clone)]
 pub enum AppMsg {
+    /// Set up the application, this can only be done once within the application
     Initialise(DatabaseConnection),
     DirectoryAddRequest,
     DirectoryAdd(Utf8PathBuf),
@@ -48,9 +53,10 @@ pub enum AppMsg {
     SelectionExport(Utf8PathBuf),
     SelectionPrintRequest,
     SelectionZoom(ZoomStates),
-    UpdatePictureView(Option<RgbaImage>),
+    UpdatePictureView(Option<Uuid>),
     ThumbnailNext,
     ThumbnailPrev,
+    UpdateLazy,
     Ignore,
 }
 
@@ -75,14 +81,64 @@ impl TryFrom<&str> for PictureView {
     }
 }
 
+/// Provide the opportunity to filter thumbnails
+///
+/// Values are true when the filter is enabled and false
+/// when they are disabled.
+#[derive(Debug)]
+struct ThumbnailFilter {
+    ignore: bool,
+    ordinary: bool,
+    pick: bool,
+    hidden: bool,
+}
+
+impl Default for ThumbnailFilter {
+    fn default() -> Self {
+        Self {
+            ignore: true,
+            ordinary: true,
+            pick: true,
+            hidden: false,
+        }
+    }
+}
+
+impl ThumbnailFilter {
+    fn filter(&self, thumbnail: &PictureThumbnail) -> bool {
+        let mut value = false;
+
+        if self.ignore {
+            value = value || thumbnail.selection == Selection::Ignore;
+        }
+        if self.ordinary {
+            value = value || thumbnail.selection == Selection::Ordinary;
+        }
+        if self.pick {
+            value = value || thumbnail.selection == Selection::Pick;
+        }
+        if self.hidden {
+            value = value && !thumbnail.hidden
+        }
+        value
+    }
+}
+
 #[derive(Debug)]
 struct AppData {
     database: DatabaseConnection,
     directories: Vec<DirectoryData>,
-    thumbnails: Vec<PictureThumbnail>,
+    directory: Option<Utf8PathBuf>,
+    thumbnails: HashMap<Uuid, PictureThumbnail>,
+    /// The version of the thumbnails. This should be incremented
+    /// any time the view of the thumbnails change
+    version: u64,
+    thumbnail_filter: ThumbnailFilter,
+
     // TODO: Use a reference counted preview so this doesn't need to
     // keep being cloned throughout
-    preview_image: Option<RgbaImage>,
+    // preview_image: Option<Utf8PathBuf>,
+    preview: Option<Uuid>,
 }
 
 impl AppData {
@@ -90,9 +146,35 @@ impl AppData {
         Self {
             database,
             directories: vec![],
-            thumbnails: vec![],
-            preview_image: None,
+            directory: None,
+            thumbnails: HashMap::new(),
+            thumbnail_filter: Default::default(),
+            // preview_image: None,
+            preview: None,
+            version: 0,
         }
+    }
+
+    fn menu_view<'a>(&self) -> Element<AppMsg> {
+        row!(
+            checkbox("Pick", self.thumbnail_filter.pick, AppMsg::DisplayPick),
+            checkbox(
+                "Ordinary",
+                self.thumbnail_filter.ordinary,
+                AppMsg::DisplayOrdinary
+            ),
+            checkbox(
+                "Ignore",
+                self.thumbnail_filter.ignore,
+                AppMsg::DisplayIgnore
+            ),
+            checkbox(
+                "Hidden",
+                self.thumbnail_filter.hidden,
+                AppMsg::DisplayHidden
+            ),
+        )
+        .into()
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
@@ -121,44 +203,57 @@ impl AppData {
     }
 
     fn thumbnail_view(&self) -> Element<AppMsg> {
-        scrollable(row(self
-            .thumbnails
-            .clone()
-            .into_iter()
-            .map(|image| {
-                if let Some(thumbnail) = &image.thumbnail {
-                    button(
-                        container(iced::widget::image(Handle::from_pixels(
-                            thumbnail.width(),
-                            thumbnail.height(),
-                            thumbnail.clone().into_vec(),
-                        )))
-                        .height(240)
-                        .width(240)
-                        .center_x()
-                        .center_y(),
-                    )
-                    .on_press(AppMsg::UpdatePictureView(image.thumbnail.clone()))
-                    .into()
-                } else {
-                    text("No Thumbnail").into()
-                }
-            })
-            .collect()))
-        .width(Length::Fill)
-        .horizontal_scroll(scrollable::Properties::new())
-        .into()
+        let thumbnails = lazy(self.version, |_| {
+            let mut items: Vec<_> = self
+                .thumbnails
+                .values()
+                .filter(|t| self.thumbnail_filter.filter(t))
+                .cloned()
+                .collect();
+            items.sort();
+
+            row(items
+                .into_iter()
+                .map(|image| {
+                    if let Some(thumbnail) = &image.thumbnail {
+                        button(
+                            container(iced::widget::image(Handle::from_pixels(
+                                thumbnail.width(),
+                                thumbnail.height(),
+                                thumbnail.clone().into_vec(),
+                            )))
+                            .height(240)
+                            .width(240)
+                            .center_x()
+                            .center_y(),
+                        )
+                        .on_press(AppMsg::UpdatePictureView(Some(image.id)))
+                        .into()
+                    } else {
+                        text("No Thumbnail").into()
+                    }
+                })
+                .collect())
+            .spacing(10)
+        });
+
+        scrollable(thumbnails)
+            .width(Length::Fill)
+            .direction(iced::widget::scrollable::Direction::Horizontal(
+                iced::widget::scrollable::Properties::default(),
+            ))
+            .into()
     }
 
     fn preview_view(&self) -> Element<AppMsg> {
-        if let Some(image) = &self.preview_image {
-            container(iced::widget::image::viewer(
-                iced::widget::image::Handle::from_pixels(
-                    image.width(),
-                    image.height(),
-                    image.to_vec(),
-                ),
-            ))
+        if let Some(image) = &self.preview {
+            container(
+                iced::widget::image::viewer(iced::widget::image::Handle::from_path(
+                    self.thumbnails.get(image).unwrap().filepath.as_path(),
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill),
+            )
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x()
@@ -225,6 +320,10 @@ impl Application for App {
             Self::Initialised(inner) => {
                 let database = inner.database.clone();
                 match msg {
+                    AppMsg::UpdateLazy => {
+                        inner.version += 1;
+                        Command::none()
+                    }
                     AppMsg::Initialise(_) => panic!("App is already initialised"),
                     AppMsg::DirectoryImportRequest => Command::perform(
                         async move {
@@ -280,22 +379,37 @@ impl Application for App {
                         },
                         |_| AppMsg::Ignore,
                     ),
-                    AppMsg::SelectDirectory(dir) => Command::perform(
-                        async move {
-                            query_directory_pictures(&database, dir.into())
-                                .await
-                                .unwrap()
-                        },
-                        AppMsg::SetThumbnails,
-                    ),
-                    AppMsg::SetThumbnails(thumbnails) => {
-                        inner.thumbnails = thumbnails;
-                        Command::none()
+                    AppMsg::SelectDirectory(dir) => {
+                        inner.directory = Some(dir.clone());
+                        Command::perform(
+                            async move {
+                                query_directory_pictures(&database, dir.into())
+                                    .await
+                                    .unwrap()
+                            },
+                            AppMsg::SetThumbnails,
+                        )
                     }
-                    AppMsg::DisplayPick(value) => Command::none(),
-                    AppMsg::DisplayOrdinary(value) => Command::none(),
-                    AppMsg::DisplayIgnore(value) => Command::none(),
-                    AppMsg::DisplayHidden(value) => Command::none(),
+                    AppMsg::SetThumbnails(thumbnails) => {
+                        inner.thumbnails = thumbnails.into_iter().map(|t| (t.id, t)).collect();
+                        Command::perform(async move {}, |_| AppMsg::UpdateLazy)
+                    }
+                    AppMsg::DisplayPick(value) => {
+                        inner.thumbnail_filter.pick = value;
+                        Command::perform(async move {}, |_| AppMsg::UpdateLazy)
+                    }
+                    AppMsg::DisplayOrdinary(value) => {
+                        inner.thumbnail_filter.ordinary = value;
+                        Command::perform(async move {}, |_| AppMsg::UpdateLazy)
+                    }
+                    AppMsg::DisplayIgnore(value) => {
+                        inner.thumbnail_filter.ignore = value;
+                        Command::perform(async move {}, |_| AppMsg::UpdateLazy)
+                    }
+                    AppMsg::DisplayHidden(value) => {
+                        inner.thumbnail_filter.hidden = value;
+                        Command::perform(async move {}, |_| AppMsg::UpdateLazy)
+                    }
                     AppMsg::SetSelection((id, s)) => Command::perform(
                         async move { update_selection_state(&database, id, s).await.unwrap() },
                         |_| AppMsg::Ignore,
@@ -318,8 +432,8 @@ impl Application for App {
                     AppMsg::Ignore => Command::none(),
                     AppMsg::ThumbnailNext => widget::focus_next(),
                     AppMsg::ThumbnailPrev => widget::focus_previous(),
-                    AppMsg::UpdatePictureView(view) => {
-                        inner.preview_image = view;
+                    AppMsg::UpdatePictureView(preview) => {
+                        inner.preview = preview;
                         Command::none()
                     }
                     AppMsg::SelectionZoom(scale) => Command::none(),
@@ -334,6 +448,7 @@ impl Application for App {
             Self::Initialised(inner) => row![
                 inner.directory_view(),
                 column![
+                    inner.menu_view(),
                     container(text("Application"))
                         .width(Length::Fill)
                         .center_x(),
