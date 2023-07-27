@@ -9,7 +9,6 @@ use std::ops::Not;
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use futures::TryStreamExt;
 use image::ImageFormat;
 use sea_orm::{sea_query, DatabaseConnection};
 use sea_query::Condition;

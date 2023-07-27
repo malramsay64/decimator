@@ -6,7 +6,7 @@ use data::{
 };
 use iced::widget::image::Handle;
 use iced::widget::{
-    self, button, checkbox, column, container, horizontal_space, lazy, row, scrollable, text,
+    self, button, checkbox, column, container, horizontal_space, lazy, radio, row, scrollable, text,
 };
 use iced::{Application, Command, Element, Length, Settings, Theme};
 use import::find_new_images;
@@ -14,7 +14,6 @@ use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use uuid::Uuid;
 
 use crate::import::import;
-use crate::picture::ZoomStates;
 
 mod data;
 mod directory;
@@ -33,8 +32,10 @@ const APP_ID: &str = "com.malramsay.Decimator";
 pub enum AppMsg {
     /// Set up the application, this can only be done once within the application
     Initialise(DatabaseConnection),
+    /// The request to open the directory selection menu
     DirectoryAddRequest,
     DirectoryAdd(Utf8PathBuf),
+    /// The request to open the directory selection menu
     DirectoryImportRequest,
     DirectoryImport(Utf8PathBuf),
     QueryDirectories,
@@ -52,7 +53,6 @@ pub enum AppMsg {
     // Contains the path where the files are being exported to
     SelectionExport(Utf8PathBuf),
     SelectionPrintRequest,
-    SelectionZoom(ZoomStates),
     UpdatePictureView(Option<Uuid>),
     ThumbnailNext,
     ThumbnailPrev,
@@ -157,6 +157,8 @@ impl AppData {
 
     fn menu_view<'a>(&self) -> Element<AppMsg> {
         row!(
+            horizontal_space(Length::Fill),
+            button(text("Thumbnails")).on_press(AppMsg::UpdateThumbnails(true)),
             checkbox("Pick", self.thumbnail_filter.pick, AppMsg::DisplayPick),
             checkbox(
                 "Ordinary",
@@ -174,6 +176,8 @@ impl AppData {
                 AppMsg::DisplayHidden
             ),
         )
+        .spacing(10)
+        .align_items(iced::Alignment::Center)
         .into()
     }
 
@@ -182,7 +186,7 @@ impl AppData {
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
                 horizontal_space(Length::Fill),
-                button(text("Thumbnails")).on_press(AppMsg::UpdateThumbnails(true)),
+                button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ],
             column(
                 self.directories
@@ -216,7 +220,7 @@ impl AppData {
                 .into_iter()
                 .map(|image| {
                     if let Some(thumbnail) = &image.thumbnail {
-                        button(
+                        button(column!(
                             container(iced::widget::image(Handle::from_pixels(
                                 thumbnail.width(),
                                 thumbnail.height(),
@@ -226,7 +230,20 @@ impl AppData {
                             .width(240)
                             .center_x()
                             .center_y(),
-                        )
+                            row![
+                                radio("P", Selection::Pick, Some(image.selection), |s| {
+                                    AppMsg::SetSelection((image.id, s))
+                                }),
+                                radio("O", Selection::Ordinary, Some(image.selection), |s| {
+                                    AppMsg::SetSelection((image.id, s))
+                                }),
+                                radio("I", Selection::Ignore, Some(image.selection), |s| {
+                                    AppMsg::SetSelection((image.id, s))
+                                })
+                            ]
+                            .spacing(10)
+                            .padding(20)
+                        ))
                         .on_press(AppMsg::UpdatePictureView(Some(image.id)))
                         .into()
                     } else {
@@ -237,12 +254,14 @@ impl AppData {
             .spacing(10)
         });
 
-        scrollable(thumbnails)
-            .width(Length::Fill)
-            .direction(iced::widget::scrollable::Direction::Horizontal(
+        container(scrollable(thumbnails).width(Length::Fill).direction(
+            iced::widget::scrollable::Direction::Horizontal(
                 iced::widget::scrollable::Properties::default(),
-            ))
-            .into()
+            ),
+        ))
+        .height(320)
+        .width(Length::Fill)
+        .into()
     }
 
     fn preview_view(&self) -> Element<AppMsg> {
@@ -410,10 +429,13 @@ impl Application for App {
                         inner.thumbnail_filter.hidden = value;
                         Command::perform(async move {}, |_| AppMsg::UpdateLazy)
                     }
-                    AppMsg::SetSelection((id, s)) => Command::perform(
-                        async move { update_selection_state(&database, id, s).await.unwrap() },
-                        |_| AppMsg::Ignore,
-                    ),
+                    AppMsg::SetSelection((id, s)) => {
+                        inner.thumbnails.get_mut(&id).unwrap().selection = s;
+                        Command::perform(
+                            async move { update_selection_state(&database, id, s).await.unwrap() },
+                            |_| AppMsg::UpdateLazy,
+                        )
+                    }
                     AppMsg::SelectionExportRequest => Command::perform(
                         async move {
                             rfd::AsyncFileDialog::new()
@@ -427,7 +449,27 @@ impl Application for App {
                         },
                         AppMsg::SelectionExport,
                     ),
-                    AppMsg::SelectionExport(dir) => Command::none(),
+                    AppMsg::SelectionExport(dir) => {
+                        let items: Vec<_> = inner
+                            .thumbnails
+                            .values()
+                            .filter(|t| inner.thumbnail_filter.filter(t))
+                            .cloned()
+                            .collect();
+                        Command::perform(
+                            async move {
+                                for file in items.into_iter() {
+                                    let origin = file.filepath;
+                                    let destination = dir.join(origin.file_name().unwrap());
+
+                                    tokio::fs::copy(origin, destination)
+                                        .await
+                                        .expect("Unable to copy image from {path}");
+                                }
+                            },
+                            |_| AppMsg::Ignore,
+                        )
+                    }
                     AppMsg::SelectionPrintRequest => Command::none(),
                     AppMsg::Ignore => Command::none(),
                     AppMsg::ThumbnailNext => widget::focus_next(),
@@ -436,7 +478,6 @@ impl Application for App {
                         inner.preview = preview;
                         Command::none()
                     }
-                    AppMsg::SelectionZoom(scale) => Command::none(),
                 }
             }
         }
@@ -449,9 +490,6 @@ impl Application for App {
                 inner.directory_view(),
                 column![
                     inner.menu_view(),
-                    container(text("Application"))
-                        .width(Length::Fill)
-                        .center_x(),
                     inner.preview_view(),
                     inner.thumbnail_view()
                 ]
