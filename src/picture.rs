@@ -1,9 +1,6 @@
-// mod image_widget;
 mod picture_data;
 mod picture_thumbnail;
 mod property_types;
-// mod view_grid;
-// mod view_preview;
 
 use std::io::Seek;
 use std::path::Path;
@@ -13,21 +10,9 @@ use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
 use image::RgbaImage;
-// pub use image_widget::*;
 pub use picture_data::*;
 pub use picture_thumbnail::*;
 pub use property_types::*;
-// pub use view_grid::*;
-// pub use view_preview::*;
-
-#[derive(Debug, Clone)]
-pub enum ZoomStates {
-    Increase,
-    Decrease,
-    Fit,
-    Native,
-    Toggle(f64, f64),
-}
 
 pub fn is_image(entry: &walkdir::DirEntry) -> bool {
     match entry.path().extension().and_then(|s| s.to_str()) {
