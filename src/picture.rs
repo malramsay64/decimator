@@ -22,13 +22,13 @@ pub fn is_image(entry: &walkdir::DirEntry) -> bool {
     }
 }
 
-fn load_image(filepath: impl AsRef<Path>, size: Option<(u32, u32)>) -> Result<RgbaImage> {
+pub fn load_image(filepath: impl AsRef<Path>, size: Option<(u32, u32)>) -> Result<RgbaImage> {
     let file = std::fs::File::open(filepath)?;
     let mut cursor = std::io::BufReader::new(file);
     let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
-
     // Reset the buffer to the start to read the image file
     cursor.rewind()?;
+
     let mut image = Reader::new(cursor).with_guessed_format()?.decode()?;
     if let Some((scale_x, scale_y)) = size {
         image = image.resize(scale_x, scale_y, FilterType::Triangle)

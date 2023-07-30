@@ -384,15 +384,19 @@ impl AppData {
     fn preview_view(&self) -> Element<AppMsg> {
         if let Some(id) = &self.preview {
             if let Some(filepath) = self.thumbnail_view.get_filepath(id) {
-                let i = image::open(filepath.as_path()).unwrap().to_rgba8();
+                let i = picture::load_image(filepath.as_path(), None).unwrap();
                 let handle =
                     iced::widget::image::Handle::from_pixels(i.width(), i.height(), i.to_vec());
-                return container(iced::widget::image::viewer(handle.clone()))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x()
-                    .center_y()
-                    .into();
+                return container(
+                    iced::widget::image::viewer(handle.clone())
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
+                .into();
             }
         }
         container(text("No image available"))

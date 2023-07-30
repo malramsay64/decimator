@@ -941,10 +941,11 @@ dependencies = [
  "dirs",
  "futures",
  "iced",
- "image",
+ "image 0.24.5",
  "itertools",
  "kamadak-exif",
  "log",
+ "lru",
  "num_cpus",
  "rayon",
  "rfd",
@@ -959,6 +960,8 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "walkdir",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -1422,8 +1425,9 @@ dependencies = [
 
 [[package]]
 name = "glyphon"
-version = "0.2.0"
-source = "git+https://github.com/grovesNL/glyphon.git?rev=81dedbd04237e181c2118931c5f37d341aeb6837#81dedbd04237e181c2118931c5f37d341aeb6837"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e87caa7459145f5e5f167bf34db4532901404c679e62339fb712a0e3ccf722a"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -1616,22 +1620,22 @@ dependencies = [
 
 [[package]]
 name = "iced"
-version = "0.9.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.10.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "iced_core",
  "iced_futures",
  "iced_renderer",
  "iced_widget",
  "iced_winit",
- "image",
+ "image 0.24.6",
  "thiserror",
 ]
 
 [[package]]
 name = "iced_core"
-version = "0.9.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.10.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "bitflags 1.3.2",
  "instant",
@@ -1643,8 +1647,8 @@ dependencies = [
 
 [[package]]
 name = "iced_futures"
-version = "0.6.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.7.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "futures",
  "iced_core",
@@ -1656,15 +1660,15 @@ dependencies = [
 
 [[package]]
 name = "iced_graphics"
-version = "0.8.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.9.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
  "glam",
  "half",
  "iced_core",
- "image",
+ "image 0.24.6",
  "kamadak-exif",
  "log",
  "raw-window-handle",
@@ -1674,7 +1678,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1687,7 +1691,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1696,8 +1700,8 @@ dependencies = [
 
 [[package]]
 name = "iced_style"
-version = "0.8.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.9.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "iced_core",
  "once_cell",
@@ -1707,7 +1711,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1723,8 +1727,8 @@ dependencies = [
 
 [[package]]
 name = "iced_wgpu"
-version = "0.10.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.11.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
@@ -1743,8 +1747,8 @@ dependencies = [
 
 [[package]]
 name = "iced_widget"
-version = "0.1.0"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.1.2"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -1757,8 +1761,8 @@ dependencies = [
 
 [[package]]
 name = "iced_winit"
-version = "0.9.1"
-source = "git+https://github.com/iced-rs/iced#6d5b69d307f1a65b1e9ad3baa5930aba67cd6293"
+version = "0.10.0"
+source = "git+https://github.com/iced-rs/iced#50ce65b3b7ad10a8537b751b3890d9dcfaecf846"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -1780,6 +1784,25 @@ checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "image"
+version = "0.24.5"
+source = "git+https://github.com/Shnatsel/image?branch=zune-jpeg-sneaky#1f6e8d89cb3490d24d87c7e9d820c8a57b646a24"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "color_quant",
+ "exr",
+ "gif",
+ "num-rational",
+ "num-traits",
+ "png",
+ "qoi",
+ "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -2018,11 +2041,11 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71e7d46de488603ffdd5f30afbc64fbba2378214a2c3a2fb83abf3d33126df17"
+checksum = "eedb2bdbad7e0634f83989bf596f497b070130daaa398ab22d84c39e266deec5"
 dependencies = [
- "hashbrown 0.13.2",
+ "hashbrown 0.14.0",
 ]
 
 [[package]]
@@ -2954,7 +2977,7 @@ checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.3.3",
+ "regex-automata 0.3.4",
  "regex-syntax 0.7.4",
 ]
 
@@ -2969,9 +2992,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39354c10dd07468c2e73926b23bb9c2caca74c5501e38a35da70406f1d923310"
+checksum = "b7b6d6190b7594385f61bd3911cd1be99dfddcfc365a4160cc2ab5bff4aed294"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3336,18 +3359,18 @@ checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "serde"
-version = "1.0.175"
+version = "1.0.178"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d25439cd7397d044e2748a6fe2432b5e85db703d6d097bd014b3c0ad1ebff0b"
+checksum = "60363bdd39a7be0266a520dab25fdc9241d2f987b08a01e01f0ec6d06a981348"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.175"
+version = "1.0.178"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b23f7ade6f110613c0d63858ddb8b94c1041f550eab58a16b371bdf2c9c80ab4"
+checksum = "f28482318d6641454cb273da158647922d1be6b5a2fcc6165cd89ebdd7ed576b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3356,9 +3379,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.103"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d03b412469450d4404fe8499a268edd7f8b79fecb074b0d812ad64ca21f4031b"
+checksum = "076066c5f1078eac5b722a31827a8832fe108bed65dfa75e233c89f8206e976c"
 dependencies = [
  "itoa",
  "ryu",
@@ -3367,9 +3390,9 @@ dependencies = [
 
 [[package]]
 name = "serde_repr"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e168eaaf71e8f9bd6037feb05190485708e019f4fd87d161b3c0a0d37daf85e5"
+checksum = "8725e1dfadb3a50f7e5ce0b1a540466f6ed3fe7a0fca2ac2b8b831d31316bd00"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4809,9 +4832,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25b5872fa2e10bd067ae946f927e726d7d603eaeb6e02fa6a350e0722d2b8c11"
+checksum = "8bd122eb777186e60c3fdf765a58ac76e41c582f1f535fbf3314434c6b58f3f7"
 dependencies = [
  "memchr",
 ]
@@ -4968,12 +4991,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c110ba09c9b3a43edd4803d570df0da2414fed6e822e22b976a4e3ef50860701"
 
 [[package]]
+name = "zune-core"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29ca36c2e02af0d8d7ee977542bfe33ed1c516be73d3c1faa4420af46e96ceee"
+dependencies = [
+ "bitflags 2.3.3",
+]
+
+[[package]]
 name = "zune-inflate"
 version = "0.2.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02"
 dependencies = [
  "simd-adler32",
+]
+
+[[package]]
+name = "zune-jpeg"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2848e8f4f29dbdcc79910ab3abdff22bb0bacef8556f2a983b5ca950d8b4991e"
+dependencies = [
+ "log",
+ "zune-core",
 ]
 
 [[package]]

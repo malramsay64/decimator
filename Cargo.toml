@@ -6,7 +6,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-image = "~0.24.6"
+# image = "~0.24.6"
 kamadak-exif = "~0.5.5"
 sea-orm = {version="~0.11.3", features = ["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
 uuid = { version = "~1.2.2", features = ["v4", "serde"] }
@@ -25,7 +25,18 @@ futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "~0.10.5"
 iced = { git = "https://github.com/iced-rs/iced", features = ["image", "tokio", "lazy"] }
+image = { git = "https://github.com/Shnatsel/image", branch = "zune-jpeg-sneaky" }
 dirs = "5.0.1"
 tokio = "1.29.1"
 rfd = { version = "0.11.4", default-features = false, features = ["xdg-portal"] }
 rayon = "1.7.0"
+zune-jpeg = "0.3.17"
+zune-core = "0.2.14"
+lru = "0.11.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
