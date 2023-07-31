@@ -1,8 +1,8 @@
-use iced::widget::image::Handle;
-use iced::widget::{column, image, row, text};
+use iced::widget::{button, column, image, row, text};
 use iced::Element;
 
-use super::PictureData;
+use super::{PictureData, Selection};
+use crate::widget::choice;
 use crate::AppMsg;
 
 pub type PictureThumbnail = PictureData;
@@ -27,18 +27,31 @@ impl Ord for PictureThumbnail {
 }
 
 impl PictureThumbnail {
-    fn view(&self) -> Element<AppMsg> {
-        if let Some(thumbnail) = &self.thumbnail {
-            column![
-                image::viewer(image::Handle::from_pixels(
+    pub fn view(self) -> Element<'static, AppMsg> {
+        if let Some(thumbnail) = self.thumbnail {
+            button(column![
+                iced::widget::image(image::Handle::from_pixels(
                     thumbnail.width(),
                     thumbnail.height(),
                     thumbnail.to_vec()
                 ))
-                .width(320)
-                .height(320),
-                row![text(&self.rating), text(&self.selection)]
-            ]
+                .width(240)
+                .height(240),
+                row![
+                    choice("I", Selection::Ignore, Some(self.selection), |s| {
+                        AppMsg::SetSelection(s)
+                    }),
+                    choice("O", Selection::Ordinary, Some(self.selection), |s| {
+                        AppMsg::SetSelection(s)
+                    }),
+                    choice("P", Selection::Pick, Some(self.selection), |s| {
+                        AppMsg::SetSelection(s)
+                    }),
+                ]
+                .spacing(10)
+                .padding(20)
+            ])
+            .on_press(AppMsg::UpdatePictureView(Some(self.id)))
             .into()
         } else {
             column![text("No image")].into()

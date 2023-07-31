@@ -5,9 +5,8 @@ use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
 use iced::keyboard::KeyCode;
-use iced::widget::image::Handle;
 use iced::widget::{
-    button, checkbox, column, container, horizontal_space, lazy, radio, row, scrollable, text,
+    button, checkbox, column, container, horizontal_space, lazy, row, scrollable, text,
 };
 use iced::{Application, Command, Element, Length, Settings, Theme};
 use import::find_new_images;
@@ -22,7 +21,7 @@ mod directory;
 mod import;
 mod picture;
 mod telemetry;
-
+mod widget;
 use directory::DirectoryData;
 use picture::{PictureThumbnail, Selection};
 use telemetry::{get_subscriber_terminal, init_subscriber};
@@ -148,12 +147,6 @@ impl std::hash::Hash for ThumbnailView {
 }
 
 impl ThumbnailView {
-    pub fn new(thumbnails: Vec<PictureThumbnail>) -> Self {
-        let mut result = Self::default();
-        result.set_thumbnails(thumbnails);
-        result
-    }
-
     /// Internal only function describing all the steps for making an update
     ///
     /// Whenever internal state changes, there are a number of additional steps
@@ -178,7 +171,7 @@ impl ThumbnailView {
             self.positions
                 .iter()
                 .position(|i| i == id)
-                .map(|i| (i + 1).clamp(0, self.positions.len()))
+                .map(|i| (i + 1).clamp(0, self.positions.len() - 1))
                 .and_then(|i| self.positions.get(i))
                 .copied()
         } else {
@@ -191,7 +184,7 @@ impl ThumbnailView {
             self.positions
                 .iter()
                 .position(|i| i == id)
-                .map(|i| (i - 1).clamp(0, self.positions.len()))
+                .map(|i| (i - 1).clamp(0, self.positions.len() - 1))
                 .and_then(|i| self.positions.get(i))
                 .copied()
         } else {
@@ -263,7 +256,6 @@ struct AppData {
     thumbnail_view: ThumbnailView,
 
     preview: Option<Uuid>,
-    preview_cache: lru::LruCache<Uuid, Handle>,
 }
 
 impl AppData {
@@ -274,7 +266,6 @@ impl AppData {
             directory: None,
             thumbnail_view: Default::default(),
             preview: None,
-            preview_cache: lru::LruCache::new(20.try_into().unwrap()),
         }
     }
 
@@ -335,38 +326,7 @@ impl AppData {
                 .thumbnail_view
                 .get_view()
                 .into_iter()
-                .map(|image| {
-                    if let Some(thumbnail) = &image.thumbnail {
-                        button(column!(
-                            container(iced::widget::image(Handle::from_pixels(
-                                thumbnail.width(),
-                                thumbnail.height(),
-                                thumbnail.clone().into_vec(),
-                            )))
-                            .height(240)
-                            .width(240)
-                            .center_x()
-                            .center_y(),
-                            row![
-                                radio("I", Selection::Ignore, Some(image.selection), |s| {
-                                    AppMsg::SetSelection(s)
-                                }),
-                                radio("O", Selection::Ordinary, Some(image.selection), |s| {
-                                    AppMsg::SetSelection(s)
-                                }),
-                                radio("P", Selection::Pick, Some(image.selection), |s| {
-                                    AppMsg::SetSelection(s)
-                                }),
-                            ]
-                            .spacing(10)
-                            .padding(20)
-                        ))
-                        .on_press(AppMsg::UpdatePictureView(Some(image.id)))
-                        .into()
-                    } else {
-                        text("No Thumbnail").into()
-                    }
-                })
+                .map(PictureThumbnail::view)
                 .collect())
             .spacing(10)
         });
@@ -388,7 +348,7 @@ impl AppData {
                 let handle =
                     iced::widget::image::Handle::from_pixels(i.width(), i.height(), i.to_vec());
                 return container(
-                    iced::widget::image::viewer(handle.clone())
+                    iced::widget::image::viewer(handle)
                         .width(Length::Fill)
                         .height(Length::Fill),
                 )

@@ -51,6 +51,7 @@ where
         .with_target("decimator", Level::DEBUG)
         .with_target("wgpu_core", Level::WARN)
         .with_target("iced_wgpu", Level::WARN)
+        .with_target("zune_jpeg", Level::WARN)
         .with_default(Level::INFO);
     let layer = tracing_subscriber::fmt::layer()
         .with_thread_names(true)

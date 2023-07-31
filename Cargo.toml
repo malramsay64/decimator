@@ -24,7 +24,8 @@ serde_json = "1.0.89"
 futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "~0.10.5"
-iced = { git = "https://github.com/iced-rs/iced", features = ["image", "tokio", "lazy"] }
+iced = { version="0.10", features = ["image", "tokio", "lazy"] }
+iced_core = { version = "0.10"}
 image = { git = "https://github.com/Shnatsel/image", branch = "zune-jpeg-sneaky" }
 dirs = "5.0.1"
 tokio = "1.29.1"
@@ -33,6 +34,8 @@ rayon = "1.7.0"
 zune-jpeg = "0.3.17"
 zune-core = "0.2.14"
 lru = "0.11.0"
+iced_style = "0.9.0"
+iced_widget = "0.1.2"
 
 [profile.release]
 lto = true
