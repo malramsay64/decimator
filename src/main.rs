@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
@@ -60,27 +61,6 @@ pub enum AppMsg {
     Ignore,
 }
 
-#[derive(Debug, Default)]
-pub enum PictureView {
-    #[default]
-    Preview,
-    Grid,
-}
-
-impl TryFrom<&str> for PictureView {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "Preview" => Ok(Self::Preview),
-            "Grid" => Ok(Self::Grid),
-            _ => Err(anyhow::anyhow!(
-                "Unable to convert pictureview from {value}"
-            )),
-        }
-    }
-}
-
 /// Provide the opportunity to filter thumbnails
 ///
 /// Values are true when the filter is enabled and false
@@ -138,12 +118,6 @@ struct ThumbnailView {
     sort: Order,
     positions: Vec<Uuid>,
     version: u64,
-}
-
-impl std::hash::Hash for ThumbnailView {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.version.hash(state);
-    }
 }
 
 impl ThumbnailView {
@@ -256,6 +230,7 @@ struct AppData {
     thumbnail_view: ThumbnailView,
 
     preview: Option<Uuid>,
+    preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
 }
 
 impl AppData {
@@ -266,6 +241,7 @@ impl AppData {
             directory: None,
             thumbnail_view: Default::default(),
             preview: None,
+            preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
         }
     }
 
@@ -344,11 +320,22 @@ impl AppData {
     fn preview_view(&self) -> Element<AppMsg> {
         if let Some(id) = &self.preview {
             if let Some(filepath) = self.thumbnail_view.get_filepath(id) {
-                let i = picture::load_image(filepath.as_path(), None).unwrap();
-                let handle =
-                    iced::widget::image::Handle::from_pixels(i.width(), i.height(), i.to_vec());
+                let mut cache = self.preview_cache.borrow_mut();
+                let handle = match cache.get(id) {
+                    Some(h) => h,
+                    None => {
+                        let i = picture::load_image(filepath.as_path(), None).unwrap();
+                        let handle = iced::widget::image::Handle::from_pixels(
+                            i.width(),
+                            i.height(),
+                            i.to_vec(),
+                        );
+                        cache.put(id.clone(), handle);
+                        cache.get(id).unwrap()
+                    }
+                };
                 return container(
-                    iced::widget::image::viewer(handle)
+                    iced::widget::image::viewer(handle.clone())
                         .width(Length::Fill)
                         .height(Length::Fill),
                 )

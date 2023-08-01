@@ -22,7 +22,11 @@ pub fn is_image(entry: &walkdir::DirEntry) -> bool {
     }
 }
 
-pub fn load_image(filepath: impl AsRef<Path>, size: Option<(u32, u32)>) -> Result<RgbaImage> {
+#[tracing::instrument(name = "Loading Image", level = "info")]
+pub fn load_image(
+    filepath: impl AsRef<Path> + std::fmt::Debug,
+    size: Option<(u32, u32)>,
+) -> Result<RgbaImage> {
     let file = std::fs::File::open(filepath)?;
     let mut cursor = std::io::BufReader::new(file);
     let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
