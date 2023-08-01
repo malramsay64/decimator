@@ -32,6 +32,7 @@ dirs = "5.0.1"
 tokio = "1.29.1"
 rfd = { version = "0.11.4", default-features = false, features = ["xdg-portal"] }
 lru = "0.11.0"
+iced_aw = { version = "0.6.0", features = ["grid", "menu", "quad", "tab_bar"], default-features = false }
 
 [profile.release]
 lto = "thin"

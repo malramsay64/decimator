@@ -1,10 +1,5 @@
 # TODO
 
-- Zoom in on preview image
-  - This will require storing both the original image and the zoomed paintable
-- Perform the conversion from an image to a pixbuf when binding to a widget
-- Simplify implementation of grid and list
-  - I want to be able to merge them into a single implementation with a configurable parameter
 - Update file location
   - Instead of crashing when directory is not found, prompt for dialog to find again
   - Update all images, not just those shown (that is, the hidden ones)
@@ -19,10 +14,6 @@
   - Within the application settings
   - This should be the value also for HiDPI screens
   - Prompt noting that HiDPI should be double
-- Implement the abilty to change the sort order of the files. This should be
-  in chronological order to begin with, sorted from the datbase. 
-  This will be the fallback sorting, with the ability to sort by filename
-  and to reverse the sort order.
 
 ## Ideas
 
@@ -30,6 +21,16 @@
 - Item recognition
 
 ## DONE
+- Style of Widgets
+- Implement Grid View
+- Double click to zoom
+- Implement the abilty to change the sort order of the files. This should be
+  in chronological order to begin with, sorted from the datbase. 
+  This will be the fallback sorting, with the ability to sort by filename
+  and to reverse the sort order.
+- Perform the conversion from an image to a pixbuf when binding to a widget
+- Zoom in on preview image
+  - This will require storing both the original image and the zoomed paintable
 - Create a grid view, allowing the export of a selection
 - Export
   - Copy all the selected / open files to another directory

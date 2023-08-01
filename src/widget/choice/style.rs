@@ -63,9 +63,9 @@ impl StyleSheet for Theme {
             Choice::Default => {
                 let palette = self.extended_palette();
                 let iced::theme::palette::Pair { color, text } = if is_selected {
-                    palette.background.strong
-                } else {
                     palette.background.weak
+                } else {
+                    palette.background.strong
                 };
 
                 appearance.background = Background::Color(color);

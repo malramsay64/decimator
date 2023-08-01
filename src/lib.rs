@@ -6,12 +6,14 @@ use data::{
 };
 use iced::keyboard::KeyCode;
 use iced::widget::{
-    button, checkbox, column, container, horizontal_space, lazy, row, scrollable, text,
+    button, column, container, horizontal_space, lazy, row, scrollable, text, toggler,
 };
 use iced::{Application, Command, Element, Length, Theme};
+use iced_aw::{grid, menu_bar, menu_tree, quad, CloseCondition, Grid, MenuTree};
 use import::find_new_images;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use uuid::Uuid;
+use widget::choice;
 
 use crate::import::import;
 use crate::widget::viewer;
@@ -49,6 +51,7 @@ pub enum AppMsg {
     DisplayHidden(bool),
     SetSelection(Selection),
     // Signal to emit when we want to export, this creates the export dialog
+    SetView(AppView),
     SelectionExportRequest,
     // Contains the path where the files are being exported to
     SelectionExport(Utf8PathBuf),
@@ -59,15 +62,33 @@ pub enum AppMsg {
     Ignore,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum AppView {
+    #[default]
+    Preview,
+    Grid,
+}
+
 #[derive(Debug)]
 pub struct AppData {
     database: DatabaseConnection,
     directories: Vec<DirectoryData>,
     directory: Option<Utf8PathBuf>,
+
+    app_view: AppView,
     thumbnail_view: ThumbnailView,
 
     preview: Option<Uuid>,
     preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
+}
+
+fn separator<'a>() -> MenuTree<'a, AppMsg, iced::Renderer> {
+    menu_tree!(quad::Quad {
+        color: [0.5; 3].into(),
+        border_radius: [4.0; 4],
+        inner_bounds: quad::InnerBounds::Ratio(0.98, 0.1),
+        ..Default::default()
+    })
 }
 
 impl AppData {
@@ -76,6 +97,7 @@ impl AppData {
             database,
             directories: vec![],
             directory: None,
+            app_view: Default::default(),
             thumbnail_view: Default::default(),
             preview: None,
             preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
@@ -83,29 +105,61 @@ impl AppData {
     }
 
     fn menu_view(&self) -> Element<AppMsg> {
-        row!(
-            horizontal_space(Length::Fill),
-            button(text("Thumbnails")).on_press(AppMsg::UpdateThumbnails(true)),
-            checkbox("Pick", self.thumbnail_view.pick(), AppMsg::DisplayPick),
-            checkbox(
-                "Ordinary",
-                self.thumbnail_view.ordinary(),
-                AppMsg::DisplayOrdinary
+        let menu: Element<AppMsg> = menu_bar!(MenuTree::with_children(
+            button("Menu"),
+            vec![
+                MenuTree::new(toggler(
+                    String::from("Pick"),
+                    self.thumbnail_view.pick(),
+                    AppMsg::DisplayPick
+                )),
+                MenuTree::new(toggler(
+                    String::from("Ordinary"),
+                    self.thumbnail_view.ordinary(),
+                    AppMsg::DisplayOrdinary
+                )),
+                MenuTree::new(toggler(
+                    String::from("Ignore"),
+                    self.thumbnail_view.ignore(),
+                    AppMsg::DisplayIgnore
+                )),
+                MenuTree::new(toggler(
+                    String::from("Hidden"),
+                    self.thumbnail_view.hidden(),
+                    AppMsg::DisplayHidden
+                )),
+                separator(),
+                menu_tree!(button(text("Generate New Thumbnails"))
+                    .on_press(AppMsg::UpdateThumbnails(true))),
+                menu_tree!(
+                    button(text("Redo All Thumbnails")).on_press(AppMsg::UpdateThumbnails(false))
+                ),
+            ],
+        ))
+        .close_condition(CloseCondition {
+            leave: true,
+            click_inside: false,
+            click_outside: true,
+        })
+        .into();
+        let tabs = row!(
+            choice(
+                text("Preview").into(),
+                AppView::Preview,
+                Some(self.app_view),
+                |s| AppMsg::SetView(s)
             ),
-            checkbox(
-                "Ignore",
-                self.thumbnail_view.ignore(),
-                AppMsg::DisplayIgnore
+            choice(
+                text("Grid").into(),
+                AppView::Grid,
+                Some(self.app_view),
+                |s| AppMsg::SetView(s)
             ),
-            checkbox(
-                "Hidden",
-                self.thumbnail_view.hidden(),
-                AppMsg::DisplayHidden
-            ),
-        )
-        .spacing(10)
-        .align_items(iced::Alignment::Center)
-        .into()
+        );
+        row!(tabs, horizontal_space(Length::Fill), menu)
+            .padding(10)
+            .align_items(iced::Alignment::Center)
+            .into()
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
@@ -143,6 +197,22 @@ impl AppData {
         .height(320)
         .width(Length::Fill)
         .into()
+    }
+
+    fn grid_view(&self) -> Element<AppMsg> {
+        let thumbnails = lazy(self.thumbnail_view.version(), |_| {
+            let mut grid = Grid::with_column_width(240.);
+            for thumb in self
+                .thumbnail_view
+                .get_view()
+                .into_iter()
+                .map(PictureThumbnail::view)
+            {
+                grid.insert(thumb);
+            }
+            grid
+        });
+        scrollable(thumbnails).into()
     }
 
     fn preview_view(&self) -> Element<AppMsg> {
@@ -233,6 +303,10 @@ impl Application for App {
             Self::Initialised(inner) => {
                 let database = inner.database.clone();
                 match msg {
+                    AppMsg::SetView(view) => {
+                        inner.app_view = view;
+                        Command::none()
+                    }
                     AppMsg::Initialise(_) => panic!("App is already initialised"),
                     AppMsg::DirectoryImportRequest => Command::perform(
                         async move {
@@ -383,13 +457,22 @@ impl Application for App {
             Self::Uninitialised => column![text("Loading...")].into(),
             Self::Initialised(inner) => row![
                 inner.directory_view(),
-                column![
-                    inner.menu_view(),
-                    inner.preview_view(),
-                    inner.thumbnail_view()
-                ]
-                .width(Length::Fill)
-                .height(Length::Fill)
+                match inner.app_view {
+                    AppView::Preview => {
+                        column![
+                            inner.menu_view(),
+                            inner.preview_view(),
+                            inner.thumbnail_view()
+                        ]
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                    }
+                    AppView::Grid => {
+                        column![inner.menu_view(), inner.grid_view(),]
+                            .width(Length::Fill)
+                            .height(Length::Fill)
+                    }
+                }
             ]
             .into(),
         };
