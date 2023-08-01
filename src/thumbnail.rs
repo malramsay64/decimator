@@ -1,11 +1,7 @@
-
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
-
-
 use itertools::Itertools;
-
 use uuid::Uuid;
 
 use crate::picture::{PictureThumbnail, Selection};

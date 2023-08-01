@@ -423,4 +423,8 @@ impl Application for App {
     fn title(&self) -> String {
         String::from("Decimator")
     }
+
+    fn theme(&self) -> Theme {
+        Theme::Dark
+    }
 }

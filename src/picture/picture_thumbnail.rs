@@ -38,19 +38,31 @@ impl PictureThumbnail {
                 .width(240)
                 .height(240),
                 row![
-                    choice("I", Selection::Ignore, Some(self.selection), |s| {
-                        AppMsg::SetSelection(s)
-                    }),
-                    choice("O", Selection::Ordinary, Some(self.selection), |s| {
-                        AppMsg::SetSelection(s)
-                    }),
-                    choice("P", Selection::Pick, Some(self.selection), |s| {
-                        AppMsg::SetSelection(s)
-                    }),
+                    choice(
+                        text("I").into(),
+                        Selection::Ignore,
+                        Some(self.selection),
+                        |s| { AppMsg::SetSelection(s) }
+                    )
+                    .width(40),
+                    choice(
+                        text("O").into(),
+                        Selection::Ordinary,
+                        Some(self.selection),
+                        |s| { AppMsg::SetSelection(s) }
+                    )
+                    .width(40),
+                    choice(
+                        text("P").into(),
+                        Selection::Pick,
+                        Some(self.selection),
+                        |s| { AppMsg::SetSelection(s) }
+                    )
+                    .width(40),
                 ]
-                .spacing(10)
                 .padding(20)
             ])
+            .style(iced::theme::Button::Text)
             .on_press(AppMsg::UpdatePictureView(Some(self.id)))
             .into()
         } else {
