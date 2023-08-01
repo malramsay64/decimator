@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
-use iced::widget::{button, row, text};
-use iced::{Element, Renderer, Theme};
+use iced::widget::{button, text};
+use iced::Element;
 
 use crate::AppMsg;
 
@@ -24,9 +24,10 @@ impl From<String> for DirectoryData {
 }
 
 impl DirectoryData {
-    fn view(&self) -> Element<AppMsg, Renderer<Theme>> {
-        row![button(text(&self.directory))
-            .on_press(AppMsg::SelectDirectory(self.directory.clone()))]
-        .into()
+    pub fn view(&self) -> Element<AppMsg> {
+        button(text(self.directory.clone().into_string()))
+            .on_press(AppMsg::SelectDirectory(self.directory.clone()))
+            .width(240)
+            .into()
     }
 }
