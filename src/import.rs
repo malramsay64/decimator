@@ -116,11 +116,9 @@ pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<
         .filter(|p| !hash_existing.contains_key(&p.filename()))
         .collect();
 
-    let total_images = &new_images.len();
-
     // Parallel map -> Will need to be careful about the directory creation
     // Spawn async tasks to do the copying?
-    for (index, image) in new_images.iter_mut().enumerate() {
+    for image in new_images.iter_mut() {
         tracing::debug!("{:?}", &image);
         // Create the directory structure
         let structure = ImportStructure::default();

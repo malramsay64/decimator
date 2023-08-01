@@ -49,7 +49,7 @@ impl From<PrimitiveDateTime> for DateTime {
 
 impl PartialOrd for DateTime {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.datetime.partial_cmp(&other.datetime)
+        Some(self.datetime.cmp(&other.datetime))
     }
 }
 

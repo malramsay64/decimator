@@ -1,4 +1,4 @@
-//! Create choices using radio buttons.
+//! Create choices using Choice buttons.
 use iced::widget::{Row, Text};
 use iced_core::event::{self, Event};
 use iced_core::widget::Tree;
@@ -58,7 +58,7 @@ where
         }
     }
 
-    /// Sets the width of the [`Radio`] button.
+    /// Sets the width of the [`Choice`] button.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
         self
@@ -82,13 +82,13 @@ where
         self
     }
 
-    /// Sets the text font of the [`Radio`] button.
+    /// Sets the text font of the [`Choice`] button.
     pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
         self.font = Some(font.into());
         self
     }
 
-    /// Sets the style of the [`Radio`] button.
+    /// Sets the style of the [`Choice`] button.
     pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
         self.style = style.into();
         self

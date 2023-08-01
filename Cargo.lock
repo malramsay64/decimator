@@ -950,7 +950,6 @@ dependencies = [
  "log",
  "lru",
  "num_cpus",
- "rayon",
  "rfd",
  "sea-orm",
  "serde",
@@ -963,8 +962,6 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "walkdir",
- "zune-core",
- "zune-jpeg",
 ]
 
 [[package]]

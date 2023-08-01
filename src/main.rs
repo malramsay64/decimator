@@ -330,7 +330,7 @@ impl AppData {
                             i.height(),
                             i.to_vec(),
                         );
-                        cache.put(id.clone(), handle);
+                        cache.put(*id, handle);
                         cache.get(id).unwrap()
                     }
                 };
@@ -444,7 +444,7 @@ impl Application for App {
                     ),
                     AppMsg::QueryDirectories => Command::perform(
                         async move { query_unique_directories(&database).await.unwrap() },
-                        |dirs| AppMsg::UpdateDirectories(dirs),
+                        AppMsg::UpdateDirectories,
                     ),
                     AppMsg::UpdateDirectories(dirs) => {
                         inner.directories = dirs;

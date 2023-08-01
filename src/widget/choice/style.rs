@@ -1,4 +1,4 @@
-use iced_core::Renderer;
+
 use iced_widget::core::{Background, Color};
 use iced_widget::style::Theme;
 

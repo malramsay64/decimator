@@ -11,7 +11,7 @@ impl Eq for PictureThumbnail {}
 
 impl PartialOrd for PictureThumbnail {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.capture_time?.partial_cmp(&other.capture_time?)
+        Some(self.capture_time?.cmp(&other.capture_time?))
     }
 }
 
