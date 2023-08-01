@@ -16,6 +16,7 @@ use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use uuid::Uuid;
 
 use crate::import::import;
+use crate::widget::viewer;
 
 mod data;
 mod directory;
@@ -335,7 +336,7 @@ impl AppData {
                     }
                 };
                 return container(
-                    iced::widget::image::viewer(handle.clone())
+                    viewer(handle.clone())
                         .width(Length::Fill)
                         .height(Length::Fill),
                 )

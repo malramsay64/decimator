@@ -24,7 +24,7 @@ futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "~0.10.5"
 iced = { version="0.10", features = ["image", "tokio", "lazy"] }
-iced_core = { version = "*"}
+iced_core = "*"
 iced_style = "*"
 iced_widget = "*"
 image = { git = "https://github.com/Shnatsel/image", branch = "zune-jpeg-sneaky" }

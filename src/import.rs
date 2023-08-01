@@ -12,7 +12,6 @@ use crate::picture::{is_image, PictureData};
 #[derive(Clone, Debug)]
 struct ImportStructure {
     base_directory: Utf8PathBuf,
-    expansion: String,
 }
 
 impl ImportStructure {
@@ -20,7 +19,7 @@ impl ImportStructure {
         let capture_time = image.capture_time.unwrap();
         // Get the image capture date
         Ok(format!(
-            // TODO: Get this from self
+            // TODO: Provide the ability to configure the expansion string
             "{base}/{year:04}/{year:04}-{month:02}-{day:02}/{filename}",
             base = self.base_directory,
             year = capture_time.year(),
@@ -36,7 +35,6 @@ impl Default for ImportStructure {
     fn default() -> Self {
         Self {
             base_directory: dirs::picture_dir().unwrap().try_into().unwrap(),
-            expansion: "{base_directory}/{year:04}/{year:04}-{month:02}-{day:02}/{filename}".into(),
         }
     }
 }

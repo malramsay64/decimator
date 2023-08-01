@@ -1,6 +1,13 @@
 mod choice;
+mod viewer;
 
 use choice::Choice;
+use viewer::Viewer;
+
+/// Creates a new [`Viewer`] with the given image `Handle`.
+pub fn viewer<Handle>(handle: Handle) -> Viewer<Handle> {
+    Viewer::new(handle)
+}
 
 /// Creates a new [`Choice`].
 ///
