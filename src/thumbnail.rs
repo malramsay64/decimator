@@ -4,7 +4,8 @@ use camino::Utf8PathBuf;
 use itertools::Itertools;
 use uuid::Uuid;
 
-use crate::picture::{PictureThumbnail, Selection};
+use crate::picture::PictureThumbnail;
+use entity::Selection;
 
 /// Provide the opportunity to filter thumbnails
 ///

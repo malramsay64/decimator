@@ -1,6 +1,5 @@
 mod picture_data;
 mod picture_thumbnail;
-mod property_types;
 
 use std::io::Seek;
 use std::path::Path;
@@ -12,7 +11,6 @@ use image::io::Reader;
 use image::RgbaImage;
 pub use picture_data::*;
 pub use picture_thumbnail::*;
-pub use property_types::*;
 
 pub fn is_image(entry: &walkdir::DirEntry) -> bool {
     match entry.path().extension().and_then(|s| s.to_str()) {

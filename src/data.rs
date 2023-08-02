@@ -4,6 +4,10 @@
 // to be properly handled and tested, so we split it into this file to maintain
 // the understanding and separation.
 
+use futures::future::join_all;
+use futures::future::try_join_all;
+use itertools::Itertools;
+use rayon::prelude::*;
 use std::io::Cursor;
 use std::ops::Not;
 
@@ -14,13 +18,13 @@ use sea_orm::{sea_query, DatabaseConnection};
 use sea_query::Condition;
 use uuid::Uuid;
 
-pub mod picture;
-
 use sea_orm::query::*;
 use sea_orm::*;
 
 use crate::directory::DirectoryData;
-use crate::picture::{PictureData, Selection};
+use crate::picture::PictureData;
+use ::entity::picture;
+use ::entity::Selection;
 
 #[tracing::instrument(name = "Querying Picture from directories", skip(db))]
 pub(crate) async fn query_directory_pictures(
@@ -69,28 +73,31 @@ pub(crate) async fn update_thumbnails(
 
     tracing::info!("{} {:?}", update_all, num_items);
 
-    let mut paginated_results = query.paginate(db, 10);
+    let mut paginated_results = query.paginate(db, 8);
     while let Some(results) = paginated_results.fetch_and_next().await? {
-        for picture in results {
-            let filepath = picture.filepath().clone();
-            let _span = tracing::info_span!("Updating thumbnail");
-            let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> = {
-                let mut buffer = Cursor::new(vec![]);
-                tracing::info!("loading file from {}", &filepath);
-                PictureData::load_thumbnail(&filepath, 240, 240).map(|f| {
-                    f.write_to(&mut buffer, ImageFormat::Jpeg)
-                        .expect("Error writing image to buffer");
-                    buffer
-                })
-            };
-            if let Ok(thumbnail) = thumbnail_buffer {
-                let mut picture: picture::ActiveModel = picture.into();
-                picture.set(picture::Column::Thumbnail, thumbnail.into_inner().into());
-                picture.update(db).await?;
-            } else {
-                tracing::warn!("Unable to read file {}", &picture.filepath());
-            }
-        }
+        let futures: Vec<_> = results
+            .par_iter()
+            .map(|picture| {
+                let filepath = picture.filepath().clone();
+                let _span = tracing::info_span!("Updating thumbnail");
+                let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> = {
+                    let mut buffer = Cursor::new(vec![]);
+                    tracing::info!("loading file from {}", &filepath);
+                    PictureData::load_thumbnail(&filepath, 240, 240).map(|f| {
+                        f.write_to(&mut buffer, ImageFormat::Jpeg)
+                            .expect("Error writing image to buffer");
+                        buffer
+                    })
+                };
+                let mut picture: picture::ActiveModel = (*picture).clone().into();
+                picture.set(
+                    picture::Column::Thumbnail,
+                    thumbnail_buffer.unwrap().into_inner().into(),
+                );
+                picture.update(db)
+            })
+            .collect();
+        try_join_all(futures).await.unwrap();
     }
     Ok(())
 }
@@ -99,9 +106,11 @@ pub(crate) async fn add_new_images(
     db: &DatabaseConnection,
     images: Vec<PictureData>,
 ) -> Result<(), Error> {
-    picture::Entity::insert_many(images.into_iter().map(picture::ActiveModel::from))
-        .exec(db)
-        .await?;
+    let mut futures = vec![];
+    for group in &images.into_iter().map(PictureData::to_active).chunks(1024) {
+        futures.push(picture::Entity::insert_many(group).exec(db))
+    }
+    join_all(futures).await;
     Ok(())
 }
 

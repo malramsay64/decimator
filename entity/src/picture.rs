@@ -1,26 +1,25 @@
+use super::Flag;
+use super::Rating;
+use super::Selection;
 use camino::Utf8PathBuf;
 use sea_orm::entity::prelude::*;
-use time::PrimitiveDateTime;
+use uuid::Uuid;
 
-use crate::picture::{Flag, Rating, Selection};
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "picture")]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
+#[sea_orm(table_name = "pictures")]
 pub struct Model {
-    #[sea_orm(
-        primary_key,
-        auto_increment = false,
-        column_type = "Binary(BlobSize::Blob(Some(16)))"
-    )]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub directory: String,
     pub filename: String,
     pub raw_extension: Option<String>,
-    pub capture_time: Option<PrimitiveDateTime>,
-    pub selection: Selection,
-    pub rating: Rating,
-    pub flag: Flag,
+    pub short_hash: Option<Vec<u8>>,
+    pub full_hash: Option<Vec<u8>>,
+    pub capture_time: Option<TimeDateTime>,
+    pub rating: Option<Rating>,
+    pub flag: Option<Flag>,
     pub hidden: bool,
+    pub selection: Selection,
     pub thumbnail: Option<Vec<u8>>,
 }
 
@@ -32,7 +31,7 @@ impl Model {
     }
 }
 
-#[derive(Clone, Copy, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}

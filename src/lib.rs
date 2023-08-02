@@ -26,7 +26,8 @@ pub mod telemetry;
 mod thumbnail;
 mod widget;
 use directory::DirectoryData;
-use picture::{PictureThumbnail, Selection};
+use entity::Selection;
+use picture::PictureThumbnail;
 use thumbnail::ThumbnailView;
 
 /// Messages for runnning the application

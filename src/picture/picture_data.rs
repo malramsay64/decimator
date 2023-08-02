@@ -7,21 +7,27 @@ use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rota
 use image::io::Reader;
 use image::{ImageFormat, RgbaImage};
 use sea_orm::ActiveValue;
+use time::format_description::FormatItem;
+use time::macros::format_description;
+use time::PrimitiveDateTime;
 use uuid::Uuid;
 use walkdir::DirEntry;
 
-use crate::data::picture;
-use crate::picture::{DateTime, Flag, Rating, Selection};
+use entity::picture;
+use entity::{Flag, Rating, Selection};
+
+const DISPLAY_FORMAT: &[FormatItem<'_>] =
+    format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
 
 #[derive(Default, Clone, PartialEq)]
 pub struct PictureData {
     pub id: Uuid,
     pub filepath: Utf8PathBuf,
     pub raw_extension: Option<String>,
-    pub capture_time: Option<DateTime>,
+    pub capture_time: Option<PrimitiveDateTime>,
     pub selection: Selection,
-    pub rating: Rating,
-    pub flag: Flag,
+    pub rating: Option<Rating>,
+    pub flag: Option<Flag>,
     pub hidden: bool,
     pub thumbnail: Option<RgbaImage>,
 }
@@ -59,7 +65,7 @@ impl PictureData {
 
         self.capture_time = if let Some(f) = capture_datetime {
             let v = f.value.display_as(exif::Tag::DateTimeOriginal).to_string();
-            Some(v.try_into().expect("Unable to parse datetime"))
+            Some(PrimitiveDateTime::parse(&v, DISPLAY_FORMAT).expect("Unable to parse datetime"))
         } else {
             None
         };
@@ -120,7 +126,7 @@ impl From<picture::Model> for PictureData {
             id: value.id,
             filepath: value.filepath(),
             raw_extension: value.raw_extension,
-            capture_time: value.capture_time.map(DateTime::from),
+            capture_time: value.capture_time.map(PrimitiveDateTime::from),
             selection: value.selection,
             rating: value.rating,
             flag: value.flag,
@@ -129,22 +135,25 @@ impl From<picture::Model> for PictureData {
         }
     }
 }
-impl From<PictureData> for picture::ActiveModel {
-    fn from(value: PictureData) -> Self {
+
+impl PictureData {
+    pub fn to_active(self) -> picture::ActiveModel {
         let mut thumbnail = Cursor::new(vec![]);
-        if let Some(f) = value.thumbnail.as_ref() {
+        if let Some(f) = self.thumbnail.as_ref() {
             f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap();
         }
-        Self {
-            id: ActiveValue::Unchanged(value.id),
-            directory: ActiveValue::Set(value.directory()),
-            filename: ActiveValue::Set(value.filename()),
-            raw_extension: ActiveValue::Set(value.raw_extension),
-            capture_time: ActiveValue::Set(value.capture_time.map(|t| t.datetime())),
-            selection: ActiveValue::Set(value.selection),
-            rating: ActiveValue::Set(value.rating),
-            flag: ActiveValue::Set(value.flag),
-            hidden: ActiveValue::Set(value.hidden),
+        picture::ActiveModel {
+            id: ActiveValue::Unchanged(self.id),
+            short_hash: ActiveValue::not_set(),
+            full_hash: ActiveValue::not_set(),
+            directory: ActiveValue::Set(self.directory()),
+            filename: ActiveValue::Set(self.filename()),
+            raw_extension: ActiveValue::Set(self.raw_extension),
+            capture_time: ActiveValue::Set(self.capture_time),
+            selection: ActiveValue::Set(self.selection),
+            rating: ActiveValue::Set(self.rating),
+            flag: ActiveValue::Set(self.flag),
+            hidden: ActiveValue::Set(self.hidden),
             thumbnail: ActiveValue::Set(Some(thumbnail.into_inner())),
         }
     }

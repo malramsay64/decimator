@@ -1,9 +1,10 @@
 use iced::widget::{button, column, image, row, text};
 use iced::Element;
 
-use super::{PictureData, Selection};
+use super::PictureData;
 use crate::widget::choice;
 use crate::AppMsg;
+use entity::Selection;
 
 pub type PictureThumbnail = PictureData;
 
@@ -66,7 +67,7 @@ impl PictureThumbnail {
             .on_press(AppMsg::UpdatePictureView(Some(self.id)))
             .into()
         } else {
-            column![text("No image")].into()
+            column![text("No image")].width(240).height(240).into()
         }
     }
 }
