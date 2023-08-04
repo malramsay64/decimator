@@ -1,5 +1,7 @@
 # TODO
 
+- Modal to confirm replacing of all thumbnails
+- Modal to check updating directory path if not found
 - Include rating scale
 - Go to preview from Grid on double click
 - progress bar
@@ -30,6 +32,7 @@
 - Item recognition
 
 ## DONE
+- Show selected item in directory list
 - Style
   - Add bars between buttons
   - Shrink buttons for Picked

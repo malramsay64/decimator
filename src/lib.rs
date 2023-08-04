@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
@@ -10,7 +10,9 @@ use iced::widget::{
 };
 use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
-use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
+use iced_aw::{
+    menu_bar, menu_tree, quad, CloseCondition, MenuTree, SelectionList, SelectionListStyles,
+};
 use iced_widget::scrollable::{Id, Properties};
 use iced_widget::vertical_space;
 use import::find_new_images;
@@ -178,14 +180,18 @@ impl AppData {
                 horizontal_space(Length::Fill),
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ],
-            scrollable(column(
+            SelectionList::new(
                 self.directories
                     .iter()
                     .sorted()
                     .rev()
-                    .map(DirectoryData::view)
-                    .collect()
-            ))
+                    .map(|d| d.strip_prefix().to_string())
+                    .collect::<Vec<_>>(),
+                |(_, dir): (usize, String)| AppMsg::SelectDirectory(
+                    Utf8Path::new("/home/malcolm").join(dir).into()
+                )
+            )
+            .style(SelectionListStyles::Default)
         ]
         .width(240)
         .height(Length::Fill)
@@ -369,7 +375,6 @@ impl Application for App {
                     }
                     AppMsg::UpdateThumbnails(all) => Command::perform(
                         async move {
-                            println!("Thumbnail Update");
                             // TODO: Add a dialog confirmation box
                             update_thumbnails(&database, all)
                                 .await

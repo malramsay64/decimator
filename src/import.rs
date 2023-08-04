@@ -130,7 +130,6 @@ pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<
 
         let parent = new_path.parent();
         tracing::debug!("Importing {} into {}", image.filepath, &new_path);
-        dbg!(&parent);
 
         // Where the new path is the same as the old one we are actually adding the
         // file rather than importing, so we can skip all the import steps.

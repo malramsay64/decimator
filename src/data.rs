@@ -27,7 +27,6 @@ pub(crate) async fn query_directory_pictures(
     db: &DatabaseConnection,
     directory: String,
 ) -> Result<Vec<PictureData>, Error> {
-    dbg!(&directory);
     Ok(picture::Entity::find()
         .filter(picture::Column::Directory.eq(directory))
         .all(db)

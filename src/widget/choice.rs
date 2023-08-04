@@ -205,9 +205,6 @@ where
             theme.active(&self.style, self.is_selected)
         };
 
-        //println!("height: {}", bounds.height);
-        // 34 15
-        //  x
         let border_radius = style_sheet
             .border_radius
             .unwrap_or(bounds.height / BORDER_RADIUS_RATIO);

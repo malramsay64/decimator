@@ -36,7 +36,7 @@ dirs = "5.0.1"
 tokio = "1.29.1"
 rfd = { version = "0.11.4", default-features = false, features = ["xdg-portal"] }
 lru = "0.11.0"
-iced_aw = { git = "https://github.com/malramsay64/iced_aw", branch="flexible_grid", features = ["grid", "menu", "quad", "tab_bar"], default-features = false }
+iced_aw = { git = "https://github.com/malramsay64/iced_aw", branch="flexible_grid", features = ["grid", "menu", "quad", "tab_bar", "selection_list"], default-features = false }
 rayon = "1.7.0"
 
 [profile.release]

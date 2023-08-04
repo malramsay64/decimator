@@ -13,7 +13,7 @@ pub struct DirectoryData {
 }
 
 impl DirectoryData {
-    fn strip_prefix(&self) -> &Utf8Path {
+    pub fn strip_prefix(&self) -> &Utf8Path {
         self.directory.strip_prefix("/home/malcolm/").unwrap()
     }
 }
