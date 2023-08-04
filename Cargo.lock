@@ -1706,8 +1706,7 @@ dependencies = [
 [[package]]
 name = "iced_aw"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "842ee223a09cf7f874b9e2d6f5a1aa54f3642c31f7ff5e26c43f1546232b127b"
+source = "git+https://github.com/malramsay64/iced_aw?branch=flexible_grid#084ea256fbb872b106e9b7880a437806583dd706"
 dependencies = [
  "iced_widget",
 ]

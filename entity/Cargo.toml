@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sea-orm = {version = "~0.11.3"}
+sea-orm = {version = "*"}
 serde = {version = "1", features = ["derive"]}
-uuid = { version = "~1.2.2", features = ["v4", "serde"] }
-camino = { version = "~1.1.1", features = ["serde1"] }
+uuid = { version = "~1", features = ["v4", "serde"] }
+camino = { version = "~1.1", features = ["serde1"] }
 
 [lib]
 name = "entity"
