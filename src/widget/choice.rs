@@ -1,5 +1,4 @@
 //! Create choices using Choice buttons.
-use iced::subscription::events;
 use iced_core::event::{self, Event};
 use iced_core::layout::Node;
 use iced_core::mouse::Cursor;

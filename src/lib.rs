@@ -9,8 +9,12 @@ use iced::widget::{
     button, column, container, horizontal_space, lazy, row, scrollable, text, toggler,
 };
 use iced::{Application, Command, Element, Length, Theme};
-use iced_aw::{grid, menu_bar, menu_tree, quad, CloseCondition, Grid, MenuTree};
+use iced_aw::native::Grid;
+use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
+use iced_widget::scrollable::{Id, Properties};
+use iced_widget::vertical_space;
 use import::find_new_images;
+use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use uuid::Uuid;
 use widget::choice;
@@ -50,6 +54,7 @@ pub enum AppMsg {
     DisplayOrdinary(bool),
     DisplayIgnore(bool),
     DisplayHidden(bool),
+    ScrollTo(Uuid),
     SetSelection(Selection),
     // Signal to emit when we want to export, this creates the export dialog
     SetView(AppView),
@@ -78,6 +83,7 @@ pub struct AppData {
 
     app_view: AppView,
     thumbnail_view: ThumbnailView,
+    thumbnail_scroller: scrollable::Id,
 
     preview: Option<Uuid>,
     preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
@@ -100,6 +106,7 @@ impl AppData {
             directory: None,
             app_view: Default::default(),
             thumbnail_view: Default::default(),
+            thumbnail_scroller: Id::unique(),
             preview: None,
             preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
         }
@@ -135,8 +142,9 @@ impl AppData {
                 menu_tree!(
                     button(text("Redo All Thumbnails")).on_press(AppMsg::UpdateThumbnails(false))
                 ),
-            ],
-        ))
+            ]
+        )
+        .width(400))
         .close_condition(CloseCondition {
             leave: true,
             click_inside: false,
@@ -148,13 +156,13 @@ impl AppData {
                 text("Preview").into(),
                 AppView::Preview,
                 Some(self.app_view),
-                |s| AppMsg::SetView(s)
+                AppMsg::SetView
             ),
             choice(
                 text("Grid").into(),
                 AppView::Grid,
                 Some(self.app_view),
-                |s| AppMsg::SetView(s)
+                AppMsg::SetView
             ),
         );
         row!(tabs, horizontal_space(Length::Fill), menu)
@@ -171,7 +179,12 @@ impl AppData {
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ],
             scrollable(column(
-                self.directories.iter().map(DirectoryData::view).collect()
+                self.directories
+                    .iter()
+                    .sorted()
+                    .rev()
+                    .map(DirectoryData::view)
+                    .collect()
             ))
         ]
         .width(240)
@@ -187,33 +200,34 @@ impl AppData {
                 .into_iter()
                 .map(PictureThumbnail::view)
                 .collect())
-            .spacing(10)
         });
-
-        container(scrollable(thumbnails).width(Length::Fill).direction(
-            iced::widget::scrollable::Direction::Horizontal(
+        let scroller = scrollable(thumbnails)
+            .direction(iced::widget::scrollable::Direction::Horizontal(
                 iced::widget::scrollable::Properties::default(),
-            ),
-        ))
-        .height(320)
-        .width(Length::Fill)
-        .into()
+            ))
+            .id(self.thumbnail_scroller.clone());
+
+        container(column![scroller, vertical_space(10)]).into()
     }
 
     fn grid_view(&self) -> Element<AppMsg> {
         let thumbnails = lazy(self.thumbnail_view.version(), |_| {
-            let mut grid = Grid::with_column_width(240.);
-            for thumb in self
-                .thumbnail_view
+            self.thumbnail_view
                 .get_view()
                 .into_iter()
                 .map(PictureThumbnail::view)
-            {
-                grid.insert(thumb);
-            }
-            grid
+                .fold(
+                    Grid::new()
+                        .width(Length::Fill)
+                        .strategy(iced_aw::Strategy::ColumnWidthFlex(260.)),
+                    |i, g| i.push(g),
+                )
         });
-        scrollable(thumbnails).into()
+        scrollable(thumbnails)
+            .direction(scrollable::Direction::Vertical(
+                Properties::new().width(2.).scroller_width(10.),
+            ))
+            .into()
     }
 
     fn preview_view(&self) -> Element<AppMsg> {
@@ -394,12 +408,29 @@ impl Application for App {
                         inner.thumbnail_view.set_hidden(value);
                         Command::none()
                     }
+                    AppMsg::ScrollTo(id) => {
+                        if inner.app_view == AppView::Preview {
+                            if let Some(pos) = inner.thumbnail_view.get_position(&id) {
+                                scrollable::scroll_to(
+                                    inner.thumbnail_scroller.clone(),
+                                    scrollable::AbsoluteOffset {
+                                        x: pos as f32 * 240.,
+                                        y: 0.,
+                                    },
+                                )
+                            } else {
+                                Command::none()
+                            }
+                        } else {
+                            Command::none()
+                        }
+                    }
                     AppMsg::SetSelection(s) => {
                         if let Some(id) = inner.preview {
                             inner.thumbnail_view.set_selection(&id, s);
                             Command::perform(
                                 async move { update_selection_state(&database, id, s).await.unwrap() },
-                                |_| AppMsg::Ignore,
+                                move |_| AppMsg::ScrollTo(id),
                             )
                         } else {
                             Command::none()
@@ -438,11 +469,19 @@ impl Application for App {
                     AppMsg::Ignore => Command::none(),
                     AppMsg::ThumbnailNext => {
                         inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
-                        Command::none()
+                        if let Some(id) = inner.preview {
+                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                        } else {
+                            Command::none()
+                        }
                     }
                     AppMsg::ThumbnailPrev => {
                         inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
-                        Command::none()
+                        if let Some(id) = inner.preview {
+                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                        } else {
+                            Command::none()
+                        }
                     }
                     AppMsg::UpdatePictureView(preview) => {
                         inner.preview = preview;

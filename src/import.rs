@@ -23,7 +23,7 @@ impl ImportStructure {
             "{base}/{year:04}/{year:04}-{month:02}-{day:02}/{filename}",
             base = self.base_directory,
             year = capture_time.year(),
-            month = capture_time.month(),
+            month = capture_time.month() as u8,
             day = capture_time.day(),
             filename = image.filename()
         )
@@ -74,7 +74,12 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
             })
         })
         .map(|mut p: PictureData| {
-            p.update_from_exif().expect("File not found");
+            p.update_from_exif().unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Unable to load exif data from {}, got error {e}",
+                    p.filename()
+                )
+            });
             p
         })
         .collect()

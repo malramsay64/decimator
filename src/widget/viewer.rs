@@ -230,7 +230,7 @@ where
 
                             // TODO: Check whether this should be max or min
                             state.scale = (image_width as f32 / bound_width)
-                                .min(image_height as f32 / bound_height);
+                                .max(image_height as f32 / bound_height);
 
                             let cursor_to_center = cursor_position - bounds.center();
                             let factor = state.scale / previous_scale - 1.0;

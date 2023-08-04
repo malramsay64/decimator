@@ -2,6 +2,7 @@ use std::io::{BufReader, Cursor, Seek};
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
+use entity::{picture, Flag, Rating, Selection};
 use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
@@ -12,9 +13,6 @@ use time::macros::format_description;
 use time::PrimitiveDateTime;
 use uuid::Uuid;
 use walkdir::DirEntry;
-
-use entity::picture;
-use entity::{Flag, Rating, Selection};
 
 const DISPLAY_FORMAT: &[FormatItem<'_>] =
     format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
@@ -137,7 +135,7 @@ impl From<picture::Model> for PictureData {
 }
 
 impl PictureData {
-    pub fn to_active(self) -> picture::ActiveModel {
+    pub fn as_active(self) -> picture::ActiveModel {
         let mut thumbnail = Cursor::new(vec![]);
         if let Some(f) = self.thumbnail.as_ref() {
             f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap();

@@ -1,12 +1,21 @@
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use iced::widget::{button, text};
 use iced::Element;
+use iced_core::Color;
+use iced_style::button::Appearance;
+use iced_style::{theme, Theme};
 
 use crate::AppMsg;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirectoryData {
     pub directory: Utf8PathBuf,
+}
+
+impl DirectoryData {
+    fn strip_prefix(&self) -> &Utf8Path {
+        self.directory.strip_prefix("/home/malcolm/").unwrap()
+    }
 }
 
 impl From<DirectoryData> for String {
@@ -23,9 +32,67 @@ impl From<String> for DirectoryData {
     }
 }
 
+#[derive(Default)]
+pub struct ButtonCustomTheme;
+
+impl button::StyleSheet for ButtonCustomTheme {
+    type Style = Theme;
+
+    fn active(&self, style: &Self::Style) -> Appearance {
+        let palette = style.extended_palette();
+        Appearance {
+            background: None,
+            text_color: palette.background.base.text,
+            border_radius: 0.0.into(),
+            border_width: 1.,
+            border_color: palette.secondary.base.color,
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> Appearance {
+        let active = self.active(style);
+
+        Appearance {
+            shadow_offset: active.shadow_offset + iced_core::Vector::new(0.0, 1.0),
+            ..active
+        }
+    }
+
+    fn pressed(&self, style: &Self::Style) -> Appearance {
+        Appearance {
+            shadow_offset: iced_core::Vector::default(),
+            ..self.active(style)
+        }
+    }
+
+    fn disabled(&self, style: &Self::Style) -> Appearance {
+        let active = self.active(style);
+
+        Appearance {
+            shadow_offset: iced_core::Vector::default(),
+            background: active.background.map(|background| match background {
+                iced_core::Background::Color(color) => iced_core::Background::Color(Color {
+                    a: color.a * 0.5,
+                    ..color
+                }),
+                iced_core::Background::Gradient(gradient) => {
+                    iced_core::Background::Gradient(gradient.mul_alpha(0.5))
+                }
+            }),
+            text_color: Color {
+                a: active.text_color.a * 0.5,
+                ..active.text_color
+            },
+            ..active
+        }
+    }
+}
+
 impl DirectoryData {
     pub fn view(&self) -> Element<AppMsg> {
-        button(text(self.directory.clone().into_string()))
+        button(text(self.strip_prefix().as_str()))
+            .style(theme::Button::custom(ButtonCustomTheme))
             .on_press(AppMsg::SelectDirectory(self.directory.clone()))
             .width(240)
             .into()

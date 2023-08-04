@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
+use entity::Selection;
 use itertools::Itertools;
 use uuid::Uuid;
 
 use crate::picture::PictureThumbnail;
-use entity::Selection;
 
 /// Provide the opportunity to filter thumbnails
 ///
@@ -84,6 +84,10 @@ impl ThumbnailView {
         if self.sort == Order::Descending {
             self.positions.reverse()
         }
+    }
+
+    pub fn get_position(&self, id: &Uuid) -> Option<usize> {
+        self.positions.iter().position(|i| i == id)
     }
 
     pub fn next(&mut self, id: Option<&Uuid>) -> Option<Uuid> {

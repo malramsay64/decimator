@@ -1,10 +1,11 @@
+use entity::Selection;
 use iced::widget::{button, column, image, row, text};
 use iced::Element;
 
 use super::PictureData;
+use crate::directory::ButtonCustomTheme;
 use crate::widget::choice;
 use crate::AppMsg;
-use entity::Selection;
 
 pub type PictureThumbnail = PictureData;
 
@@ -30,44 +31,51 @@ impl Ord for PictureThumbnail {
 impl PictureThumbnail {
     pub fn view(self) -> Element<'static, AppMsg> {
         if let Some(thumbnail) = self.thumbnail {
-            button(column![
-                iced::widget::image(image::Handle::from_pixels(
-                    thumbnail.width(),
-                    thumbnail.height(),
-                    thumbnail.to_vec()
-                ))
-                .width(240)
-                .height(240),
-                row![
-                    choice(
-                        text("I").into(),
-                        Selection::Ignore,
-                        Some(self.selection),
-                        |s| { AppMsg::SetSelection(s) }
-                    )
-                    .width(40),
-                    choice(
-                        text("O").into(),
-                        Selection::Ordinary,
-                        Some(self.selection),
-                        |s| { AppMsg::SetSelection(s) }
-                    )
-                    .width(40),
-                    choice(
-                        text("P").into(),
-                        Selection::Pick,
-                        Some(self.selection),
-                        |s| { AppMsg::SetSelection(s) }
-                    )
-                    .width(40),
+            button(
+                column![
+                    iced::widget::image(image::Handle::from_pixels(
+                        thumbnail.width(),
+                        thumbnail.height(),
+                        thumbnail.to_vec()
+                    ))
+                    .width(240)
+                    .height(240),
+                    row![
+                        choice(
+                            text("I").into(),
+                            Selection::Ignore,
+                            Some(self.selection),
+                            |s| { AppMsg::SetSelection(s) }
+                        )
+                        .width(40),
+                        choice(
+                            text("O").into(),
+                            Selection::Ordinary,
+                            Some(self.selection),
+                            |s| { AppMsg::SetSelection(s) }
+                        )
+                        .width(40),
+                        choice(
+                            text("P").into(),
+                            Selection::Pick,
+                            Some(self.selection),
+                            |s| { AppMsg::SetSelection(s) }
+                        )
+                        .width(40),
+                    ]
                 ]
-                .padding(20)
-            ])
-            .style(iced::theme::Button::Text)
+                .align_items(iced_core::Alignment::Center)
+                .padding(10),
+            )
+            .style(iced::theme::Button::custom(ButtonCustomTheme))
             .on_press(AppMsg::UpdatePictureView(Some(self.id)))
             .into()
         } else {
-            column![text("No image")].width(240).height(240).into()
+            column![text("No thumbnail")]
+                .align_items(iced_core::Alignment::Center)
+                .width(240)
+                .height(240)
+                .into()
         }
     }
 }

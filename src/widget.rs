@@ -13,12 +13,12 @@ pub fn viewer<Handle>(handle: Handle) -> Viewer<Handle> {
 /// Creates a new [`Choice`].
 ///
 /// [`Choice`]: widget::Choice
-pub fn choice<'a, Message, Renderer, V>(
-    label: Element<'a, Message, Renderer>,
+pub fn choice<Message, Renderer, V>(
+    label: Element<'_, Message, Renderer>,
     value: V,
     selected: Option<V>,
     on_click: impl FnOnce(V) -> Message,
-) -> Choice<'a, Message, Renderer>
+) -> Choice<'_, Message, Renderer>
 where
     Message: Clone,
     Renderer: iced_core::text::Renderer,

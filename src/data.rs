@@ -4,27 +4,23 @@
 // to be properly handled and tested, so we split it into this file to maintain
 // the understanding and separation.
 
-use futures::future::join_all;
-use futures::future::try_join_all;
-use itertools::Itertools;
-use rayon::prelude::*;
 use std::io::Cursor;
 use std::ops::Not;
 
+use ::entity::{picture, Selection};
 use anyhow::Error;
 use camino::Utf8PathBuf;
+use futures::future::{join_all, try_join_all};
 use image::ImageFormat;
-use sea_orm::{sea_query, DatabaseConnection};
+use itertools::Itertools;
+use rayon::prelude::*;
+use sea_orm::query::*;
+use sea_orm::{sea_query, DatabaseConnection, *};
 use sea_query::Condition;
 use uuid::Uuid;
 
-use sea_orm::query::*;
-use sea_orm::*;
-
 use crate::directory::DirectoryData;
 use crate::picture::PictureData;
-use ::entity::picture;
-use ::entity::Selection;
 
 #[tracing::instrument(name = "Querying Picture from directories", skip(db))]
 pub(crate) async fn query_directory_pictures(
@@ -94,6 +90,8 @@ pub(crate) async fn update_thumbnails(
                     picture::Column::Thumbnail,
                     thumbnail_buffer.unwrap().into_inner().into(),
                 );
+                // Updates have to be done to single objects, unlike inserts
+                // where we can insert many items at once
                 picture.update(db)
             })
             .collect();
@@ -107,7 +105,7 @@ pub(crate) async fn add_new_images(
     images: Vec<PictureData>,
 ) -> Result<(), Error> {
     let mut futures = vec![];
-    for group in &images.into_iter().map(PictureData::to_active).chunks(1024) {
+    for group in &images.into_iter().map(PictureData::as_active).chunks(1024) {
         futures.push(picture::Entity::insert_many(group).exec(db))
     }
     join_all(futures).await;

@@ -1,5 +1,12 @@
 # TODO
 
+- Include rating scale
+- Go to preview from Grid on double click
+- progress bar
+- Hover labels for buttons (tooltips)
+- Run migrations and database on app initialisation
+- log and ignore empty / malformed files on import
+- Documentation of code / modules / functions / classes
 - Update file location
   - Instead of crashing when directory is not found, prompt for dialog to find again
   - Update all images, not just those shown (that is, the hidden ones)
@@ -17,10 +24,19 @@
 
 ## Ideas
 
+- Computing image transformations using WGPU compute
+
 - Facial Recognition
 - Item recognition
 
 ## DONE
+- Style
+  - Add bars between buttons
+  - Shrink buttons for Picked
+  - alignment of buttons for picked
+- Order directories
+- Scroll to selected widget
+- Zoom in based on max not min
 - Style of Widgets
 - Implement Grid View
 - Double click to zoom
