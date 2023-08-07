@@ -14,7 +14,9 @@ pub struct DirectoryData {
 
 impl DirectoryData {
     pub fn strip_prefix(&self) -> &Utf8Path {
-        self.directory.strip_prefix("/home/malcolm/").unwrap()
+        self.directory
+            .strip_prefix(dirs::home_dir().unwrap())
+            .unwrap_or(&self.directory)
     }
 }
 

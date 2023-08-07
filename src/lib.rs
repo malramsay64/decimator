@@ -188,7 +188,7 @@ impl AppData {
                     .map(|d| d.strip_prefix().to_string())
                     .collect::<Vec<_>>(),
                 |(_, dir): (usize, String)| AppMsg::SelectDirectory(
-                    Utf8Path::new("/home/malcolm").join(dir).into()
+                    dirs::home_dir().unwrap().join(dir).try_into().unwrap()
                 )
             )
             .style(SelectionListStyles::Default)
