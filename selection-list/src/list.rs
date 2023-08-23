@@ -235,7 +235,7 @@ where
         state: &Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
-        style: &renderer::Style,
+        _style: &renderer::Style,
         layout: Layout<'_>,
         cursor: Cursor,
         viewport: &Rectangle,
@@ -249,9 +249,7 @@ where
         let end = ((offset + viewport.height) / option_height).ceil() as usize;
         let mut layout_iter = layout.children().skip(start);
         let visible_options = &self.ordering[start..end.min(self.ordering.len())];
-        dbg!(self.ordering.len());
         let list_state = state.state.downcast_ref::<ListState<Label>>();
-        println!("There are {} visible options", visible_options.len());
 
         for (i, option) in visible_options.iter().enumerate() {
             let i = start + i;
@@ -284,42 +282,26 @@ where
                     },
                 );
             }
-            // let text_color = if is_selected {
-            //     theme.style(self.style).selected_text_color
-            // } else if is_hovered {
-            //     theme.style(self.style).hovered_text_color
-            // } else {
-            //     theme.style(self.style).text_color
-            // };
 
-            // let style = renderer::Style { text_color };
-            // dbg!(style);
+            let text_color = if is_selected {
+                theme.style(self.style).selected_text_color
+            } else if is_hovered {
+                theme.style(self.style).hovered_text_color
+            } else {
+                theme.style(self.style).text_color
+            };
+
+            let style = renderer::Style { text_color };
 
             self.items.get(option).unwrap().as_widget().draw(
                 &state.children[i],
                 renderer,
                 theme,
-                style,
+                &style,
                 layout_iter.next().unwrap(),
                 cursor,
                 &bounds,
             );
-            // renderer.fill_text(iced::text::Text {
-            //     content: &option.to_string(),
-            //     bounds: Rectangle {
-            //         x: bounds.x,
-            //         y: bounds.center_y(),
-            //         width: f32::INFINITY,
-            //         ..bounds
-            //     },
-            //     size: self.text_size,
-            //     color: text_color,
-            //     font: self.font,
-            //     horizontal_alignment: Horizontal::Left,
-            //     vertical_alignment: Vertical::Center,
-            //     line_height: LineHeight::default(),
-            //     shaping: iced_widget::text::Shaping::Advanced,
-            // });
         }
     }
 }

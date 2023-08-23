@@ -185,9 +185,10 @@ impl AppData {
         column![
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
-                horizontal_space(Length::Fill),
+                horizontal_space(20.),
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
-            ],
+            ]
+            .padding(10),
             SelectionList::new(
                 views,
                 dirs,
@@ -201,7 +202,7 @@ impl AppData {
                 |d| DirectoryData::as_view(d),
             )
         ]
-        .width(240)
+        .width(Length::Shrink)
         .height(Length::Fill)
         .into()
     }
@@ -221,7 +222,7 @@ impl AppData {
             ))
             .id(self.thumbnail_scroller.clone());
 
-        container(column![scroller, vertical_space(10)]).into()
+        scroller.into()
     }
 
     fn grid_view(&self) -> Element<AppMsg> {

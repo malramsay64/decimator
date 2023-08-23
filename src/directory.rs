@@ -2,7 +2,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use iced::advanced::renderer;
 use iced::widget::{button, text};
 use iced::Element;
-use iced_core::Color;
+use iced_core::{Color, Length};
 use iced_style::button::Appearance;
 use iced_style::{theme, Theme};
 
@@ -97,7 +97,7 @@ impl DirectoryData {
         button(text(self.strip_prefix().as_str()))
             .style(theme::Button::custom(ButtonCustomTheme))
             .on_press(AppMsg::SelectDirectory(self.directory.clone()))
-            .width(240)
+            .width(Length::Fill)
             .into()
     }
 
@@ -105,7 +105,7 @@ impl DirectoryData {
         button(text(self.strip_prefix().as_str()))
             .style(theme::Button::custom(ButtonCustomTheme))
             .on_press(AppMsg::SelectDirectory(self.directory.clone()))
-            .width(240)
+            .width(Length::Fill)
             .into()
     }
 }
