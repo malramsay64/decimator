@@ -31,44 +31,40 @@ impl Ord for PictureThumbnail {
 impl PictureThumbnail {
     pub fn view(self) -> Element<'static, AppMsg> {
         if let Some(thumbnail) = self.thumbnail {
-            button(
-                column![
-                    iced::widget::image(image::Handle::from_pixels(
-                        thumbnail.width(),
-                        thumbnail.height(),
-                        thumbnail.to_vec()
-                    ))
-                    .width(240)
-                    .height(240),
-                    row![
-                        choice(
-                            text("I").into(),
-                            Selection::Ignore,
-                            Some(self.selection),
-                            |s| { AppMsg::SetSelection(s) }
-                        )
-                        .width(40),
-                        choice(
-                            text("O").into(),
-                            Selection::Ordinary,
-                            Some(self.selection),
-                            |s| { AppMsg::SetSelection(s) }
-                        )
-                        .width(40),
-                        choice(
-                            text("P").into(),
-                            Selection::Pick,
-                            Some(self.selection),
-                            |s| { AppMsg::SetSelection(s) }
-                        )
-                        .width(40),
-                    ]
+            column![
+                iced::widget::image(image::Handle::from_pixels(
+                    thumbnail.width(),
+                    thumbnail.height(),
+                    thumbnail.to_vec()
+                ))
+                .width(240)
+                .height(240),
+                row![
+                    choice(
+                        text("I").into(),
+                        Selection::Ignore,
+                        Some(self.selection),
+                        |s| { AppMsg::SetSelection(s) }
+                    )
+                    .width(40),
+                    choice(
+                        text("O").into(),
+                        Selection::Ordinary,
+                        Some(self.selection),
+                        |s| { AppMsg::SetSelection(s) }
+                    )
+                    .width(40),
+                    choice(
+                        text("P").into(),
+                        Selection::Pick,
+                        Some(self.selection),
+                        |s| { AppMsg::SetSelection(s) }
+                    )
+                    .width(40),
                 ]
-                .align_items(iced_core::Alignment::Center)
-                .padding(10),
-            )
-            .style(iced::theme::Button::custom(ButtonCustomTheme))
-            .on_press(AppMsg::UpdatePictureView(Some(self.id)))
+            ]
+            .align_items(iced_core::Alignment::Center)
+            .padding(10)
             .into()
         } else {
             column![text("No thumbnail")]

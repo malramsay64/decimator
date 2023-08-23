@@ -163,6 +163,10 @@ impl ThumbnailView {
         self.update_inner()
     }
 
+    pub fn positions(&self) -> Vec<Uuid> {
+        self.positions.clone()
+    }
+
     pub fn get_view(&self) -> Vec<PictureThumbnail> {
         self.positions
             .iter()

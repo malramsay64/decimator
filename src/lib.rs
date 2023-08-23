@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
@@ -12,11 +12,10 @@ use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
 use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
 use iced_widget::scrollable::{Id, Properties};
-use iced_widget::vertical_space;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use selection_list::SelectionList;
+use selection_list::SelectionListBuilder;
 use uuid::Uuid;
 use widget::choice;
 
@@ -173,15 +172,8 @@ impl AppData {
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
-        let dirs: Vec<_> = self
-            .directories
-            .clone()
-            .into_iter()
-            .sorted_unstable()
-            .rev()
-            .collect();
-
-        let views: Vec<_> = dirs.clone();
+        let dirs = self.directories.iter().sorted_unstable().rev();
+        let values: Vec<_> = dirs.clone().zip(dirs.map(DirectoryData::view)).collect();
         column![
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
@@ -189,18 +181,11 @@ impl AppData {
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ]
             .padding(10),
-            SelectionList::new(
-                views,
-                dirs,
-                |dir| {
-                    AppMsg::SelectDirectory(
-                        Utf8Path::new("/home/malcolm")
-                            .join(dir.directory.clone())
-                            .into(),
-                    )
-                },
-                |d| DirectoryData::as_view(d),
-            )
+            SelectionListBuilder::new(values, |dir| {
+                AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
+            },)
+            .width(200.)
+            .build()
         ]
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -208,21 +193,22 @@ impl AppData {
     }
 
     fn thumbnail_view(&self) -> Element<AppMsg> {
-        let thumbnails = lazy(self.thumbnail_view.version(), |_| {
-            row(self
-                .thumbnail_view
-                .get_view()
-                .into_iter()
-                .map(PictureThumbnail::view)
-                .collect())
-        });
-        let scroller = scrollable(thumbnails)
-            .direction(iced::widget::scrollable::Direction::Horizontal(
-                iced::widget::scrollable::Properties::default(),
-            ))
-            .id(self.thumbnail_scroller.clone());
-
-        scroller.into()
+        let view: Vec<_> = self
+            .thumbnail_view
+            .positions()
+            .into_iter()
+            .zip(
+                self.thumbnail_view
+                    .get_view()
+                    .into_iter()
+                    .map(PictureThumbnail::view),
+            )
+            .collect();
+        SelectionListBuilder::new(view, |i| AppMsg::UpdatePictureView(Some(i)))
+            .direction(selection_list::Direction::Horizontal)
+            .height(320.)
+            .build()
+            .into()
     }
 
     fn grid_view(&self) -> Element<AppMsg> {
@@ -422,23 +408,7 @@ impl Application for App {
                         inner.thumbnail_view.set_hidden(value);
                         Command::none()
                     }
-                    AppMsg::ScrollTo(id) => {
-                        if inner.app_view == AppView::Preview {
-                            if let Some(pos) = inner.thumbnail_view.get_position(&id) {
-                                scrollable::scroll_to(
-                                    inner.thumbnail_scroller.clone(),
-                                    scrollable::AbsoluteOffset {
-                                        x: pos as f32 * 240.,
-                                        y: 0.,
-                                    },
-                                )
-                            } else {
-                                Command::none()
-                            }
-                        } else {
-                            Command::none()
-                        }
-                    }
+                    AppMsg::ScrollTo(_id) => Command::none(),
                     AppMsg::SetSelection(s) => {
                         if let Some(id) = inner.preview {
                             inner.thumbnail_view.set_selection(&id, s);
