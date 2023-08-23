@@ -40,12 +40,10 @@ impl Application for App {
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
         row![
             SelectionList::new(
-                self.items
-                    .iter()
-                    .map(|i| text(format!("{i}")).into())
-                    .collect(),
+                self.items.clone(),
                 self.items.iter().enumerate().map(|(i, _)| i).collect(),
                 |_| AppMsg::None,
+                |t| text(format!("{t}")).into()
             )
             .width(400)
             .height(Length::Fill),

@@ -10,14 +10,13 @@ use iced::widget::{
 };
 use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
-use iced_aw::{
-    menu_bar, menu_tree, quad, CloseCondition, MenuTree, SelectionList, SelectionListStyles,
-};
+use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
 use iced_widget::scrollable::{Id, Properties};
 use iced_widget::vertical_space;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use selection_list::SelectionList;
 use uuid::Uuid;
 use widget::choice;
 
@@ -174,6 +173,15 @@ impl AppData {
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
+        let dirs: Vec<_> = self
+            .directories
+            .clone()
+            .into_iter()
+            .sorted_unstable()
+            .rev()
+            .collect();
+
+        let views: Vec<_> = dirs.clone();
         column![
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
@@ -181,17 +189,17 @@ impl AppData {
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ],
             SelectionList::new(
-                self.directories
-                    .iter()
-                    .sorted()
-                    .rev()
-                    .map(|d| d.strip_prefix().to_string())
-                    .collect::<Vec<_>>(),
-                |(_, dir): (usize, String)| AppMsg::SelectDirectory(
-                    Utf8Path::new("/home/malcolm").join(dir).into()
-                )
+                views,
+                dirs,
+                |dir| {
+                    AppMsg::SelectDirectory(
+                        Utf8Path::new("/home/malcolm")
+                            .join(dir.directory.clone())
+                            .into(),
+                    )
+                },
+                |d| DirectoryData::as_view(d),
             )
-            .style(SelectionListStyles::Default)
         ]
         .width(240)
         .height(Length::Fill)

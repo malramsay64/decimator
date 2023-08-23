@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use iced::advanced::renderer;
 use iced::widget::{button, text};
 use iced::Element;
 use iced_core::Color;
@@ -7,14 +8,16 @@ use iced_style::{theme, Theme};
 
 use crate::AppMsg;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DirectoryData {
     pub directory: Utf8PathBuf,
 }
 
 impl DirectoryData {
     pub fn strip_prefix(&self) -> &Utf8Path {
-        self.directory.strip_prefix("/home/malcolm/").unwrap()
+        self.directory
+            .strip_prefix(dirs::home_dir().unwrap())
+            .unwrap()
     }
 }
 
@@ -90,7 +93,15 @@ impl button::StyleSheet for ButtonCustomTheme {
 }
 
 impl DirectoryData {
-    pub fn view(&self) -> Element<AppMsg> {
+    pub fn view(&self) -> Element<'_, AppMsg, iced::Renderer<Theme>> {
+        button(text(self.strip_prefix().as_str()))
+            .style(theme::Button::custom(ButtonCustomTheme))
+            .on_press(AppMsg::SelectDirectory(self.directory.clone()))
+            .width(240)
+            .into()
+    }
+
+    pub fn as_view<'a>(self) -> Element<'a, AppMsg, iced::Renderer<Theme>> {
         button(text(self.strip_prefix().as_str()))
             .style(theme::Button::custom(ButtonCustomTheme))
             .on_press(AppMsg::SelectDirectory(self.directory.clone()))

@@ -116,12 +116,14 @@ where
     Message: Clone + 'static,
     Renderer::Theme: StyleSheet + container::StyleSheet + scrollable::StyleSheet,
 {
-    pub fn new(
-        items: Vec<Element<'a, Message, Renderer>>,
+    pub fn new<Item>(
+        items: Vec<Item>,
         labels: Vec<Label>,
         on_selected: impl Fn(Label) -> Message + 'static,
+        view_func: impl Fn(Item) -> Element<'a, Message, Renderer>,
     ) -> Self
 where {
+        let items: Vec<_> = items.into_iter().map(view_func).collect();
         let container = Container::new(
             Scrollable::new(list::List::new(items, labels, on_selected, 200., 40.))
                 .width(Length::Fill),
