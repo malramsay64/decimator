@@ -7,7 +7,8 @@ use iced::advanced::mouse::{self, Cursor};
 use iced::advanced::widget::tree::{State, Tag};
 use iced::advanced::widget::Tree;
 use iced::advanced::{layout, renderer, Clipboard, Layout, Shell, Widget};
-use iced::{event, touch, Color, Element, Event, Length, Point, Rectangle, Size};
+use iced::keyboard::KeyCode;
+use iced::{event, keyboard, touch, Color, Element, Event, Length, Point, Rectangle, Size};
 
 use super::StyleSheet;
 
@@ -199,6 +200,43 @@ where
 
         if let Some(cursor) = cursor.position_over(bounds) {
             match event {
+                Event::Keyboard(keyboard::Event::KeyReleased {
+                    key_code: KeyCode::Left | KeyCode::H,
+                    ..
+                }) => {
+                    list_state.last_selected_index =
+                        list_state.last_selected_index.map(|i| i.saturating_sub(1));
+                    status = list_state.last_selected_index.as_ref().map_or(
+                        event::Status::Ignored,
+                        |last| {
+                            if let Some(option) = self.labels.get(*last) {
+                                shell.publish((self.on_selected)(option.clone()));
+                                event::Status::Captured
+                            } else {
+                                event::Status::Ignored
+                            }
+                        },
+                    );
+                }
+                Event::Keyboard(keyboard::Event::KeyReleased {
+                    key_code: KeyCode::Right | KeyCode::L,
+                    ..
+                }) => {
+                    list_state.last_selected_index = list_state
+                        .last_selected_index
+                        .map(|i| (i + 1).min(self.items.len()));
+                    status = list_state.last_selected_index.as_ref().map_or(
+                        event::Status::Ignored,
+                        |last| {
+                            if let Some(option) = self.labels.get(*last) {
+                                shell.publish((self.on_selected)(option.clone()));
+                                event::Status::Captured
+                            } else {
+                                event::Status::Ignored
+                            }
+                        },
+                    );
+                }
                 Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                     list_state.hovered_option = match self.direction {
                         Direction::Vertical => Some(
@@ -225,7 +263,7 @@ where
                     };
 
                     if let Some(id) = list_state.hovered_option {
-                        if let Some(_option) = self.labels.get(id) {
+                        if self.labels.get(id).is_some() {
                             list_state.last_selected_index = Some(id);
                         }
                     }

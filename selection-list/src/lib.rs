@@ -88,12 +88,15 @@ where
             Direction::Horizontal => scrollable::Direction::Horizontal(Properties::default()),
         };
         let container = Container::new(
-            Scrollable::new(list::List::new(
-                self.values,
-                self.on_selected,
-                self.item_width,
-                self.item_height,
-            ))
+            Scrollable::new(
+                list::List::new(
+                    self.values,
+                    self.on_selected,
+                    self.item_width,
+                    self.item_height,
+                )
+                .direction(self.direction),
+            )
             .direction(scrollable_direction),
         )
         .width(self.width)

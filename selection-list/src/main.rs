@@ -1,4 +1,4 @@
-use iced::widget::{horizontal_space, row, text};
+use iced::widget::{column, row, text, vertical_space};
 use iced::{Application, Command, Length, Settings, Theme};
 use selection_list::SelectionListBuilder;
 
@@ -38,20 +38,33 @@ impl Application for App {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
-        let items: Vec<_> = self
+        let items_vertical: Vec<_> = self
+            .items
+            .iter()
+            .map(|i| (i.clone(), text(i).into()))
+            .collect();
+        let items_horizontal: Vec<_> = self
             .items
             .iter()
             .map(|i| (i.clone(), text(i).into()))
             .collect();
         row![
-            SelectionListBuilder::new(items, |_| AppMsg::None,)
+            SelectionListBuilder::new(items_vertical, |_| AppMsg::None,)
                 .item_height(30.)
                 .item_width(200.)
                 .width(200)
                 .height(Length::Fill)
                 .direction(selection_list::Direction::Vertical)
                 .build(),
-            horizontal_space(Length::Fill)
+            column![
+                vertical_space(Length::Fill),
+                SelectionListBuilder::new(items_horizontal, |_| AppMsg::None,)
+                    .item_height(60.)
+                    .item_width(100.)
+                    .height(70)
+                    .direction(selection_list::Direction::Horizontal)
+                    .build(),
+            ],
         ]
         .into()
     }
