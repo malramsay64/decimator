@@ -1,5 +1,4 @@
 //! Build and show dropdown `ListMenus`.
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
@@ -27,8 +26,8 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub items: HashMap<Label, Element<'a, Message, Renderer>>,
-    pub ordering: Vec<Label>,
+    pub items: Vec<Element<'a, Message, Renderer>>,
+    pub labels: Vec<Label>,
     /// Hovered Item Pointer
     /// Style for Font colors and Box hover colors.
     pub style: <Renderer::Theme as StyleSheet>::Style,
@@ -47,7 +46,7 @@ where
 
 impl<'a, Label, Message, Renderer> List<'a, Label, Message, Renderer>
 where
-    Label: Clone + Eq + Hash + 'a,
+    Label: Clone + Eq + Hash,
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
@@ -57,13 +56,12 @@ where
         item_width: f32,
         item_height: f32,
     ) -> Self {
-        let ordering: Vec<_> = values.iter().map(|(i, _)| i.clone()).collect();
-        let items: HashMap<_, _> = values.into_iter().collect();
+        let (labels, items) = values.into_iter().unzip();
         Self {
             items,
+            labels,
             item_width,
             item_height,
-            ordering,
             selected: None,
             style: <Renderer::Theme as StyleSheet>::Style::default(),
             on_selected: Box::new(on_selected),
@@ -71,13 +69,6 @@ where
             padding: 0.,
             direction: Default::default(),
         }
-    }
-
-    pub fn items(&self) -> Vec<&Element<'a, Message, Renderer>> {
-        self.ordering
-            .iter()
-            .filter_map(|i| self.items.get(i))
-            .collect()
     }
 
     #[must_use]
@@ -126,18 +117,18 @@ where
         }
     }
     fn children(&self) -> Vec<Tree> {
-        self.items().into_iter().map(Tree::new).collect()
+        self.items.iter().map(Tree::new).collect()
     }
 
     fn diff(&self, state: &mut Tree) {
-        state.diff_children(&self.items());
+        state.diff_children(&self.items);
         let list_state = state.state.downcast_mut::<ListState>();
 
-        if let Some(id) = &self.selected {
-            list_state.last_selected_index = self.ordering.iter().position(|x| x == id);
-        } else if let Some(_id) = &list_state.last_selected_index {
-            // list_state.last_selected_index = self.ordering.iter().position(|x| x == id);
-        }
+        // if let Some(id) = &self.selected {
+        //     list_state.last_selected_index = self.labels.iter().position(|x| x == id);
+        // } else if let Some(_id) = &list_state.last_selected_index {
+        //     // list_state.last_selected_index = self.ordering.iter().position(|x| x == id);
+        // }
     }
 
     fn width(&self) -> Length {
@@ -161,17 +152,17 @@ where
         let intrinsic = match self.direction {
             Direction::Vertical => Size::new(
                 limits.fill().width,
-                (self.item_height + (self.padding * 2.0)) * self.ordering.len() as f32,
+                (self.item_height + (self.padding * 2.0)) * self.labels.len() as f32,
             ),
             Direction::Horizontal => Size::new(
-                (self.item_width + (self.padding * 2.0)) * self.ordering.len() as f32,
+                (self.item_width + (self.padding * 2.0)) * self.labels.len() as f32,
                 limits.fill().height,
             ),
         };
-        let mut nodes: Vec<layout::Node> = Vec::with_capacity(self.ordering.len());
-        nodes.resize(self.ordering.len(), layout::Node::default());
+        let mut nodes: Vec<layout::Node> = Vec::with_capacity(self.labels.len());
+        nodes.resize(self.labels.len(), layout::Node::default());
 
-        for (index, (node, child)) in nodes.iter_mut().zip(self.items()).enumerate() {
+        for (index, (node, child)) in nodes.iter_mut().zip(self.items.iter()).enumerate() {
             let child_limits = Limits::new(
                 Size::new(self.item_width, self.item_height),
                 Size::new(self.item_width, self.item_height),
@@ -234,7 +225,7 @@ where
                     };
 
                     if let Some(id) = list_state.hovered_option {
-                        if let Some(option) = self.ordering.get(id) {
+                        if let Some(_option) = self.labels.get(id) {
                             list_state.last_selected_index = Some(id);
                         }
                     }
@@ -242,7 +233,7 @@ where
                     status = list_state.last_selected_index.as_ref().map_or(
                         event::Status::Ignored,
                         |last| {
-                            if let Some(option) = self.ordering.get(*last) {
+                            if let Some(option) = self.labels.get(*last) {
                                 shell.publish((self.on_selected)(option.clone()));
                                 event::Status::Captured
                             } else {
@@ -270,7 +261,7 @@ where
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
 
-        if bounds.contains(cursor.position().unwrap_or_default()) {
+        if cursor.is_over(bounds) {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::default()
@@ -312,27 +303,26 @@ where
 
         let list_state = state.state.downcast_ref::<ListState>();
 
-        for (index, (option, layout)) in self
-            .ordering
+        for (index, (item, layout)) in self
+            .items
             .iter()
             .zip(layout.children())
+            .enumerate()
             .skip(skip)
             .take(take)
-            .enumerate()
         {
-            let i = skip + index;
-            let is_selected = list_state.last_selected_index == Some(i);
-            let is_hovered = list_state.hovered_option == Some(i);
+            let is_selected = list_state.last_selected_index == Some(index);
+            let is_hovered = list_state.hovered_option == Some(index);
 
             let bounds = match self.direction {
                 Direction::Vertical => Rectangle {
                     x: bounds.x,
-                    y: bounds.y + option_height * i as f32,
+                    y: bounds.y + option_height * index as f32,
                     width: option_width,
                     height: option_height,
                 },
                 Direction::Horizontal => Rectangle {
-                    x: bounds.x + option_width * i as f32,
+                    x: bounds.x + option_width * index as f32,
                     y: bounds.y,
                     width: option_width,
                     height: option_height,
@@ -355,6 +345,16 @@ where
                 );
             }
 
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds,
+                    border_radius: (0.0).into(),
+                    border_width: 5.0,
+                    border_color: Color::new(1., 0., 0., 1.),
+                },
+                theme.style(self.style).background,
+            );
+
             let text_color = if is_selected {
                 theme.style(self.style).selected_text_color
             } else if is_hovered {
@@ -365,8 +365,8 @@ where
 
             let style = renderer::Style { text_color };
 
-            self.items.get(option).unwrap().as_widget().draw(
-                &state.children[i],
+            item.as_widget().draw(
+                &state.children[index],
                 renderer,
                 theme,
                 &style,

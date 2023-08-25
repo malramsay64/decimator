@@ -14,13 +14,6 @@ mod style;
 pub use list::Direction;
 use style::StyleSheet;
 
-#[derive(Default, Clone, Copy, Debug)]
-enum Order {
-    #[default]
-    Ascending,
-    Descending,
-}
-
 pub struct SelectionListBuilder<'a, Label, Message, Renderer = iced::Renderer>
 where
     Label: Eq + Hash + Clone,
@@ -134,7 +127,7 @@ where
 
 impl<'a, Label, Message, Renderer> SelectionList<'a, Label, Message, Renderer>
 where
-    Label: Clone + Hash + Eq + 'a,
+    Label: Clone + Hash + Eq,
     Renderer: renderer::Renderer + 'a,
     Message: Clone + 'a,
     Renderer::Theme: StyleSheet + scrollable::StyleSheet + container::StyleSheet,

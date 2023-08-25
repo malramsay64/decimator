@@ -1,6 +1,6 @@
 use iced::widget::{horizontal_space, row, text};
 use iced::{Application, Command, Length, Settings, Theme};
-use selection_list::SelectionList;
+use selection_list::SelectionListBuilder;
 
 #[derive(Debug, Clone)]
 enum AppMsg {
@@ -38,15 +38,17 @@ impl Application for App {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+        let items: Vec<_> = self
+            .items
+            .iter()
+            .map(|i| (i.clone(), text(format!("{i}")).into()))
+            .collect();
         row![
-            SelectionList::new(
-                self.items.clone(),
-                self.items.iter().enumerate().map(|(i, _)| i).collect(),
-                |_| AppMsg::None,
-                |t| text(format!("{t}")).into()
-            )
-            .width(400)
-            .height(Length::Fill),
+            SelectionListBuilder::new(items, |_| AppMsg::None,)
+                .item_height(30.)
+                .width(400)
+                .height(Length::Fill)
+                .build(),
             horizontal_space(Length::Fill)
         ]
         .into()
