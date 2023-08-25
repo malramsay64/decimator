@@ -41,13 +41,15 @@ impl Application for App {
         let items: Vec<_> = self
             .items
             .iter()
-            .map(|i| (i.clone(), text(format!("{i}")).into()))
+            .map(|i| (i.clone(), text(i).into()))
             .collect();
         row![
             SelectionListBuilder::new(items, |_| AppMsg::None,)
                 .item_height(30.)
-                .width(400)
+                .item_width(200.)
+                .width(200)
                 .height(Length::Fill)
+                .direction(selection_list::Direction::Vertical)
                 .build(),
             horizontal_space(Length::Fill)
         ]

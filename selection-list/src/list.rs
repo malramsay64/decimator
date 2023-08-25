@@ -38,7 +38,7 @@ where
     pub item_width: f32,
     pub item_height: f32,
     /// Set the Selected ID manually.
-    pub selected: Option<Label>,
+    pub selected: Option<usize>,
     /// Shadow Type holder for Renderer.
     pub renderer: PhantomData<Renderer>,
     pub direction: Direction,
@@ -124,11 +124,11 @@ where
         state.diff_children(&self.items);
         let list_state = state.state.downcast_mut::<ListState>();
 
-        // if let Some(id) = &self.selected {
-        //     list_state.last_selected_index = self.labels.iter().position(|x| x == id);
-        // } else if let Some(_id) = &list_state.last_selected_index {
-        //     // list_state.last_selected_index = self.ordering.iter().position(|x| x == id);
-        // }
+        if let Some(id) = self.selected {
+            list_state.last_selected_index = Some(id);
+        } else if let Some(id) = list_state.last_selected_index {
+            list_state.last_selected_index = Some(id);
+        }
     }
 
     fn width(&self) -> Length {
@@ -308,8 +308,8 @@ where
             .iter()
             .zip(layout.children())
             .enumerate()
-            .skip(skip)
             .take(take)
+            .skip(skip)
         {
             let is_selected = list_state.last_selected_index == Some(index);
             let is_hovered = list_state.hovered_option == Some(index);
@@ -344,16 +344,6 @@ where
                     },
                 );
             }
-
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds,
-                    border_radius: (0.0).into(),
-                    border_width: 5.0,
-                    border_color: Color::new(1., 0., 0., 1.),
-                },
-                theme.style(self.style).background,
-            );
 
             let text_color = if is_selected {
                 theme.style(self.style).selected_text_color
