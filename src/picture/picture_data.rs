@@ -135,7 +135,7 @@ impl From<picture::Model> for PictureData {
 }
 
 impl PictureData {
-    pub fn as_active(self) -> picture::ActiveModel {
+    pub fn into_active(self) -> picture::ActiveModel {
         let mut thumbnail = Cursor::new(vec![]);
         if let Some(f) = self.thumbnail.as_ref() {
             f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap();

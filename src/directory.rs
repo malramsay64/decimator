@@ -104,10 +104,4 @@ impl DirectoryData {
             .width(Length::Fill)
             .into()
     }
-
-    pub fn as_view<'a>(self) -> Element<'a, AppMsg, iced::Renderer<Theme>> {
-        text(self.strip_prefix().as_str())
-            .width(Length::Fill)
-            .into()
-    }
 }

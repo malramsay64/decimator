@@ -104,7 +104,11 @@ pub(crate) async fn add_new_images(
     images: Vec<PictureData>,
 ) -> Result<(), Error> {
     let mut futures = vec![];
-    for group in &images.into_iter().map(PictureData::as_active).chunks(1024) {
+    for group in &images
+        .into_iter()
+        .map(PictureData::into_active)
+        .chunks(1024)
+    {
         futures.push(picture::Entity::insert_many(group).exec(db))
     }
     join_all(futures).await;
