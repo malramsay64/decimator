@@ -4,6 +4,7 @@ use camino::Utf8PathBuf;
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
+use iced::advanced::widget::Id;
 use iced::keyboard::KeyCode;
 use iced::widget::{
     button, column, container, horizontal_space, lazy, row, scrollable, text, toggler,
@@ -11,7 +12,7 @@ use iced::widget::{
 use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
 use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
-use iced_widget::scrollable::{Id, Properties};
+use iced_widget::scrollable::Properties;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -29,6 +30,7 @@ mod picture;
 pub mod telemetry;
 mod thumbnail;
 mod widget;
+
 use directory::DirectoryData;
 use entity::Selection;
 use picture::PictureThumbnail;
@@ -83,7 +85,7 @@ pub struct AppData {
 
     app_view: AppView,
     thumbnail_view: ThumbnailView,
-    thumbnail_scroller: scrollable::Id,
+    thumbnail_scroller: Id,
 
     preview: Option<Uuid>,
     preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
@@ -183,8 +185,10 @@ impl AppData {
             .padding(10),
             SelectionListBuilder::new(values, |dir| {
                 AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
-            },)
-            .width(200.)
+            })
+            .item_width(250.)
+            .item_height(30.)
+            .width(260.)
             .build()
         ]
         .width(Length::Shrink)
@@ -206,7 +210,10 @@ impl AppData {
             .collect();
         SelectionListBuilder::new(view, |i| AppMsg::UpdatePictureView(Some(i)))
             .direction(selection_list::Direction::Horizontal)
+            .item_height(320.)
+            .item_width(240.)
             .height(320.)
+            .id(self.thumbnail_scroller.clone())
             .build()
             .into()
     }
@@ -306,7 +313,6 @@ impl Application for App {
 
     #[tracing::instrument(name = "Updating App", level = "info", skip(self))]
     fn update(&mut self, msg: Self::Message) -> Command<AppMsg> {
-        tracing::info!("{:?}", &msg);
         match self {
             Self::Uninitialised => match msg {
                 AppMsg::Initialise(database) => {
@@ -390,6 +396,7 @@ impl Application for App {
                     }
                     AppMsg::SetThumbnails(thumbnails) => {
                         inner.thumbnail_view.set_thumbnails(thumbnails);
+                        inner.preview = None;
                         Command::none()
                     }
                     AppMsg::DisplayPick(value) => {
@@ -452,20 +459,26 @@ impl Application for App {
                     AppMsg::SelectionPrintRequest => Command::none(),
                     AppMsg::Ignore => Command::none(),
                     AppMsg::ThumbnailNext => {
-                        inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
-                        if let Some(id) = inner.preview {
-                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
-                        } else {
-                            Command::none()
-                        }
+                        tracing::info!("Selecting Next");
+                        selection_list::command_select_next(inner.thumbnail_scroller.clone())
+                        // selection_list::select_next::<()>(inner.thumbnail_scroller.clone());
+                        // inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
+                        // if let Some(id) = inner.preview {
+                        //     Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                        // } else {
+                        //     Command::none()
+                        // }
+                        // Command::none()
                     }
                     AppMsg::ThumbnailPrev => {
-                        inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
-                        if let Some(id) = inner.preview {
-                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
-                        } else {
-                            Command::none()
-                        }
+                        tracing::info!("Selecting Prev");
+                        selection_list::command_select_next(inner.thumbnail_scroller.clone())
+                        // inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
+                        // if let Some(id) = inner.preview {
+                        //     Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                        // } else {
+                        //     Command::none()
+                        // }
                     }
                     AppMsg::UpdatePictureView(preview) => {
                         inner.preview = preview;

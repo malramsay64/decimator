@@ -1,5 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use iced::widget::{button, text};
+use iced::widget::{button, text, Container};
 use iced::Element;
 use iced_core::{Color, Length};
 use iced_style::button::Appearance;
@@ -100,8 +100,9 @@ impl button::StyleSheet for ButtonCustomTheme {
 
 impl DirectoryData {
     pub fn view(&self) -> Element<'_, AppMsg, iced::Renderer<Theme>> {
-        text(self.strip_prefix().as_str())
-            .width(Length::Fill)
+        Container::new(text(self.strip_prefix().as_str()).width(Length::Fill))
+            .align_y(iced::alignment::Vertical::Center)
+            .height(Length::Fill)
             .into()
     }
 }

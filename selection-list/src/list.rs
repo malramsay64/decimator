@@ -4,11 +4,14 @@ use std::marker::PhantomData;
 
 use iced::advanced::layout::Limits;
 use iced::advanced::mouse::{self, Cursor};
+use iced::advanced::widget::operation::scope;
 use iced::advanced::widget::tree::{State, Tag};
-use iced::advanced::widget::Tree;
+use iced::advanced::widget::{Id, Operation, Tree};
 use iced::advanced::{layout, renderer, Clipboard, Layout, Shell, Widget};
 use iced::keyboard::KeyCode;
-use iced::{event, keyboard, touch, Color, Element, Event, Length, Point, Rectangle, Size};
+use iced::{
+    event, keyboard, touch, widget, Color, Command, Element, Event, Length, Point, Rectangle, Size,
+};
 
 use super::StyleSheet;
 
@@ -38,8 +41,6 @@ where
     pub padding: f32,
     pub item_width: f32,
     pub item_height: f32,
-    /// Set the Selected ID manually.
-    pub selected: Option<usize>,
     /// Shadow Type holder for Renderer.
     pub renderer: PhantomData<Renderer>,
     pub direction: Direction,
@@ -63,7 +64,6 @@ where
             labels,
             item_width,
             item_height,
-            selected: None,
             style: <Renderer::Theme as StyleSheet>::Style::default(),
             on_selected: Box::new(on_selected),
             renderer: PhantomData,
@@ -92,10 +92,37 @@ where
 /// The Private [`ListState`] Handles the State of the inner list.
 #[derive(Debug, Clone, Default)]
 pub struct ListState {
+    pub length: Option<usize>,
     /// Statehood of hovered_option
     pub hovered_option: Option<usize>,
     /// The index in the list of options of the last chosen Item Clicked for Processing
-    pub last_selected_index: Option<usize>,
+    pub selected_index: Option<usize>,
+}
+
+impl ListState {
+    pub fn select_next(&mut self) {
+        match (self.selected_index, self.length) {
+            (Some(index), Some(length)) => {
+                let new_state = (index + 1).min(length - 1);
+                if new_state != index {
+                    self.selected_index.replace(new_state);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    pub fn select_prev(&mut self) {
+        match self.selected_index {
+            Some(index) => {
+                let new_state = index.saturating_sub(1);
+                if new_state != index {
+                    self.selected_index.replace(new_state);
+                }
+            }
+            _ => (),
+        }
+    }
 }
 
 impl<'a, Label, Message, Renderer> Widget<Message, Renderer> for List<'a, Label, Message, Renderer>
@@ -111,25 +138,40 @@ where
     fn state(&self) -> State {
         {
             let state: ListState = ListState {
+                length: Some(self.items.len()),
                 hovered_option: None,
-                last_selected_index: None,
+                selected_index: None,
             };
             State::Some(Box::new(state))
         }
     }
+
     fn children(&self) -> Vec<Tree> {
         self.items.iter().map(Tree::new).collect()
     }
 
     fn diff(&self, state: &mut Tree) {
         state.diff_children(&self.items);
-        let list_state = state.state.downcast_mut::<ListState>();
+        // let list_state = state.state.downcast_mut::<ListState>();
 
-        if let Some(id) = self.selected {
-            list_state.last_selected_index = Some(id);
-        } else if let Some(id) = list_state.last_selected_index {
-            list_state.last_selected_index = Some(id);
-        }
+        // if let Some(id) = self.selected {
+        //     list_state.last_selected_index = Some(id);
+        // } else if let Some(id) = list_state.last_selected_index {
+        //     list_state.last_selected_index = Some(id);
+        // }
+    }
+
+    fn operate(
+        &self,
+        state: &mut Tree,
+        _layout: Layout<'_>,
+        _renderer: &Renderer,
+        operation: &mut dyn iced::advanced::widget::Operation<Message>,
+    ) {
+        tracing::debug!("Running operate function");
+        // let state = state.downcast_mut::<ListState>();
+
+        operation.custom(state, None);
     }
 
     fn width(&self) -> Length {
@@ -147,9 +189,18 @@ where
     }
 
     fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        use std::f32;
+        // Calculating the width and height of the items on demand. Not sure how to do this
+        // or even whether I should do this.
+        // let (item_width, item_height) = self
+        //     .items
+        //     .iter()
+        //     .map(|i| i.as_widget().layout(renderer, limits).size())
+        //     .fold((0.0_f32, 0.0_f32), |(w, h), size| {
+        //         (w.max(size.width), h.max(size.height))
+        //     });
         let limits = limits.height(Length::Fill).width(Length::Fill);
 
+        // Calculate the size based on all the widgets contained within the list
         let intrinsic = match self.direction {
             Direction::Vertical => Size::new(
                 limits.fill().width,
@@ -160,8 +211,7 @@ where
                 limits.fill().height,
             ),
         };
-        let mut nodes: Vec<layout::Node> = Vec::with_capacity(self.labels.len());
-        nodes.resize(self.labels.len(), layout::Node::default());
+        let mut nodes = vec![layout::Node::default(); self.labels.len()];
 
         for (index, (node, child)) in nodes.iter_mut().zip(self.items.iter()).enumerate() {
             let child_limits = Limits::new(
@@ -200,43 +250,6 @@ where
 
         if let Some(cursor) = cursor.position_over(bounds) {
             match event {
-                Event::Keyboard(keyboard::Event::KeyReleased {
-                    key_code: KeyCode::Left | KeyCode::H,
-                    ..
-                }) => {
-                    list_state.last_selected_index =
-                        list_state.last_selected_index.map(|i| i.saturating_sub(1));
-                    status = list_state.last_selected_index.as_ref().map_or(
-                        event::Status::Ignored,
-                        |last| {
-                            if let Some(option) = self.labels.get(*last) {
-                                shell.publish((self.on_selected)(option.clone()));
-                                event::Status::Captured
-                            } else {
-                                event::Status::Ignored
-                            }
-                        },
-                    );
-                }
-                Event::Keyboard(keyboard::Event::KeyReleased {
-                    key_code: KeyCode::Right | KeyCode::L,
-                    ..
-                }) => {
-                    list_state.last_selected_index = list_state
-                        .last_selected_index
-                        .map(|i| (i + 1).min(self.items.len()));
-                    status = list_state.last_selected_index.as_ref().map_or(
-                        event::Status::Ignored,
-                        |last| {
-                            if let Some(option) = self.labels.get(*last) {
-                                shell.publish((self.on_selected)(option.clone()));
-                                event::Status::Captured
-                            } else {
-                                event::Status::Ignored
-                            }
-                        },
-                    );
-                }
                 Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                     list_state.hovered_option = match self.direction {
                         Direction::Vertical => Some(
@@ -264,21 +277,22 @@ where
 
                     if let Some(id) = list_state.hovered_option {
                         if self.labels.get(id).is_some() {
-                            list_state.last_selected_index = Some(id);
+                            list_state.selected_index = Some(id);
                         }
                     }
 
-                    status = list_state.last_selected_index.as_ref().map_or(
-                        event::Status::Ignored,
-                        |last| {
-                            if let Some(option) = self.labels.get(*last) {
-                                shell.publish((self.on_selected)(option.clone()));
-                                event::Status::Captured
-                            } else {
-                                event::Status::Ignored
-                            }
-                        },
-                    );
+                    status =
+                        list_state
+                            .selected_index
+                            .as_ref()
+                            .map_or(event::Status::Ignored, |last| {
+                                if let Some(option) = self.labels.get(*last) {
+                                    shell.publish((self.on_selected)(option.clone()));
+                                    event::Status::Captured
+                                } else {
+                                    event::Status::Ignored
+                                }
+                            });
                 }
                 _ => {}
             }
@@ -349,7 +363,7 @@ where
             .take(take)
             .skip(skip)
         {
-            let is_selected = list_state.last_selected_index == Some(index);
+            let is_selected = list_state.selected_index == Some(index);
             let is_hovered = list_state.hovered_option == Some(index);
 
             let bounds = match self.direction {
@@ -417,4 +431,57 @@ where
     fn from(list: List<'a, Label, Message, Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(list)
     }
+}
+pub fn select_next<T: 'static>(target: Id) -> impl Operation<T> {
+    struct SelectNext();
+
+    impl<T> Operation<T> for SelectNext {
+        fn custom(&mut self, state: &mut dyn std::any::Any, _id: Option<&Id>) {
+            tracing::info!("Running Custom next Operation");
+            state.downcast_mut::<ListState>().unwrap().select_next();
+        }
+
+        fn container(
+            &mut self,
+            _id: Option<&Id>,
+            _bounds: Rectangle,
+            operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
+        ) {
+            operate_on_children(self)
+        }
+    }
+
+    scope(target, SelectNext())
+}
+
+pub fn select_prev<T: 'static>(target: Id) -> impl Operation<T> {
+    struct SelectPrev();
+
+    impl<T> Operation<T> for SelectPrev {
+        fn custom(&mut self, state: &mut dyn std::any::Any, _id: Option<&Id>) {
+            tracing::info!("Running Custom prev Operation");
+            state.downcast_mut::<ListState>().unwrap().select_prev();
+        }
+
+        fn container(
+            &mut self,
+            _id: Option<&Id>,
+            _bounds: Rectangle,
+            operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
+        ) {
+            tracing::info!("Container");
+            operate_on_children(self)
+        }
+    }
+
+    scope(target, SelectPrev())
+}
+
+/// Produces a [`Command`] that focuses the [`TextInput`] with the given [`Id`].
+pub fn command_select_next<Message: 'static>(id: Id) -> Command<Message> {
+    Command::widget(select_next(id))
+}
+/// Produces a [`Command`] that focuses the [`TextInput`] with the given [`Id`].
+pub fn command_select_prev<Message: 'static>(id: Id) -> Command<Message> {
+    Command::widget(select_prev(id))
 }

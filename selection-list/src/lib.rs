@@ -2,17 +2,20 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use iced::advanced::layout::Node;
-use iced::advanced::widget::Tree;
-use iced::advanced::{mouse, renderer, Clipboard, Shell, Widget};
+use iced::advanced::widget::operation::scope;
+use iced::advanced::widget::{self, Operation, Tree};
+use iced::advanced::{self, mouse, renderer, Clipboard, Shell, Widget};
 use iced::widget::scrollable::Properties;
 use iced::widget::{container, scrollable, Container, Scrollable};
-use iced::{event, Element, Event, Length, Rectangle};
+use iced::{event, Command, Element, Event, Length, Rectangle};
 
 mod list;
 mod style;
 
 pub use list::Direction;
 use style::StyleSheet;
+
+pub use crate::list::{command_select_next, command_select_prev, ListState};
 
 pub struct SelectionListBuilder<'a, Label, Message, Renderer = iced::Renderer>
 where
@@ -28,6 +31,7 @@ where
     direction: Direction,
     values: Vec<(Label, Element<'a, Message, Renderer>)>,
     on_selected: Box<dyn Fn(Label) -> Message + 'a>,
+    scroll_id: widget::Id,
 }
 
 impl<'a, Label, Message, Renderer> SelectionListBuilder<'a, Label, Message, Renderer>
@@ -49,6 +53,7 @@ where
             direction: Direction::Vertical,
             values,
             on_selected: Box::new(on_selected),
+            scroll_id: widget::Id::unique(),
         }
     }
 
@@ -82,11 +87,18 @@ where
         self
     }
 
-    pub fn build(self) -> SelectionList<'a, Label, Message, Renderer> {
+    #[must_use]
+    pub fn id(mut self, id: widget::Id) -> Self {
+        self.scroll_id = id;
+        self
+    }
+
+    pub fn build(self) -> SelectionList<'a, Message, Renderer> {
         let scrollable_direction = match self.direction {
             Direction::Vertical => scrollable::Direction::Vertical(Properties::default()),
             Direction::Horizontal => scrollable::Direction::Horizontal(Properties::default()),
         };
+        let scroll_id = scrollable::Id::unique();
         let container = Container::new(
             Scrollable::new(
                 list::List::new(
@@ -97,13 +109,14 @@ where
                 )
                 .direction(self.direction),
             )
-            .direction(scrollable_direction),
+            .direction(scrollable_direction)
+            .id(scroll_id.clone()),
         )
         .width(self.width)
         .height(self.height);
         SelectionList {
+            scroll_id,
             container,
-            phantom_data: PhantomData,
             renderer: PhantomData,
             style: Default::default(),
             width: self.width,
@@ -112,15 +125,14 @@ where
     }
 }
 
-pub struct SelectionList<'a, Label, Message, Renderer = iced::Renderer>
+pub struct SelectionList<'a, Message, Renderer = iced::Renderer>
 where
-    Label: Eq + Hash + Clone,
     Message: Clone,
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet + scrollable::StyleSheet + container::StyleSheet,
 {
+    scroll_id: scrollable::Id,
     container: Container<'a, Message, Renderer>,
-    phantom_data: PhantomData<Label>,
 
     renderer: PhantomData<Renderer>,
     style: <Renderer::Theme as StyleSheet>::Style,
@@ -128,13 +140,16 @@ where
     height: Length,
 }
 
-impl<'a, Label, Message, Renderer> SelectionList<'a, Label, Message, Renderer>
+impl<'a, Message, Renderer> SelectionList<'a, Message, Renderer>
 where
-    Label: Clone + Hash + Eq,
     Renderer: renderer::Renderer + 'a,
     Message: Clone + 'a,
     Renderer::Theme: StyleSheet + scrollable::StyleSheet + container::StyleSheet,
 {
+    pub fn id(&self) -> widget::Id {
+        self.scroll_id.clone().into()
+    }
+
     /// Sets the width of the [`SelectionList`](SelectionList).
     #[must_use]
     pub fn width<L: Into<Length>>(mut self, width: L) -> Self {
@@ -154,10 +169,8 @@ where
     }
 }
 
-impl<'a, Label, Message, Renderer> Widget<Message, Renderer>
-    for SelectionList<'a, Label, Message, Renderer>
+impl<'a, Message, Renderer> Widget<Message, Renderer> for SelectionList<'a, Message, Renderer>
 where
-    Label: Eq + Hash + Clone,
     Renderer: renderer::Renderer + 'a,
     Message: Clone,
     Renderer::Theme: StyleSheet + container::StyleSheet + scrollable::StyleSheet,
@@ -173,8 +186,8 @@ where
     fn layout(
         &self,
         renderer: &Renderer,
-        limits: &iced::advanced::layout::Limits,
-    ) -> iced::advanced::layout::Node {
+        limits: &advanced::layout::Limits,
+    ) -> advanced::layout::Node {
         let limits = limits.width(self.width).height(self.height);
 
         let content = self.container.layout(renderer, &limits);
@@ -184,12 +197,12 @@ where
 
     fn draw(
         &self,
-        state: &iced::advanced::widget::Tree,
+        state: &widget::Tree,
         renderer: &mut Renderer,
-        theme: &<Renderer as iced::advanced::Renderer>::Theme,
-        style: &iced::advanced::renderer::Style,
-        layout: iced::advanced::Layout<'_>,
-        cursor: iced::advanced::mouse::Cursor,
+        theme: &<Renderer as advanced::Renderer>::Theme,
+        style: &advanced::renderer::Style,
+        layout: advanced::Layout<'_>,
+        cursor: advanced::mouse::Cursor,
         _viewport: &iced::Rectangle,
     ) {
         renderer.fill_quad(
@@ -220,7 +233,7 @@ where
         &mut self,
         state: &mut Tree,
         event: Event,
-        layout: iced::advanced::Layout<'_>,
+        layout: advanced::Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
@@ -242,8 +255,8 @@ where
         )
     }
 
-    fn state(&self) -> iced::advanced::widget::tree::State {
-        iced::advanced::widget::tree::State::None
+    fn state(&self) -> widget::tree::State {
+        widget::tree::State::None
     }
 
     fn children(&self) -> Vec<Tree> {
@@ -254,10 +267,23 @@ where
         tree.diff_children(&[&self.container as &dyn Widget<_, _>]);
     }
 
+    fn operate(
+        &self,
+        state: &mut Tree,
+        _layout: advanced::Layout<'_>,
+        _renderer: &Renderer,
+        _operation: &mut dyn Operation<Message>,
+    ) {
+        tracing::debug!("Running operate function");
+        // let state = tree.state.downcast_mut::<ListState>();
+
+        // operation.custom(state, Some(&self.id()));
+    }
+
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: iced::advanced::Layout<'_>,
+        layout: advanced::Layout<'_>,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
@@ -266,15 +292,15 @@ where
             .mouse_interaction(&state.children[0], layout, cursor, viewport, renderer)
     }
 }
-impl<'a, Label, Message, Renderer> From<SelectionList<'a, Label, Message, Renderer>>
+
+impl<'a, Message, Renderer> From<SelectionList<'a, Message, Renderer>>
     for Element<'a, Message, Renderer>
 where
-    Label: Eq + Hash + Clone + 'a,
     Renderer: renderer::Renderer + 'a,
     Message: Clone + 'a,
     Renderer::Theme: StyleSheet + container::StyleSheet + scrollable::StyleSheet,
 {
-    fn from(list: SelectionList<'a, Label, Message, Renderer>) -> Self {
+    fn from(list: SelectionList<'a, Message, Renderer>) -> Self {
         Self::new(list)
     }
 }
