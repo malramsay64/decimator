@@ -208,16 +208,22 @@ impl AppData {
                     .map(PictureThumbnail::view),
             )
             .collect();
-        SelectionListBuilder::new(view, |i| AppMsg::UpdatePictureView(Some(i)))
-            .direction(selection_list::Direction::Horizontal)
-            .item_height(320.)
-            .item_width(240.)
-            .height(320.)
-            .id(self.thumbnail_scroller.clone())
-            .build()
-            .into()
+        SelectionListBuilder::new_with_selection(
+            view,
+            |i| AppMsg::UpdatePictureView(Some(i)),
+            self.preview
+                .map_or(Some(0), |id| self.thumbnail_view.get_position(&id)),
+        )
+        .direction(selection_list::Direction::Horizontal)
+        .item_height(320.)
+        .item_width(240.)
+        .height(320.)
+        .id(self.thumbnail_scroller.clone())
+        .build()
+        .into()
     }
 
+    /// Provides an overview of all the images on a grid
     fn grid_view(&self) -> Element<AppMsg> {
         let thumbnails = lazy(self.thumbnail_view.version(), |_| {
             self.thumbnail_view
@@ -460,25 +466,26 @@ impl Application for App {
                     AppMsg::Ignore => Command::none(),
                     AppMsg::ThumbnailNext => {
                         tracing::info!("Selecting Next");
-                        selection_list::command_select_next(inner.thumbnail_scroller.clone())
+                        // selection_list::command_select_next(inner.thumbnail_scroller.clone())
                         // selection_list::select_next::<()>(inner.thumbnail_scroller.clone());
-                        // inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
+                        inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
                         // if let Some(id) = inner.preview {
                         //     Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
                         // } else {
                         //     Command::none()
                         // }
-                        // Command::none()
+                        Command::none()
                     }
                     AppMsg::ThumbnailPrev => {
                         tracing::info!("Selecting Prev");
-                        selection_list::command_select_next(inner.thumbnail_scroller.clone())
-                        // inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
+                        // selection_list::command_select_next(inner.thumbnail_scroller.clone())
+                        inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
                         // if let Some(id) = inner.preview {
                         //     Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
                         // } else {
-                        //     Command::none()
+                        // Command::none()
                         // }
+                        Command::none()
                     }
                     AppMsg::UpdatePictureView(preview) => {
                         inner.preview = preview;

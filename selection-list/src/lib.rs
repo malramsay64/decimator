@@ -2,12 +2,11 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use iced::advanced::layout::Node;
-use iced::advanced::widget::operation::scope;
 use iced::advanced::widget::{self, Operation, Tree};
 use iced::advanced::{self, mouse, renderer, Clipboard, Shell, Widget};
 use iced::widget::scrollable::Properties;
 use iced::widget::{container, scrollable, Container, Scrollable};
-use iced::{event, Command, Element, Event, Length, Rectangle};
+use iced::{event, Element, Event, Length, Rectangle};
 
 mod list;
 mod style;
@@ -31,6 +30,7 @@ where
     direction: Direction,
     values: Vec<(Label, Element<'a, Message, Renderer>)>,
     on_selected: Box<dyn Fn(Label) -> Message + 'a>,
+    manual_selection: Option<usize>,
     scroll_id: widget::Id,
 }
 
@@ -45,6 +45,14 @@ where
         values: Vec<(Label, Element<'a, Message, Renderer>)>,
         on_selected: impl Fn(Label) -> Message + 'a,
     ) -> Self {
+        Self::new_with_selection(values, on_selected, None)
+    }
+
+    pub fn new_with_selection(
+        values: Vec<(Label, Element<'a, Message, Renderer>)>,
+        on_selected: impl Fn(Label) -> Message + 'a,
+        selection: Option<usize>,
+    ) -> Self {
         Self {
             width: Length::Shrink,
             height: Length::Shrink,
@@ -53,6 +61,7 @@ where
             direction: Direction::Vertical,
             values,
             on_selected: Box::new(on_selected),
+            manual_selection: selection,
             scroll_id: widget::Id::unique(),
         }
     }
@@ -104,6 +113,7 @@ where
                 list::List::new(
                     self.values,
                     self.on_selected,
+                    self.manual_selection,
                     self.item_width,
                     self.item_height,
                 )

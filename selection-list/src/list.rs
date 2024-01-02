@@ -8,10 +8,7 @@ use iced::advanced::widget::operation::scope;
 use iced::advanced::widget::tree::{State, Tag};
 use iced::advanced::widget::{Id, Operation, Tree};
 use iced::advanced::{layout, renderer, Clipboard, Layout, Shell, Widget};
-use iced::keyboard::KeyCode;
-use iced::{
-    event, keyboard, touch, widget, Color, Command, Element, Event, Length, Point, Rectangle, Size,
-};
+use iced::{event, touch, Color, Command, Element, Event, Length, Point, Rectangle, Size};
 
 use super::StyleSheet;
 
@@ -37,6 +34,7 @@ where
     pub style: <Renderer::Theme as StyleSheet>::Style,
     /// Function Pointer On Select to call on Mouse button press.
     pub on_selected: Box<dyn Fn(Label) -> Message + 'a>,
+    pub selected: Option<usize>,
     /// The padding Width
     pub padding: f32,
     pub item_width: f32,
@@ -55,6 +53,7 @@ where
     pub fn new(
         values: Vec<(Label, Element<'a, Message, Renderer>)>,
         on_selected: impl Fn(Label) -> Message + 'a,
+        selection: Option<usize>,
         item_width: f32,
         item_height: f32,
     ) -> Self {
@@ -66,6 +65,7 @@ where
             item_height,
             style: <Renderer::Theme as StyleSheet>::Style::default(),
             on_selected: Box::new(on_selected),
+            selected: selection,
             renderer: PhantomData,
             padding: 0.,
             direction: Default::default(),
@@ -140,7 +140,7 @@ where
             let state: ListState = ListState {
                 length: Some(self.items.len()),
                 hovered_option: None,
-                selected_index: None,
+                selected_index: self.selected,
             };
             State::Some(Box::new(state))
         }
@@ -152,13 +152,11 @@ where
 
     fn diff(&self, state: &mut Tree) {
         state.diff_children(&self.items);
-        // let list_state = state.state.downcast_mut::<ListState>();
+        let list_state = state.state.downcast_mut::<ListState>();
 
-        // if let Some(id) = self.selected {
-        //     list_state.last_selected_index = Some(id);
-        // } else if let Some(id) = list_state.last_selected_index {
-        //     list_state.last_selected_index = Some(id);
-        // }
+        if let Some(id) = self.selected {
+            list_state.selected_index = Some(id);
+        }
     }
 
     fn operate(
@@ -169,7 +167,6 @@ where
         operation: &mut dyn iced::advanced::widget::Operation<Message>,
     ) {
         tracing::debug!("Running operate function");
-        // let state = state.downcast_mut::<ListState>();
 
         operation.custom(state, None);
     }
