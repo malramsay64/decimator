@@ -6,6 +6,7 @@ use iced_widget::{button, horizontal_space, row, text, toggler};
 use crate::widget::choice;
 use crate::{AppData, AppMsg, AppView};
 
+/// Helper to generate a separator for the menu
 fn separator<'a>() -> MenuTree<'a, AppMsg, iced::Renderer> {
     menu_tree!(quad::Quad {
         color: [0.5; 3].into(),
@@ -48,7 +49,7 @@ pub fn menu_view(data: &AppData) -> Element<AppMsg> {
             ),
         ]
     )
-    .width(400))
+    .width(500))
     .close_condition(CloseCondition {
         leave: true,
         click_inside: false,

@@ -14,7 +14,7 @@ use iced_widget::scrollable::Properties;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use selection_list::SelectionListBuilder;
+use selection_list::SelectionList;
 use uuid::Uuid;
 use widget::choice;
 
@@ -120,13 +120,13 @@ impl AppData {
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ]
             .padding(10),
-            SelectionListBuilder::new(values, |dir| {
+            SelectionList::new(values, |dir| {
                 AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
             })
             .item_width(250.)
             .item_height(30.)
             .width(260.)
-            .build()
+            .view()
         ]
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -145,7 +145,7 @@ impl AppData {
                     .map(PictureThumbnail::view),
             )
             .collect();
-        SelectionListBuilder::new_with_selection(
+        SelectionList::new_with_selection(
             view,
             |i| AppMsg::UpdatePictureView(Some(i)),
             self.preview
@@ -156,7 +156,7 @@ impl AppData {
         .item_width(240.)
         .height(320.)
         .id(self.thumbnail_scroller.clone())
-        .build()
+        .view()
         .into()
     }
 
