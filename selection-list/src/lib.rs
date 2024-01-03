@@ -2,7 +2,7 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use iced::advanced::layout::Node;
-use iced::advanced::widget::{self, Operation, Tree};
+use iced::advanced::widget::{self, Tree};
 use iced::advanced::{self, mouse, renderer, Clipboard, Shell, Widget};
 use iced::widget::scrollable::Properties;
 use iced::widget::{container, scrollable, Container, Scrollable};
@@ -14,7 +14,7 @@ mod style;
 pub use list::Direction;
 use style::StyleSheet;
 
-pub use crate::list::{command_select_next, command_select_prev, ListState};
+pub use crate::list::ListState;
 
 pub struct SelectionListBuilder<'a, Label, Message, Renderer = iced::Renderer>
 where
@@ -275,19 +275,6 @@ where
 
     fn diff(&self, tree: &mut Tree) {
         tree.diff_children(&[&self.container as &dyn Widget<_, _>]);
-    }
-
-    fn operate(
-        &self,
-        state: &mut Tree,
-        _layout: advanced::Layout<'_>,
-        _renderer: &Renderer,
-        _operation: &mut dyn Operation<Message>,
-    ) {
-        tracing::debug!("Running operate function");
-        // let state = tree.state.downcast_mut::<ListState>();
-
-        // operation.custom(state, Some(&self.id()));
     }
 
     fn mouse_interaction(

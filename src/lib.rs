@@ -6,9 +6,7 @@ use data::{
 };
 use iced::advanced::widget::Id;
 use iced::keyboard::KeyCode;
-use iced::widget::{
-    button, column, container, horizontal_space, lazy, row, scrollable, text, toggler,
-};
+use iced::widget::{button, column, container, horizontal_space, row, scrollable, text, toggler};
 use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
 use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
@@ -34,7 +32,7 @@ mod widget;
 use directory::DirectoryData;
 use entity::Selection;
 use picture::PictureThumbnail;
-use thumbnail::ThumbnailView;
+use thumbnail::ThumbnailData;
 
 /// Messages for runnning the application
 #[derive(Debug, Clone)]
@@ -67,6 +65,8 @@ pub enum AppMsg {
     UpdatePictureView(Option<Uuid>),
     ThumbnailNext,
     ThumbnailPrev,
+    DirectoryNext,
+    DirectoryPrev,
     Ignore,
 }
 
@@ -84,7 +84,7 @@ pub struct AppData {
     directory: Option<Utf8PathBuf>,
 
     app_view: AppView,
-    thumbnail_view: ThumbnailView,
+    thumbnail_view: ThumbnailData,
     thumbnail_scroller: Id,
 
     preview: Option<Uuid>,
@@ -225,18 +225,17 @@ impl AppData {
 
     /// Provides an overview of all the images on a grid
     fn grid_view(&self) -> Element<AppMsg> {
-        let thumbnails = lazy(self.thumbnail_view.version(), |_| {
-            self.thumbnail_view
-                .get_view()
-                .into_iter()
-                .map(PictureThumbnail::view)
-                .fold(
-                    Grid::new()
-                        .width(Length::Fill)
-                        .strategy(iced_aw::Strategy::ColumnWidthFlex(260.)),
-                    |i, g| i.push(g),
-                )
-        });
+        let thumbnails = self
+            .thumbnail_view
+            .get_view()
+            .into_iter()
+            .map(PictureThumbnail::view)
+            .fold(
+                Grid::new()
+                    .width(Length::Fill)
+                    .strategy(iced_aw::Strategy::ColumnWidthFlex(260.)),
+                |i, g| i.push(g),
+            );
         scrollable(thumbnails)
             .direction(scrollable::Direction::Vertical(
                 Properties::new().width(2.).scroller_width(10.),
@@ -421,6 +420,7 @@ impl Application for App {
                         inner.thumbnail_view.set_hidden(value);
                         Command::none()
                     }
+                    // TODO: Implement ScrollTo action
                     AppMsg::ScrollTo(_id) => Command::none(),
                     AppMsg::SetSelection(s) => {
                         if let Some(id) = inner.preview {
@@ -464,28 +464,25 @@ impl Application for App {
                     }
                     AppMsg::SelectionPrintRequest => Command::none(),
                     AppMsg::Ignore => Command::none(),
+                    AppMsg::DirectoryNext => Command::none(),
+                    AppMsg::DirectoryPrev => Command::none(),
                     AppMsg::ThumbnailNext => {
                         tracing::info!("Selecting Next");
-                        // selection_list::command_select_next(inner.thumbnail_scroller.clone())
-                        // selection_list::select_next::<()>(inner.thumbnail_scroller.clone());
                         inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
-                        // if let Some(id) = inner.preview {
-                        //     Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
-                        // } else {
-                        //     Command::none()
-                        // }
-                        Command::none()
+                        if let Some(id) = inner.preview {
+                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                        } else {
+                            Command::none()
+                        }
                     }
                     AppMsg::ThumbnailPrev => {
                         tracing::info!("Selecting Prev");
-                        // selection_list::command_select_next(inner.thumbnail_scroller.clone())
                         inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
-                        // if let Some(id) = inner.preview {
-                        //     Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
-                        // } else {
-                        // Command::none()
-                        // }
-                        Command::none()
+                        if let Some(id) = inner.preview {
+                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                        } else {
+                            Command::none()
+                        }
                     }
                     AppMsg::UpdatePictureView(preview) => {
                         inner.preview = preview;
@@ -537,6 +534,9 @@ impl Application for App {
                 }) => match k {
                     KeyCode::H | KeyCode::Left => Some(AppMsg::ThumbnailPrev),
                     KeyCode::L | KeyCode::Right => Some(AppMsg::ThumbnailNext),
+                    // TODO: Keyboard Navigation of directories
+                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
+                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
                     KeyCode::P => Some(AppMsg::SetSelection(Selection::Pick)),
                     KeyCode::O => Some(AppMsg::SetSelection(Selection::Ordinary)),
                     KeyCode::I => Some(AppMsg::SetSelection(Selection::Ignore)),

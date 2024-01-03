@@ -1,12 +1,12 @@
 use entity::Selection;
-use iced::widget::{button, column, image, row, text};
+use iced::widget::{column, image, row, text};
 use iced::Element;
 
 use super::PictureData;
-use crate::directory::ButtonCustomTheme;
 use crate::widget::choice;
 use crate::AppMsg;
 
+/// Defining the data for a thumbnail image
 pub type PictureThumbnail = PictureData;
 
 impl Eq for PictureThumbnail {}

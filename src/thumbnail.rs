@@ -57,16 +57,23 @@ pub enum Order {
     Descending,
 }
 
+/// Provide an o
 #[derive(Debug, Default)]
-pub struct ThumbnailView {
+pub struct ThumbnailData {
+    // All the thumbnails that have been loaded
     thumbnails: HashMap<Uuid, PictureThumbnail>,
+    // The filter applied to the thumbnails that have been loaded
     filter: ThumbnailFilter,
+    // The sort ordering of the thumbnails
     sort: Order,
+    // Each of the items in order after applying the filter and sort
     positions: Vec<Uuid>,
+    // This value changes whenever the underlying struct changes
+    // and is used to determine when to regenerate the view.
     version: u64,
 }
 
-impl ThumbnailView {
+impl ThumbnailData {
     /// Internal only function describing all the steps for making an update
     ///
     /// Whenever internal state changes, there are a number of additional steps

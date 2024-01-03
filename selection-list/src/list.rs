@@ -1,14 +1,14 @@
 //! Build and show dropdown `ListMenus`.
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
 use iced::advanced::layout::Limits;
 use iced::advanced::mouse::{self, Cursor};
-use iced::advanced::widget::operation::scope;
 use iced::advanced::widget::tree::{State, Tag};
-use iced::advanced::widget::{Id, Operation, Tree};
+use iced::advanced::widget::Tree;
 use iced::advanced::{layout, renderer, Clipboard, Layout, Shell, Widget};
-use iced::{event, touch, Color, Command, Element, Event, Length, Point, Rectangle, Size};
+use iced::{event, touch, Color, Element, Event, Length, Point, Rectangle, Size};
 
 use super::StyleSheet;
 
@@ -50,8 +50,13 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
+    #[tracing::instrument(
+        name = "Initialising List Widget",
+        level = "debug",
+        skip(values, on_selected)
+    )]
     pub fn new(
-        values: Vec<(Label, Element<'a, Message, Renderer>)>,
+        values: impl IntoIterator<Item = (Label, Element<'a, Message, Renderer>)>,
         on_selected: impl Fn(Label) -> Message + 'a,
         selection: Option<usize>,
         item_width: f32,
@@ -92,37 +97,10 @@ where
 /// The Private [`ListState`] Handles the State of the inner list.
 #[derive(Debug, Clone, Default)]
 pub struct ListState {
-    pub length: Option<usize>,
     /// Statehood of hovered_option
     pub hovered_option: Option<usize>,
     /// The index in the list of options of the last chosen Item Clicked for Processing
     pub selected_index: Option<usize>,
-}
-
-impl ListState {
-    pub fn select_next(&mut self) {
-        match (self.selected_index, self.length) {
-            (Some(index), Some(length)) => {
-                let new_state = (index + 1).min(length - 1);
-                if new_state != index {
-                    self.selected_index.replace(new_state);
-                }
-            }
-            _ => (),
-        }
-    }
-
-    pub fn select_prev(&mut self) {
-        match self.selected_index {
-            Some(index) => {
-                let new_state = index.saturating_sub(1);
-                if new_state != index {
-                    self.selected_index.replace(new_state);
-                }
-            }
-            _ => (),
-        }
-    }
 }
 
 impl<'a, Label, Message, Renderer> Widget<Message, Renderer> for List<'a, Label, Message, Renderer>
@@ -138,7 +116,6 @@ where
     fn state(&self) -> State {
         {
             let state: ListState = ListState {
-                length: Some(self.items.len()),
                 hovered_option: None,
                 selected_index: self.selected,
             };
@@ -157,18 +134,6 @@ where
         if let Some(id) = self.selected {
             list_state.selected_index = Some(id);
         }
-    }
-
-    fn operate(
-        &self,
-        state: &mut Tree,
-        _layout: Layout<'_>,
-        _renderer: &Renderer,
-        operation: &mut dyn iced::advanced::widget::Operation<Message>,
-    ) {
-        tracing::debug!("Running operate function");
-
-        operation.custom(state, None);
     }
 
     fn width(&self) -> Length {
@@ -230,6 +195,7 @@ where
         layout::Node::with_children(intrinsic, nodes)
     }
 
+    /// Handle Interactions with events within the widget
     fn on_event(
         &mut self,
         state: &mut Tree,
@@ -300,23 +266,6 @@ where
         status
     }
 
-    fn mouse_interaction(
-        &self,
-        _state: &Tree,
-        layout: Layout<'_>,
-        cursor: Cursor,
-        _viewport: &Rectangle,
-        _renderer: &Renderer,
-    ) -> mouse::Interaction {
-        let bounds = layout.bounds();
-
-        if cursor.is_over(bounds) {
-            mouse::Interaction::Pointer
-        } else {
-            mouse::Interaction::default()
-        }
-    }
-
     fn draw(
         &self,
         state: &Tree,
@@ -360,9 +309,7 @@ where
             .take(take)
             .skip(skip)
         {
-            let is_selected = list_state.selected_index == Some(index);
-            let is_hovered = list_state.hovered_option == Some(index);
-
+            // Calculate where each child element is laid out
             let bounds = match self.direction {
                 Direction::Vertical => Rectangle {
                     x: bounds.x,
@@ -378,29 +325,37 @@ where
                 },
             };
 
-            if is_selected || is_hovered {
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds,
-                        border_radius: (0.0).into(),
-                        border_width: 0.0,
-                        border_color: Color::TRANSPARENT,
-                    },
-                    if is_selected {
-                        theme.style(self.style).selected_background
-                    } else {
-                        theme.style(self.style).hovered_background
-                    },
-                );
-            }
+            // Determine the style of each element
+            let is_selected = list_state.selected_index == Some(index);
+            let is_hovered = list_state.hovered_option == Some(index);
 
-            let text_color = if is_selected {
-                theme.style(self.style).selected_text_color
+            let (text_color, background_colour) = if is_selected {
+                (
+                    theme.style(self.style).selected_text_color,
+                    theme.style(self.style).selected_background,
+                )
             } else if is_hovered {
-                theme.style(self.style).hovered_text_color
+                (
+                    theme.style(self.style).hovered_text_color,
+                    theme.style(self.style).hovered_background,
+                )
             } else {
-                theme.style(self.style).text_color
+                (
+                    theme.style(self.style).text_color,
+                    theme.style(self.style).background,
+                )
             };
+
+            // Render a the background of the item first, so it remains behind the image
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds,
+                    border_radius: (0.0).into(),
+                    border_width: 0.0,
+                    border_color: Color::TRANSPARENT,
+                },
+                background_colour,
+            );
 
             let style = renderer::Style { text_color };
 
@@ -428,57 +383,4 @@ where
     fn from(list: List<'a, Label, Message, Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(list)
     }
-}
-pub fn select_next<T: 'static>(target: Id) -> impl Operation<T> {
-    struct SelectNext();
-
-    impl<T> Operation<T> for SelectNext {
-        fn custom(&mut self, state: &mut dyn std::any::Any, _id: Option<&Id>) {
-            tracing::info!("Running Custom next Operation");
-            state.downcast_mut::<ListState>().unwrap().select_next();
-        }
-
-        fn container(
-            &mut self,
-            _id: Option<&Id>,
-            _bounds: Rectangle,
-            operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
-        ) {
-            operate_on_children(self)
-        }
-    }
-
-    scope(target, SelectNext())
-}
-
-pub fn select_prev<T: 'static>(target: Id) -> impl Operation<T> {
-    struct SelectPrev();
-
-    impl<T> Operation<T> for SelectPrev {
-        fn custom(&mut self, state: &mut dyn std::any::Any, _id: Option<&Id>) {
-            tracing::info!("Running Custom prev Operation");
-            state.downcast_mut::<ListState>().unwrap().select_prev();
-        }
-
-        fn container(
-            &mut self,
-            _id: Option<&Id>,
-            _bounds: Rectangle,
-            operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
-        ) {
-            tracing::info!("Container");
-            operate_on_children(self)
-        }
-    }
-
-    scope(target, SelectPrev())
-}
-
-/// Produces a [`Command`] that focuses the [`TextInput`] with the given [`Id`].
-pub fn command_select_next<Message: 'static>(id: Id) -> Command<Message> {
-    Command::widget(select_next(id))
-}
-/// Produces a [`Command`] that focuses the [`TextInput`] with the given [`Id`].
-pub fn command_select_prev<Message: 'static>(id: Id) -> Command<Message> {
-    Command::widget(select_prev(id))
 }
