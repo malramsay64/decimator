@@ -22,7 +22,6 @@ mod data;
 mod directory;
 mod import;
 mod menu;
-mod operations;
 mod picture;
 pub mod telemetry;
 mod thumbnail;
