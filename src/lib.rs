@@ -54,7 +54,8 @@ pub enum AppMsg {
     DisplayIgnore(bool),
     DisplayHidden(bool),
     ScrollTo(Uuid),
-    SetSelection(Selection),
+    SetSelection((Uuid, Selection)),
+    SetSelectionCurrent(Selection),
     // Signal to emit when we want to export, this creates the export dialog
     SetView(AppView),
     SelectionExportRequest,
@@ -216,6 +217,7 @@ impl AppData {
     }
 }
 
+// TODO: Remove the need to have an uninitialised state of the application
 #[derive(Debug, Default)]
 pub enum App {
     #[default]
@@ -340,6 +342,7 @@ impl Application for App {
                         inner.preview = inner.thumbnail_view.positions().first().copied();
                         Command::none()
                     }
+                    // Modify Thumbnail filters
                     AppMsg::DisplayPick(value) => {
                         inner.thumbnail_view.set_pick(value);
                         Command::none()
@@ -358,16 +361,19 @@ impl Application for App {
                     }
                     // TODO: Implement ScrollTo action
                     AppMsg::ScrollTo(_id) => Command::none(),
-                    AppMsg::SetSelection(s) => {
+                    AppMsg::SetSelectionCurrent(s) => {
                         if let Some(id) = inner.preview {
-                            inner.thumbnail_view.set_selection(&id, s);
-                            Command::perform(
-                                async move { update_selection_state(&database, id, s).await.unwrap() },
-                                move |_| AppMsg::ScrollTo(id),
-                            )
+                            Command::perform(async {}, move |_| AppMsg::SetSelection((id, s)))
                         } else {
                             Command::none()
                         }
+                    }
+                    AppMsg::SetSelection((id, s)) => {
+                        inner.thumbnail_view.set_selection(&id, s);
+                        Command::perform(
+                            async move { update_selection_state(&database, id, s).await.unwrap() },
+                            move |_| AppMsg::ScrollTo(id),
+                        )
                     }
                     AppMsg::SelectionExportRequest => Command::perform(
                         async move {
@@ -473,9 +479,9 @@ impl Application for App {
                     // TODO: Keyboard Navigation of directories
                     // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
                     // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
-                    KeyCode::P => Some(AppMsg::SetSelection(Selection::Pick)),
-                    KeyCode::O => Some(AppMsg::SetSelection(Selection::Ordinary)),
-                    KeyCode::I => Some(AppMsg::SetSelection(Selection::Ignore)),
+                    KeyCode::P => Some(AppMsg::SetSelectionCurrent(Selection::Pick)),
+                    KeyCode::O => Some(AppMsg::SetSelectionCurrent(Selection::Ordinary)),
+                    KeyCode::I => Some(AppMsg::SetSelectionCurrent(Selection::Ignore)),
                     _ => None,
                 },
                 _ => None,

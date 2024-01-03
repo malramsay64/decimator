@@ -44,21 +44,21 @@ impl PictureThumbnail {
                         text("I").into(),
                         Selection::Ignore,
                         Some(self.selection),
-                        |s| { AppMsg::SetSelection(s) }
+                        |s| { AppMsg::SetSelection((self.id, s)) }
                     )
                     .width(40),
                     choice(
                         text("O").into(),
                         Selection::Ordinary,
                         Some(self.selection),
-                        |s| { AppMsg::SetSelection(s) }
+                        |s| { AppMsg::SetSelection((self.id, s)) }
                     )
                     .width(40),
                     choice(
                         text("P").into(),
                         Selection::Pick,
                         Some(self.selection),
-                        |s| { AppMsg::SetSelection(s) }
+                        |s| { AppMsg::SetSelection((self.id, s)) }
                     )
                     .width(40),
                 ]

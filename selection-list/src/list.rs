@@ -202,10 +202,10 @@ where
         event: Event,
         layout: Layout<'_>,
         cursor: Cursor,
-        _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<Message>,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) -> event::Status {
         let bounds = layout.bounds();
         let mut status = event::Status::Ignored;
@@ -262,8 +262,27 @@ where
         } else {
             list_state.hovered_option = None;
         }
-
-        status
+        // In addition to handling the events associated with selecting items
+        // from the list, we also need to handle events that occur within each
+        // item. This iterates over each item to handle the events there.
+        status.merge(
+            self.items
+                .iter_mut()
+                .zip(layout.children())
+                .enumerate()
+                .fold(event::Status::Ignored, |status, (index, (item, layout))| {
+                    status.merge(item.as_widget_mut().on_event(
+                        &mut state.children[index],
+                        event.clone(),
+                        layout,
+                        cursor,
+                        renderer,
+                        clipboard,
+                        shell,
+                        viewport,
+                    ))
+                }),
+        )
     }
 
     fn draw(
