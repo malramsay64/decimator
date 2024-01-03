@@ -66,22 +66,11 @@ pub struct ThumbnailData {
     filter: ThumbnailFilter,
     // The sort ordering of the thumbnails
     sort: Order,
-    // Each of the items in order after applying the filter and sort
-    positions: Vec<Uuid>,
-    // This value changes whenever the underlying struct changes
-    // and is used to determine when to regenerate the view.
-    version: u64,
 }
 
 impl ThumbnailData {
-    /// Internal only function describing all the steps for making an update
-    ///
-    /// Whenever internal state changes, there are a number of additional steps
-    /// required to maintain consistency. This performs all those steps, ensuring
-    /// they are in a single location.
-    fn update_inner(&mut self) {
-        self.version += 1;
-        self.positions = self
+    pub fn positions(&self) -> Vec<Uuid> {
+        let mut positions: Vec<_> = self
             .thumbnails
             .values()
             .filter(|t| self.filter.filter(t))
@@ -89,21 +78,23 @@ impl ThumbnailData {
             .map(|t| t.id)
             .collect();
         if self.sort == Order::Descending {
-            self.positions.reverse()
+            positions.reverse()
         }
+        positions
     }
 
     pub fn get_position(&self, id: &Uuid) -> Option<usize> {
-        self.positions.iter().position(|i| i == id)
+        self.positions().iter().position(|i| i == id)
     }
 
     pub fn next(&mut self, id: Option<&Uuid>) -> Option<Uuid> {
         if let Some(id) = id {
-            self.positions
+            let positions = self.positions();
+            positions
                 .iter()
                 .position(|i| i == id)
-                .map(|i| (i + 1).clamp(0, self.positions.len() - 1))
-                .and_then(|i| self.positions.get(i))
+                .map(|i| (i + 1).clamp(0, positions.len() - 1))
+                .and_then(|i| positions.get(i))
                 .copied()
         } else {
             None
@@ -112,19 +103,16 @@ impl ThumbnailData {
 
     pub fn prev(&mut self, id: Option<&Uuid>) -> Option<Uuid> {
         if let Some(id) = id {
-            self.positions
+            let positions = self.positions();
+            self.positions()
                 .iter()
                 .position(|i| i == id)
-                .map(|i| (i - 1).clamp(0, self.positions.len() - 1))
-                .and_then(|i| self.positions.get(i))
+                .map(|i| (i - 1).clamp(0, positions.len() - 1))
+                .and_then(|i| positions.get(i))
                 .copied()
         } else {
             None
         }
-    }
-
-    pub fn version(&self) -> u64 {
-        self.version
     }
 
     pub fn pick(&self) -> bool {
@@ -145,37 +133,30 @@ impl ThumbnailData {
 
     pub fn set_thumbnails(&mut self, thumbnails: Vec<PictureThumbnail>) {
         self.thumbnails = thumbnails.into_iter().map(|t| (t.id, t)).collect();
-        self.update_inner();
     }
 
     pub fn set_ignore(&mut self, value: bool) {
         self.filter.ignore = value;
-        self.update_inner();
     }
+
     pub fn set_ordinary(&mut self, value: bool) {
         self.filter.ordinary = value;
-        self.update_inner();
     }
+
     pub fn set_pick(&mut self, value: bool) {
         self.filter.pick = value;
-        self.update_inner();
     }
+
     pub fn set_hidden(&mut self, value: bool) {
         self.filter.hidden = value;
-        self.update_inner();
     }
 
     pub fn set_selection(&mut self, id: &Uuid, selection: Selection) {
         self.thumbnails.get_mut(id).unwrap().selection = selection;
-        self.update_inner()
-    }
-
-    pub fn positions(&self) -> Vec<Uuid> {
-        self.positions.clone()
     }
 
     pub fn get_view(&self) -> Vec<PictureThumbnail> {
-        self.positions
+        self.positions()
             .iter()
             .map(|i| self.thumbnails.get(i).unwrap())
             .cloned()

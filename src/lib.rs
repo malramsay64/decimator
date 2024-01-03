@@ -6,17 +6,15 @@ use data::{
 };
 use iced::advanced::widget::Id;
 use iced::keyboard::KeyCode;
-use iced::widget::{button, column, container, horizontal_space, row, scrollable, text, toggler};
+use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
-use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
 use iced_widget::scrollable::Properties;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use selection_list::SelectionList;
 use uuid::Uuid;
-use widget::choice;
 
 use crate::import::import;
 use crate::widget::viewer;
@@ -107,7 +105,7 @@ impl AppData {
     }
 
     fn menu_view(&self) -> Element<AppMsg> {
-        menu::menu_view(&self)
+        menu::menu_view(self)
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
@@ -145,6 +143,7 @@ impl AppData {
                     .map(PictureThumbnail::view),
             )
             .collect();
+
         SelectionList::new_with_selection(
             view,
             |i| AppMsg::UpdatePictureView(Some(i)),
@@ -157,7 +156,6 @@ impl AppData {
         .height(320.)
         .id(self.thumbnail_scroller.clone())
         .view()
-        .into()
     }
 
     /// Provides an overview of all the images on a grid
@@ -338,7 +336,8 @@ impl Application for App {
                     }
                     AppMsg::SetThumbnails(thumbnails) => {
                         inner.thumbnail_view.set_thumbnails(thumbnails);
-                        inner.preview = None;
+                        // Default to selecting the first image within a directory
+                        inner.preview = inner.thumbnail_view.positions().first().copied();
                         Command::none()
                     }
                     AppMsg::DisplayPick(value) => {
