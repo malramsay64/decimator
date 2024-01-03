@@ -29,7 +29,7 @@ where
     values: Vec<(Label, Element<'a, Message, Renderer>)>,
     on_selected: Box<dyn Fn(Label) -> Message + 'a>,
     manual_selection: Option<usize>,
-    scroll_id: widget::Id,
+    scroll_id: scrollable::Id,
 }
 
 impl<'a, Label, Message, Renderer> SelectionList<'a, Label, Message, Renderer>
@@ -60,7 +60,7 @@ where
             values,
             on_selected: Box::new(on_selected),
             manual_selection: selection,
-            scroll_id: widget::Id::unique(),
+            scroll_id: scrollable::Id::unique(),
         }
     }
 
@@ -95,7 +95,7 @@ where
     }
 
     #[must_use]
-    pub fn id(mut self, id: widget::Id) -> Self {
+    pub fn id(mut self, id: scrollable::Id) -> Self {
         self.scroll_id = id;
         self
     }
@@ -105,7 +105,6 @@ where
             Direction::Vertical => scrollable::Direction::Vertical(Properties::default()),
             Direction::Horizontal => scrollable::Direction::Horizontal(Properties::default()),
         };
-        let scroll_id = scrollable::Id::unique();
         let container = Container::new(
             Scrollable::new(
                 list::List::new(
@@ -118,7 +117,7 @@ where
                 .direction(self.direction),
             )
             .direction(scrollable_direction)
-            .id(scroll_id.clone()),
+            .id(self.scroll_id.clone()),
         )
         .width(self.width)
         .height(self.height);

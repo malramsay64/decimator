@@ -4,12 +4,11 @@ use camino::Utf8PathBuf;
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
-use iced::advanced::widget::Id;
 use iced::keyboard::KeyCode;
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Application, Command, Element, Length, Theme};
 use iced_aw::native::Grid;
-use iced_widget::scrollable::Properties;
+use iced_widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -23,6 +22,7 @@ mod data;
 mod directory;
 mod import;
 mod menu;
+mod operations;
 mod picture;
 pub mod telemetry;
 mod thumbnail;
@@ -360,7 +360,13 @@ impl Application for App {
                         Command::none()
                     }
                     // TODO: Implement ScrollTo action
-                    AppMsg::ScrollTo(_id) => Command::none(),
+                    AppMsg::ScrollTo(id) => {
+                        let offset = inner.thumbnail_view.get_position(&id).unwrap() as f32 * 240.;
+                        scroll_to(
+                            inner.thumbnail_scroller.clone(),
+                            AbsoluteOffset { x: offset, y: 0. },
+                        )
+                    }
                     AppMsg::SetSelectionCurrent(s) => {
                         if let Some(id) = inner.preview {
                             Command::perform(async {}, move |_| AppMsg::SetSelection((id, s)))
