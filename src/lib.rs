@@ -24,6 +24,7 @@ use crate::widget::viewer;
 mod data;
 mod directory;
 mod import;
+mod menu;
 mod picture;
 pub mod telemetry;
 mod thumbnail;
@@ -91,15 +92,6 @@ pub struct AppData {
     preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
 }
 
-fn separator<'a>() -> MenuTree<'a, AppMsg, iced::Renderer> {
-    menu_tree!(quad::Quad {
-        color: [0.5; 3].into(),
-        border_radius: [4.0; 4],
-        inner_bounds: quad::InnerBounds::Ratio(0.98, 0.1),
-        ..Default::default()
-    })
-}
-
 impl AppData {
     fn new(database: DatabaseConnection) -> Self {
         Self {
@@ -115,62 +107,7 @@ impl AppData {
     }
 
     fn menu_view(&self) -> Element<AppMsg> {
-        let menu: Element<AppMsg> = menu_bar!(MenuTree::with_children(
-            button("Menu"),
-            vec![
-                MenuTree::new(toggler(
-                    String::from("Pick"),
-                    self.thumbnail_view.pick(),
-                    AppMsg::DisplayPick
-                )),
-                MenuTree::new(toggler(
-                    String::from("Ordinary"),
-                    self.thumbnail_view.ordinary(),
-                    AppMsg::DisplayOrdinary
-                )),
-                MenuTree::new(toggler(
-                    String::from("Ignore"),
-                    self.thumbnail_view.ignore(),
-                    AppMsg::DisplayIgnore
-                )),
-                MenuTree::new(toggler(
-                    String::from("Hidden"),
-                    self.thumbnail_view.hidden(),
-                    AppMsg::DisplayHidden
-                )),
-                separator(),
-                menu_tree!(button(text("Generate New Thumbnails"))
-                    .on_press(AppMsg::UpdateThumbnails(true))),
-                menu_tree!(
-                    button(text("Redo All Thumbnails")).on_press(AppMsg::UpdateThumbnails(false))
-                ),
-            ]
-        )
-        .width(400))
-        .close_condition(CloseCondition {
-            leave: true,
-            click_inside: false,
-            click_outside: true,
-        })
-        .into();
-        let tabs = row!(
-            choice(
-                text("Preview").into(),
-                AppView::Preview,
-                Some(self.app_view),
-                AppMsg::SetView
-            ),
-            choice(
-                text("Grid").into(),
-                AppView::Grid,
-                Some(self.app_view),
-                AppMsg::SetView
-            ),
-        );
-        row!(tabs, horizontal_space(Length::Fill), menu)
-            .padding(10)
-            .align_items(iced::Alignment::Center)
-            .into()
+        menu::menu_view(&self)
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
