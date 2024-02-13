@@ -11,6 +11,8 @@ use iced::{Application, Command, Element, Event, Length, Subscription, Theme};
 use iced_aw::Wrap;
 use iced_widget::runtime::futures::event;
 use iced_widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
+// use iced_core::widget::operation::Scrollable;
+use iced_widget::Scrollable;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -123,13 +125,14 @@ impl AppData {
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ]
             .padding(10),
-            SelectionList::new(values, |dir| {
-                AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
-            })
-            .item_width(250.)
-            .item_height(30.)
-            .width(260.)
-            .view()
+            Scrollable::new(
+                SelectionList::new(values, |dir| {
+                    AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
+                })
+                .item_width(250.)
+                .item_height(30.)
+                .width(260.)
+            )
         ]
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -149,18 +152,19 @@ impl AppData {
             )
             .collect();
 
-        SelectionList::new_with_selection(
-            view,
-            |i| AppMsg::UpdatePictureView(Some(i)),
-            self.preview
-                .map_or(Some(0), |id| self.thumbnail_view.get_position(&id)),
+        Scrollable::new(
+            SelectionList::new_with_selection(
+                view,
+                |i| AppMsg::UpdatePictureView(Some(i)),
+                self.preview
+                    .map_or(Some(0), |id| self.thumbnail_view.get_position(&id)),
+            )
+            .direction(selection_list::Direction::Horizontal)
+            .item_height(320.)
+            .item_width(240.)
+            .height(320.),
         )
-        .direction(selection_list::Direction::Horizontal)
-        .item_height(320.)
-        .item_width(240.)
-        .height(320.)
-        .id(self.thumbnail_scroller.clone())
-        .view()
+        .into()
     }
 
     /// Provides an overview of all the images on a grid
