@@ -4,10 +4,12 @@ use camino::Utf8PathBuf;
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
-use iced::keyboard::KeyCode;
+use iced::keyboard::key::Named;
+use iced::keyboard::{self, Key};
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
-use iced::{Application, Command, Element, Length, Theme};
-use iced_aw::native::Grid;
+use iced::{Application, Command, Element, Event, Length, Subscription, Theme};
+use iced_aw::Wrap;
+use iced_widget::runtime::futures::event;
 use iced_widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
 use import::find_new_images;
 use itertools::Itertools;
@@ -21,7 +23,8 @@ use crate::widget::viewer;
 mod data;
 mod directory;
 mod import;
-mod menu;
+// The menu is not currently working with the iced master branch
+// mod menu;
 mod picture;
 pub mod telemetry;
 mod thumbnail;
@@ -67,6 +70,7 @@ pub enum AppMsg {
     DirectoryNext,
     DirectoryPrev,
     Ignore,
+    EventOccurred(Event),
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -105,7 +109,8 @@ impl AppData {
     }
 
     fn menu_view(&self) -> Element<AppMsg> {
-        menu::menu_view(self)
+        horizontal_space(20.).into()
+        // menu::menu_view(self)
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
@@ -165,12 +170,7 @@ impl AppData {
             .get_view()
             .into_iter()
             .map(PictureThumbnail::view)
-            .fold(
-                Grid::new()
-                    .width(Length::Fill)
-                    .strategy(iced_aw::Strategy::ColumnWidthFlex(260.)),
-                |i, g| i.push(g),
-            );
+            .fold(Wrap::new(), |i, g| i.push(g));
         scrollable(thumbnails)
             .direction(scrollable::Direction::Vertical(
                 Properties::new().width(2.).scroller_width(10.),
@@ -393,6 +393,46 @@ impl Application for App {
                         },
                         AppMsg::SelectionExport,
                     ),
+                    AppMsg::EventOccurred(event) => {
+                        match event {
+                            Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
+                                match key.as_ref() {
+                                    keyboard::Key::Character("h")
+                                    | Key::Named(Named::ArrowLeft) => {
+                                        Command::perform(async move {}, move |_| {
+                                            AppMsg::ThumbnailPrev
+                                        })
+                                    }
+                                    keyboard::Key::Character("l")
+                                    | Key::Named(Named::ArrowRight) => {
+                                        Command::perform(async move {}, move |_| {
+                                            AppMsg::ThumbnailNext
+                                        })
+                                    }
+                                    // TODO: Keyboard Navigation of directories
+                                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
+                                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
+                                    Key::Character("p") => {
+                                        Command::perform(async move {}, move |_| {
+                                            AppMsg::SetSelectionCurrent(Selection::Pick)
+                                        })
+                                    }
+                                    Key::Character("o") => {
+                                        Command::perform(async move {}, move |_| {
+                                            AppMsg::SetSelectionCurrent(Selection::Ordinary)
+                                        })
+                                    }
+                                    Key::Character("i") => {
+                                        Command::perform(async move {}, move |_| {
+                                            AppMsg::SetSelectionCurrent(Selection::Ignore)
+                                        })
+                                    }
+                                    _ => Command::none(),
+                                }
+                            }
+                            _ => Command::none(),
+                        }
+                    }
                     AppMsg::SelectionExport(dir) => {
                         let items = inner.thumbnail_view.get_view();
                         Command::perform(
@@ -472,26 +512,8 @@ impl Application for App {
             .into()
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::Message> {
-        match self {
-            App::Uninitialised => iced::subscription::events_with(|_, _| None),
-            App::Initialised(_) => iced::subscription::events_with(move |e, _| match e {
-                iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                    key_code: k, ..
-                }) => match k {
-                    KeyCode::H | KeyCode::Left => Some(AppMsg::ThumbnailPrev),
-                    KeyCode::L | KeyCode::Right => Some(AppMsg::ThumbnailNext),
-                    // TODO: Keyboard Navigation of directories
-                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
-                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
-                    KeyCode::P => Some(AppMsg::SetSelectionCurrent(Selection::Pick)),
-                    KeyCode::O => Some(AppMsg::SetSelectionCurrent(Selection::Ordinary)),
-                    KeyCode::I => Some(AppMsg::SetSelectionCurrent(Selection::Ignore)),
-                    _ => None,
-                },
-                _ => None,
-            }),
-        }
+    fn subscription(&self) -> Subscription<AppMsg> {
+        event::listen().map(AppMsg::EventOccurred)
     }
 
     fn title(&self) -> String {

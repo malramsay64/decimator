@@ -3,11 +3,13 @@ use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 use iced_core::event::{self, Event};
+use iced_core::image::FilterMethod;
 use iced_core::widget::tree::{self, Tree};
 use iced_core::{
     image, layout, mouse, renderer, Clipboard, Element, Layout, Length, Pixels, Point, Rectangle,
     Shell, Size, Vector, Widget,
 };
+use iced_style::Theme;
 
 const DOUBLE_CLICK_TIMEOUT: Duration = Duration::from_millis(250);
 
@@ -81,7 +83,7 @@ impl<Handle> Viewer<Handle> {
     }
 }
 
-impl<Message, Renderer, Handle> Widget<Message, Renderer> for Viewer<Handle>
+impl<Message, Renderer, Handle> Widget<Message, Theme, Renderer> for Viewer<Handle>
 where
     Renderer: image::Renderer<Handle = Handle>,
     Handle: Clone + Hash,
@@ -94,21 +96,19 @@ where
         tree::State::new(State::new())
     }
 
-    fn width(&self) -> Length {
-        self.width
-    }
-
-    fn height(&self) -> Length {
-        self.height
-    }
-
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let Size { width, height } = renderer.dimensions(&self.handle);
 
-        let mut size = limits
-            .width(self.width)
-            .height(self.height)
-            .resolve(Size::new(width as f32, height as f32));
+        let mut size = limits.resolve(
+            self.width,
+            self.height,
+            Size::new(width as f32, height as f32),
+        );
 
         let expansion_size = if height > width {
             self.width
@@ -323,7 +323,7 @@ where
         &self,
         tree: &Tree,
         renderer: &mut Renderer,
-        _theme: &Renderer::Theme,
+        _theme: &Theme,
         _style: &renderer::Style,
         layout: Layout<'_>,
         _cursor: mouse::Cursor,
@@ -348,6 +348,7 @@ where
                 image::Renderer::draw(
                     renderer,
                     self.handle.clone(),
+                    FilterMethod::Linear,
                     Rectangle {
                         x: bounds.x,
                         y: bounds.y,
@@ -356,6 +357,13 @@ where
                 )
             });
         });
+    }
+
+    fn size(&self) -> Size<Length> {
+        Size {
+            width: self.width,
+            height: self.height,
+        }
     }
 }
 
@@ -407,13 +415,13 @@ impl State {
     }
 }
 
-impl<'a, Message, Renderer, Handle> From<Viewer<Handle>> for Element<'a, Message, Renderer>
+impl<'a, Message, Renderer, Handle> From<Viewer<Handle>> for Element<'a, Message, Theme, Renderer>
 where
     Renderer: 'a + image::Renderer<Handle = Handle>,
     Message: 'a,
     Handle: Clone + Hash + 'a,
 {
-    fn from(viewer: Viewer<Handle>) -> Element<'a, Message, Renderer> {
+    fn from(viewer: Viewer<Handle>) -> Element<'a, Message, Theme, Renderer> {
         Element::new(viewer)
     }
 }

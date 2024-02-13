@@ -1,7 +1,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use iced::widget::{button, text, Container};
-use iced::Element;
-use iced_core::{Color, Length};
+use iced::{Color, Element, Length};
+use iced_core::Border;
 use iced_style::button::Appearance;
 use iced_style::Theme;
 
@@ -49,12 +49,15 @@ impl button::StyleSheet for ButtonCustomTheme {
 
     fn active(&self, style: &Self::Style) -> Appearance {
         let palette = style.extended_palette();
+        let border = Border {
+            color: palette.secondary.base.color,
+            width: 1.,
+            radius: 0.0.into(),
+        };
         Appearance {
             background: None,
             text_color: palette.background.base.text,
-            border_radius: 0.0.into(),
-            border_width: 1.,
-            border_color: palette.secondary.base.color,
+            border,
             ..Default::default()
         }
     }
@@ -99,7 +102,7 @@ impl button::StyleSheet for ButtonCustomTheme {
 }
 
 impl DirectoryData {
-    pub fn view(&self) -> Element<'_, AppMsg, iced::Renderer<Theme>> {
+    pub fn view(&self) -> Element<'_, AppMsg, Theme, iced::Renderer> {
         Container::new(text(self.strip_prefix().as_str()).width(Length::Fill))
             .align_y(iced::alignment::Vertical::Center)
             .height(Length::Fill)

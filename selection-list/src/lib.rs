@@ -1,7 +1,6 @@
 use std::hash::Hash;
 
 use iced::advanced::renderer;
-use iced::advanced::widget::{self};
 use iced::widget::scrollable::Properties;
 use iced::widget::{container, scrollable, Container, Scrollable};
 use iced::{Element, Length};
@@ -14,40 +13,40 @@ use style::StyleSheet;
 
 pub use crate::list::ListState;
 
-pub struct SelectionList<'a, Label, Message, Renderer = iced::Renderer>
+pub struct SelectionList<'a, Label, Message, Theme, Renderer = iced::Renderer>
 where
     Label: Eq + Hash + Clone,
     Message: Clone,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet + scrollable::StyleSheet,
+    Theme: StyleSheet + scrollable::StyleSheet,
 {
     width: Length,
     height: Length,
     item_width: f32,
     item_height: f32,
     direction: Direction,
-    values: Vec<(Label, Element<'a, Message, Renderer>)>,
+    values: Vec<(Label, Element<'a, Message, Theme, Renderer>)>,
     on_selected: Box<dyn Fn(Label) -> Message + 'a>,
     manual_selection: Option<usize>,
     scroll_id: scrollable::Id,
 }
 
-impl<'a, Label, Message, Renderer> SelectionList<'a, Label, Message, Renderer>
+impl<'a, Label, Message, Theme, Renderer> SelectionList<'a, Label, Message, Theme, Renderer>
 where
     Label: Eq + Hash + Clone + 'a,
     Message: Clone + 'a,
     Renderer: renderer::Renderer + 'a,
-    Renderer::Theme: StyleSheet + scrollable::StyleSheet + container::StyleSheet,
+    Theme: StyleSheet + scrollable::StyleSheet + container::StyleSheet + 'a,
 {
     pub fn new(
-        values: Vec<(Label, Element<'a, Message, Renderer>)>,
+        values: Vec<(Label, Element<'a, Message, Theme, Renderer>)>,
         on_selected: impl Fn(Label) -> Message + 'a,
     ) -> Self {
         Self::new_with_selection(values, on_selected, None)
     }
 
     pub fn new_with_selection(
-        values: Vec<(Label, Element<'a, Message, Renderer>)>,
+        values: Vec<(Label, Element<'a, Message, Theme, Renderer>)>,
         on_selected: impl Fn(Label) -> Message + 'a,
         selection: Option<usize>,
     ) -> Self {
@@ -100,7 +99,7 @@ where
         self
     }
 
-    pub fn view(self) -> Element<'a, Message, Renderer> {
+    pub fn view(self) -> Element<'a, Message, Theme, Renderer> {
         let scrollable_direction = match self.direction {
             Direction::Vertical => scrollable::Direction::Vertical(Properties::default()),
             Direction::Horizontal => scrollable::Direction::Horizontal(Properties::default()),

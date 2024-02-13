@@ -4,8 +4,8 @@ use iced_core::layout::Node;
 use iced_core::mouse::Cursor;
 use iced_core::widget::{tree, Tree};
 use iced_core::{
-    layout, mouse, renderer, text, touch, Alignment, Clipboard, Color, Element, Layout, Length,
-    Point, Rectangle, Shell, Widget,
+    layout, mouse, renderer, text, touch, Alignment, Border, Clipboard, Color, Element, Layout,
+    Length, Rectangle, Shell, Widget,
 };
 use style::StyleSheet;
 
@@ -14,12 +14,12 @@ pub mod style;
 /// The ratio of the border radius.
 const BORDER_RADIUS_RATIO: f32 = 10.;
 
-pub struct Choice<'a, Message, Renderer = iced::Renderer>
+pub struct Choice<'a, Message, Theme, Renderer = iced::Renderer>
 where
     Renderer: iced_core::Renderer,
-    Renderer::Theme: StyleSheet,
+    Theme: StyleSheet + 'a,
 {
-    content: Element<'a, Message, Renderer>,
+    content: Element<'a, Message, Theme, Renderer>,
     /// The padding of the [`Badge`].
     padding: u16,
     /// The width of the [`Badge`].
@@ -31,17 +31,17 @@ where
     /// The vertical alignment of the [`Badge`](Badge).
     vertical_alignment: Alignment,
     /// The style of the [`Badge`](Badge).
-    style: <Renderer::Theme as StyleSheet>::Style,
+    style: <Theme as StyleSheet>::Style,
     /// The content [`Element`](iced_native::Element) of the [`Badge`](Badge).
     is_selected: bool,
     on_click: Message,
 }
 
-impl<'a, Message, Renderer> Choice<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> Choice<'a, Message, Theme, Renderer>
 where
     Message: Clone,
     Renderer: iced_core::Renderer,
-    Renderer::Theme: StyleSheet,
+    Theme: StyleSheet + 'a,
 {
     /// Creates a new [`Choice`] button.
     ///
@@ -57,7 +57,7 @@ where
     ///     * the content [`Element`](iced_native::Element) to display in the [`Badge`](Badge).
     pub fn new<T, V, F>(content: T, value: V, selected: Option<V>, f: F) -> Self
     where
-        T: Into<Element<'a, Message, Renderer>>,
+        T: Into<Element<'a, Message, Theme, Renderer>>,
         V: Eq + Copy,
         F: FnOnce(V) -> Message,
     {
@@ -67,7 +67,7 @@ where
             height: Length::Shrink,
             horizontal_alignment: Alignment::Center,
             vertical_alignment: Alignment::Center,
-            style: <Renderer::Theme as StyleSheet>::Style::default(),
+            style: <Theme as StyleSheet>::Style::default(),
             content: content.into(),
             is_selected: Some(value) == selected,
             on_click: f(value),
@@ -81,7 +81,7 @@ where
     }
 
     /// Sets the style of the [`Choice`] button.
-    pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
+    pub fn style(mut self, style: impl Into<<Theme as StyleSheet>::Style>) -> Self {
         self.style = style.into();
         self
     }
@@ -99,15 +99,13 @@ impl State {
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for Choice<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for Choice<'a, Message, Theme, Renderer>
 where
     Message: Clone,
     Renderer: text::Renderer,
-    Renderer::Theme: StyleSheet + crate::text::StyleSheet,
+    Theme: StyleSheet + crate::text::StyleSheet + 'a,
 {
-    fn width(&self) -> Length {
-        self.width
-    }
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content)]
     }
@@ -124,25 +122,22 @@ where
         tree::Tag::of::<State>()
     }
 
-    fn height(&self) -> Length {
-        Length::Shrink
-    }
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let mut content = self
+            .content
+            .as_widget()
+            .layout(tree, renderer, &limits.loose());
+        let size = limits.resolve(self.width, self.height, content.size());
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        let padding = self.padding.into();
-        let limits = limits
-            .loose()
-            .width(self.width)
-            .height(self.height)
-            .pad(padding);
+        // content.move_to(Point::new(self.padding, self.padding));
+        content.align_mut(self.horizontal_alignment, self.vertical_alignment, size);
 
-        let mut content = self.content.as_widget().layout(renderer, &limits.loose());
-        let size = limits.resolve(content.size());
-
-        content.move_to(Point::new(padding.left, padding.top));
-        content.align(self.horizontal_alignment, self.vertical_alignment, size);
-
-        Node::with_children(size.pad(padding), vec![content])
+        Node::with_children(size, vec![content])
     }
 
     fn on_event(
@@ -190,7 +185,7 @@ where
         &self,
         tree: &Tree,
         renderer: &mut Renderer,
-        theme: &Renderer::Theme,
+        theme: &Theme,
         _style: &renderer::Style,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
@@ -209,12 +204,17 @@ where
             .border_radius
             .unwrap_or(bounds.height / BORDER_RADIUS_RATIO);
 
+        let border = Border {
+            color: style_sheet.border_color.unwrap_or(Color::BLACK),
+            width: style_sheet.border_width,
+            radius: border_radius.into(),
+        };
+
         renderer.fill_quad(
             renderer::Quad {
                 bounds,
-                border_radius: border_radius.into(),
-                border_width: style_sheet.border_width,
-                border_color: style_sheet.border_color.unwrap_or(Color::BLACK),
+                border,
+                ..Default::default()
             },
             style_sheet.background,
         );
@@ -233,15 +233,20 @@ where
             viewport,
         );
     }
+
+    fn size(&self) -> iced_core::Size<Length> {
+        todo!()
+    }
 }
 
-impl<'a, Message, Renderer> From<Choice<'a, Message, Renderer>> for Element<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> From<Choice<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
 where
     Message: 'a + Clone,
     Renderer: 'a + text::Renderer,
-    Renderer::Theme: StyleSheet + crate::text::StyleSheet,
+    Theme: StyleSheet + crate::text::StyleSheet + 'a,
 {
-    fn from(choice: Choice<'a, Message, Renderer>) -> Element<'a, Message, Renderer> {
+    fn from(choice: Choice<'a, Message, Theme, Renderer>) -> Element<'a, Message, Theme, Renderer> {
         Element::new(choice)
     }
 }

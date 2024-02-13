@@ -28,15 +28,16 @@ serde_json = "1.0.89"
 futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "^0.12"
-iced = { version="0.10", features = ["image", "tokio", "lazy", "advanced"] }
-iced_core = "*"
-iced_style = "*"
-iced_widget = "*"
-iced_aw = { git = "https://github.com/malramsay64/iced_aw", branch="flexible_grid", features = ["grid", "menu", "quad", "tab_bar", "selection_list"], default-features = false }
+iced = { git = "https://github.com/iced-rs/iced", features = ["image", "tokio", "lazy", "advanced"] }
+iced_core = { git = "https://github.com/iced-rs/iced" }
+iced_style = { git = "https://github.com/iced-rs/iced" }
+iced_widget = { git = "https://github.com/iced-rs/iced" }
+# The menu is currently not updated for the latest master relase of iced
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", features = ["grid", "quad", "tab_bar", "wrap"], default-features = false }
 image = "*"
 dirs = "5.0.1"
-tokio = "1.29.1"
-rfd = { version = "0.12", default-features = false, features = ["xdg-portal"] }
+tokio = "~1.29"
+rfd = { version = "0.13", default-features = false, features = ["xdg-portal", "tokio"] }
 lru = "0.12"
 rayon = "1.7.0"
 
