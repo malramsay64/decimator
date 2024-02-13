@@ -1,7 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use iced::widget::{button, text, Container};
-use iced::{Color, Element, Length};
-use iced_core::Border;
+use iced::{Border, Color, Element, Length};
 use iced_style::button::Appearance;
 use iced_style::Theme;
 
@@ -66,14 +65,14 @@ impl button::StyleSheet for ButtonCustomTheme {
         let active = self.active(style);
 
         Appearance {
-            shadow_offset: active.shadow_offset + iced_core::Vector::new(0.0, 1.0),
+            shadow_offset: active.shadow_offset + iced::Vector::new(0.0, 1.0),
             ..active
         }
     }
 
     fn pressed(&self, style: &Self::Style) -> Appearance {
         Appearance {
-            shadow_offset: iced_core::Vector::default(),
+            shadow_offset: iced::Vector::default(),
             ..self.active(style)
         }
     }
@@ -82,14 +81,14 @@ impl button::StyleSheet for ButtonCustomTheme {
         let active = self.active(style);
 
         Appearance {
-            shadow_offset: iced_core::Vector::default(),
+            shadow_offset: iced::Vector::default(),
             background: active.background.map(|background| match background {
-                iced_core::Background::Color(color) => iced_core::Background::Color(Color {
+                iced::Background::Color(color) => iced::Background::Color(Color {
                     a: color.a * 0.5,
                     ..color
                 }),
-                iced_core::Background::Gradient(gradient) => {
-                    iced_core::Background::Gradient(gradient.mul_alpha(0.5))
+                iced::Background::Gradient(gradient) => {
+                    iced::Background::Gradient(gradient.mul_alpha(0.5))
                 }
             }),
             text_color: Color {

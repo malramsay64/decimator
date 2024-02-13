@@ -1,9 +1,9 @@
 use entity::Selection;
 use iced::widget::{column, image, row, text};
 use iced::Element;
+use iced_aw::native::SegmentedButton;
 
 use super::PictureData;
-use crate::widget::choice;
 use crate::AppMsg;
 
 /// Defining the data for a thumbnail image
@@ -30,6 +30,29 @@ impl Ord for PictureThumbnail {
 
 impl PictureThumbnail {
     pub fn view(self) -> Element<'static, AppMsg> {
+        let button_ignore = SegmentedButton::new(
+            text("I"),
+            Selection::Ignore,
+            Some(self.selection),
+            AppMsg::SetSelectionCurrent,
+        )
+        .width(40.0.into());
+
+        let button_ordinary = SegmentedButton::new(
+            text("O"),
+            Selection::Ordinary,
+            Some(self.selection),
+            AppMsg::SetSelectionCurrent,
+        )
+        .width(40.0.into());
+
+        let button_pick = SegmentedButton::new(
+            text("P"),
+            Selection::Pick,
+            Some(self.selection),
+            AppMsg::SetSelectionCurrent,
+        )
+        .width(40.0.into());
         if let Some(thumbnail) = self.thumbnail {
             column![
                 iced::widget::image(image::Handle::from_pixels(
@@ -39,36 +62,14 @@ impl PictureThumbnail {
                 ))
                 .width(240)
                 .height(240),
-                row![
-                    choice(
-                        text("I").into(),
-                        Selection::Ignore,
-                        Some(self.selection),
-                        |s| { AppMsg::SetSelection((self.id, s)) }
-                    )
-                    .width(40),
-                    choice(
-                        text("O").into(),
-                        Selection::Ordinary,
-                        Some(self.selection),
-                        |s| { AppMsg::SetSelection((self.id, s)) }
-                    )
-                    .width(40),
-                    choice(
-                        text("P").into(),
-                        Selection::Pick,
-                        Some(self.selection),
-                        |s| { AppMsg::SetSelection((self.id, s)) }
-                    )
-                    .width(40),
-                ]
+                row![button_ignore, button_ordinary, button_pick]
             ]
-            .align_items(iced_core::Alignment::Center)
+            .align_items(iced::Alignment::Center)
             .padding(10)
             .into()
         } else {
             column![text("No thumbnail")]
-                .align_items(iced_core::Alignment::Center)
+                .align_items(iced::Alignment::Center)
                 .width(240)
                 .height(240)
                 .into()

@@ -1,6 +1,6 @@
 use iced::widget::{column, row, text, vertical_space};
 use iced::{Application, Command, Length, Settings, Theme};
-use selection_list::SelectionListBuilder;
+use selection_list::SelectionList;
 
 #[derive(Debug, Clone)]
 enum AppMsg {
@@ -37,7 +37,7 @@ impl Application for App {
         Command::none()
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+    fn view(&self) -> iced::Element<'_, Self::Message, Theme, iced::Renderer> {
         let items_vertical: Vec<_> = self
             .items
             .iter()
@@ -49,21 +49,19 @@ impl Application for App {
             .map(|i| (i.clone(), text(i).into()))
             .collect();
         row![
-            SelectionListBuilder::new(items_vertical, |_| AppMsg::None,)
+            SelectionList::new(items_vertical, |_| AppMsg::None,)
                 .item_height(30.)
                 .item_width(200.)
                 .width(200)
                 .height(Length::Fill)
-                .direction(selection_list::Direction::Vertical)
-                .build(),
+                .direction(selection_list::Direction::Vertical),
             column![
                 vertical_space(Length::Fill),
-                SelectionListBuilder::new(items_horizontal, |_| AppMsg::None,)
+                SelectionList::new(items_horizontal, |_| AppMsg::None,)
                     .item_height(60.)
                     .item_width(100.)
                     .height(70)
                     .direction(selection_list::Direction::Horizontal)
-                    .build(),
             ],
         ]
         .into()

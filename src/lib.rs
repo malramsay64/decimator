@@ -6,6 +6,7 @@ use data::{
 };
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
+use iced::mouse::ScrollDelta;
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Application, Command, Element, Event, Length, Subscription, Theme};
 use iced_aw::Wrap;
@@ -128,7 +129,7 @@ impl AppData {
             Scrollable::new(
                 SelectionList::new(values, |dir| {
                     AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
-                })
+                },)
                 .item_width(250.)
                 .item_height(30.)
                 .width(260.)
@@ -164,6 +165,8 @@ impl AppData {
             .item_width(240.)
             .height(320.),
         )
+        .id(self.thumbnail_scroller.clone())
+        .direction(scrollable::Direction::Horizontal(Properties::default()))
         .into()
     }
 

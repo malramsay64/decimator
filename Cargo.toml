@@ -29,11 +29,10 @@ futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "^0.12"
 iced = { git = "https://github.com/iced-rs/iced", features = ["image", "tokio", "lazy", "advanced"] }
-iced_core = { git = "https://github.com/iced-rs/iced" }
 iced_style = { git = "https://github.com/iced-rs/iced" }
 iced_widget = { git = "https://github.com/iced-rs/iced" }
 # The menu is currently not updated for the latest master relase of iced
-iced_aw = { git = "https://github.com/iced-rs/iced_aw", features = ["grid", "quad", "tab_bar", "wrap"], default-features = false }
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", features = ["grid", "quad", "tab_bar", "wrap", "segmented_button"], default-features = false }
 image = "*"
 dirs = "5.0.1"
 tokio = "~1.29"

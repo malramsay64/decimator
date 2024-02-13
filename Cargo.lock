@@ -1174,7 +1174,6 @@ dependencies = [
  "futures",
  "iced",
  "iced_aw",
- "iced_core",
  "iced_style",
  "iced_widget",
  "image",

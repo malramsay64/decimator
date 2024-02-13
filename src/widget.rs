@@ -2,8 +2,8 @@ mod choice;
 mod viewer;
 
 use choice::Choice;
+use iced::advanced::text;
 use iced::Element;
-use iced_style::Theme;
 use viewer::Viewer;
 
 /// Creates a new [`Viewer`] with the given image `Handle`.
@@ -22,7 +22,7 @@ pub fn choice<Message, Theme, Renderer, V>(
 ) -> Choice<'_, Message, Theme, Renderer>
 where
     Message: Clone,
-    Renderer: iced_core::text::Renderer,
+    Renderer: text::Renderer,
     Theme: choice::style::StyleSheet,
     V: Copy + Eq,
 {

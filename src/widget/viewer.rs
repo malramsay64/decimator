@@ -2,13 +2,11 @@
 use std::hash::Hash;
 use std::time::{Duration, Instant};
 
-use iced_core::event::{self, Event};
-use iced_core::image::FilterMethod;
-use iced_core::widget::tree::{self, Tree};
-use iced_core::{
-    image, layout, mouse, renderer, Clipboard, Element, Layout, Length, Pixels, Point, Rectangle,
-    Shell, Size, Vector, Widget,
-};
+use iced::advanced::image::FilterMethod;
+use iced::advanced::widget::tree::{self, Tree};
+use iced::advanced::{image, layout, renderer, Clipboard, Layout, Shell, Widget};
+use iced::event::{self, Event};
+use iced::{mouse, Element, Length, Pixels, Point, Rectangle, Size, Vector};
 use iced_style::Theme;
 
 const DOUBLE_CLICK_TIMEOUT: Duration = Duration::from_millis(250);

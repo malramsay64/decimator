@@ -7,7 +7,7 @@ use iced::advanced::widget::Tree;
 use iced::advanced::{renderer, Clipboard, Layout, Shell, Widget};
 use iced::mouse::Cursor;
 use iced::widget::{container, scrollable};
-use iced::{event, mouse, touch, Alignment, Element, Event, Length, Padding, Point, Rectangle};
+use iced::{event, mouse, touch, Element, Event, Length, Padding, Point, Rectangle};
 
 mod style;
 
@@ -41,14 +41,12 @@ where
     labels: Vec<Label>,
     on_selected: Box<dyn Fn(Label) -> Message + 'a>,
     selected: Option<usize>,
-    manual_selection: Option<usize>,
     /// Style for Font colors and Box hover colors.
     pub style: <Theme as StyleSheet>::Style,
     item_width: f32,
     item_height: f32,
     width: Length,
     height: Length,
-    alignment: Alignment,
     /// The padding Width
     padding: f32,
     direction: Direction,
@@ -85,12 +83,10 @@ where
             item_height: 0.,
             direction: Direction::Vertical,
             on_selected: Box::new(on_selected),
-            manual_selection: selection,
             selected: selection,
             style: <Theme as StyleSheet>::Style::default(),
             padding: 0.,
             renderer: PhantomData,
-            alignment: Alignment::Start,
         }
     }
 
@@ -123,30 +119,6 @@ where
         self.direction = direction;
         self
     }
-
-    // pub fn view(self) -> Element<'a, Message, Theme, Renderer> {
-    //     let scrollable_direction = match self.direction {
-    //         Direction::Vertical => scrollable::Direction::Vertical(Properties::default()),
-    //         Direction::Horizontal => scrollable::Direction::Horizontal(Properties::default()),
-    //     };
-    //     let container = Container::new(
-    //         Scrollable::new(
-    //             list::List::new(
-    //                 self.values,
-    //                 self.on_selected,
-    //                 self.manual_selection,
-    //                 self.item_width,
-    //                 self.item_height,
-    //             )
-    //             .direction(self.direction),
-    //         )
-    //         .direction(scrollable_direction)
-    //         .id(self.scroll_id.clone()),
-    //     )
-    //     .width(self.width)
-    //     .height(self.height);
-    //     container.into()
-    // }
 }
 
 impl<'a, Label, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
@@ -286,18 +258,8 @@ where
         limits: &iced::advanced::layout::Limits,
     ) -> iced::advanced::layout::Node {
         let padding = Padding::from(self.padding);
-        #[allow(clippy::cast_precision_loss)] // TODO: possible precision loss
-        // let line_minimal_length = self.line_minimal_length;
-        // let line_minimal_length = 0.;
         let limits = limits.shrink(padding).width(self.width).height(self.height);
-        // .max_width(self.max_width)
-        // .max_height(self.max_height);
-        // let max_width = limits.max().width;
         let mut children = tree.children.iter_mut();
-        // let mut curse = padding.left;
-        // let deep_curse = padding.left;
-        // let mut current_line_height = line_minimal_length;
-        // let mut current_line_height = 0.0_f32;
         let item_size = iced::Size {
             width: self.item_width,
             height: self.item_height,
@@ -313,29 +275,21 @@ where
                     renderer,
                     &node_limit,
                 );
-
-                // let size = node.size();
-
-                // let offset_init = size.width + spacing;
-                // let offset = curse + offset_init;
-
-                node.move_to_mut(Point::new(self.padding, self.item_height * index as f32));
-                // current_line_height = current_line_height.max(size.height);
-
+                match self.direction {
+                    Direction::Vertical => {
+                        node.move_to_mut(Point::new(self.padding, self.item_height * index as f32));
+                    }
+                    Direction::Horizontal => {
+                        node.move_to_mut(Point::new(self.item_width * index as f32, self.padding));
+                    }
+                }
                 node
             })
             .collect();
-        // if end != start {
-        //     align.push((start..end, current_line_height));
-        // }
-        // for (range, max_length) in align {
-        //     nodes[range].iter_mut().for_each(|node| {
-        //         let size = node.size();
-        //         let space = iced::Size::new(size.width, max_length);
-        //         node.align_mut(Alignment::Start, self.alignment, space);
-        //     });
-        // }
-        let (width, height) = (self.item_width, self.item_height * self.items.len() as f32);
+        let (width, height) = match self.direction {
+            Direction::Vertical => (self.item_width, self.item_height * self.items.len() as f32),
+            Direction::Horizontal => (self.item_width * self.items.len() as f32, self.item_height),
+        };
         let size = limits.resolve(self.width, self.height, iced::Size::new(width, height));
 
         Node::with_children(size.expand(padding), nodes)
@@ -346,7 +300,7 @@ where
         state: &iced::advanced::widget::Tree,
         renderer: &mut Renderer,
         theme: &Theme,
-        style: &renderer::Style,
+        _style: &renderer::Style,
         layout: iced::advanced::Layout<'_>,
         cursor: iced::advanced::mouse::Cursor,
         viewport: &iced::Rectangle,
