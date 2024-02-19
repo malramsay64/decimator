@@ -6,8 +6,7 @@ use iced::advanced::image::FilterMethod;
 use iced::advanced::widget::tree::{self, Tree};
 use iced::advanced::{image, layout, renderer, Clipboard, Layout, Shell, Widget};
 use iced::event::{self, Event};
-use iced::{mouse, Element, Length, Pixels, Point, Rectangle, Size, Vector};
-use iced_style::Theme;
+use iced::{mouse, Element, Length, Pixels, Point, Rectangle, Size, Theme, Vector};
 
 const DOUBLE_CLICK_TIMEOUT: Duration = Duration::from_millis(250);
 

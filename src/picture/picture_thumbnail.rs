@@ -30,29 +30,33 @@ impl Ord for PictureThumbnail {
 
 impl PictureThumbnail {
     pub fn view(self) -> Element<'static, AppMsg> {
-        let button_ignore = SegmentedButton::new(
+        let button_width = iced::Length::from(40.0);
+        let button_ignore: Element<'_, AppMsg> = SegmentedButton::new(
             text("I"),
             Selection::Ignore,
             Some(self.selection),
             AppMsg::SetSelectionCurrent,
         )
-        .width(40.0.into());
+        .width(button_width)
+        .into();
 
-        let button_ordinary = SegmentedButton::new(
+        let button_ordinary: Element<'_, AppMsg> = SegmentedButton::new(
             text("O"),
             Selection::Ordinary,
             Some(self.selection),
             AppMsg::SetSelectionCurrent,
         )
-        .width(40.0.into());
+        .width(button_width)
+        .into();
 
-        let button_pick = SegmentedButton::new(
+        let button_pick: Element<'_, AppMsg> = SegmentedButton::new(
             text("P"),
             Selection::Pick,
             Some(self.selection),
             AppMsg::SetSelectionCurrent,
         )
-        .width(40.0.into());
+        .width(button_width)
+        .into();
         if let Some(thumbnail) = self.thumbnail {
             column![
                 iced::widget::image(image::Handle::from_pixels(
@@ -62,6 +66,7 @@ impl PictureThumbnail {
                 ))
                 .width(240)
                 .height(240),
+                // TODO: Re-enable once supported by iced_aw
                 row![button_ignore, button_ordinary, button_pick]
             ]
             .align_items(iced::Alignment::Center)

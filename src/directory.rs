@@ -1,8 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use iced::widget::{button, text, Container};
-use iced::{Border, Color, Element, Length};
-use iced_style::button::Appearance;
-use iced_style::Theme;
+use iced::{Border, Color, Element, Length, Padding, Theme};
 
 use crate::AppMsg;
 
@@ -46,14 +44,14 @@ pub struct ButtonCustomTheme;
 impl button::StyleSheet for ButtonCustomTheme {
     type Style = Theme;
 
-    fn active(&self, style: &Self::Style) -> Appearance {
+    fn active(&self, style: &Self::Style) -> button::Appearance {
         let palette = style.extended_palette();
         let border = Border {
             color: palette.secondary.base.color,
             width: 1.,
             radius: 0.0.into(),
         };
-        Appearance {
+        button::Appearance {
             background: None,
             text_color: palette.background.base.text,
             border,
@@ -61,26 +59,26 @@ impl button::StyleSheet for ButtonCustomTheme {
         }
     }
 
-    fn hovered(&self, style: &Self::Style) -> Appearance {
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
         let active = self.active(style);
 
-        Appearance {
+        button::Appearance {
             shadow_offset: active.shadow_offset + iced::Vector::new(0.0, 1.0),
             ..active
         }
     }
 
-    fn pressed(&self, style: &Self::Style) -> Appearance {
-        Appearance {
+    fn pressed(&self, style: &Self::Style) -> button::Appearance {
+        button::Appearance {
             shadow_offset: iced::Vector::default(),
             ..self.active(style)
         }
     }
 
-    fn disabled(&self, style: &Self::Style) -> Appearance {
+    fn disabled(&self, style: &Self::Style) -> button::Appearance {
         let active = self.active(style);
 
-        Appearance {
+        button::Appearance {
             shadow_offset: iced::Vector::default(),
             background: active.background.map(|background| match background {
                 iced::Background::Color(color) => iced::Background::Color(Color {
@@ -103,6 +101,7 @@ impl button::StyleSheet for ButtonCustomTheme {
 impl DirectoryData {
     pub fn view(&self) -> Element<'_, AppMsg, Theme, iced::Renderer> {
         Container::new(text(self.strip_prefix().as_str()).width(Length::Fill))
+            .padding(Padding::horizontal(10.into()))
             .align_y(iced::alignment::Vertical::Center)
             .height(Length::Fill)
             .into()

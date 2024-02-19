@@ -6,14 +6,12 @@ use data::{
 };
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::mouse::ScrollDelta;
-use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
-use iced::{Application, Command, Element, Event, Length, Subscription, Theme};
+use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
+use iced::widget::{
+    button, column, container, horizontal_space, row, scrollable, text, Scrollable,
+};
+use iced::{event, Application, Command, Element, Event, Length, Subscription, Theme};
 use iced_aw::Wrap;
-use iced_widget::runtime::futures::event;
-use iced_widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
-// use iced_core::widget::operation::Scrollable;
-use iced_widget::Scrollable;
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -78,8 +76,8 @@ pub enum AppMsg {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum AppView {
-    #[default]
     Preview,
+    #[default]
     Grid,
 }
 
@@ -112,17 +110,18 @@ impl AppData {
     }
 
     fn menu_view(&self) -> Element<AppMsg> {
-        horizontal_space(20.).into()
+        horizontal_space().into()
         // menu::menu_view(self)
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
         let dirs = self.directories.iter().sorted_unstable().rev();
+
         let values: Vec<_> = dirs.clone().zip(dirs.map(DirectoryData::view)).collect();
         column![
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
-                horizontal_space(20.),
+                horizontal_space(),
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ]
             .padding(10),
@@ -172,12 +171,13 @@ impl AppData {
 
     /// Provides an overview of all the images on a grid
     fn grid_view(&self) -> Element<AppMsg> {
-        let thumbnails = self
+        let mut thumbnails = self
             .thumbnail_view
             .get_view()
             .into_iter()
             .map(PictureThumbnail::view)
             .fold(Wrap::new(), |i, g| i.push(g));
+        thumbnails.width = Length::Fill;
         scrollable(thumbnails)
             .direction(scrollable::Direction::Vertical(
                 Properties::new().width(2.).scroller_width(10.),
@@ -384,7 +384,7 @@ impl Application for App {
                         inner.thumbnail_view.set_selection(&id, s);
                         Command::perform(
                             async move { update_selection_state(&database, id, s).await.unwrap() },
-                            move |_| AppMsg::ScrollTo(id),
+                            move |_| AppMsg::Ignore,
                         )
                     }
                     AppMsg::SelectionExportRequest => Command::perform(

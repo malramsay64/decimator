@@ -56,7 +56,7 @@ impl Application for App {
                 .height(Length::Fill)
                 .direction(selection_list::Direction::Vertical),
             column![
-                vertical_space(Length::Fill),
+                vertical_space(),
                 SelectionList::new(items_horizontal, |_| AppMsg::None,)
                     .item_height(60.)
                     .item_width(100.)

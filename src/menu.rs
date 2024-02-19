@@ -1,7 +1,7 @@
+use iced::widget::{button, horizontal_space, row, text, toggler};
 use iced::Element;
 use iced_aw::{menu_bar, menu_tree, quad, CloseCondition, MenuTree};
 use iced_core::Length;
-use iced_widget::{button, horizontal_space, row, text, toggler};
 
 use crate::widget::choice;
 use crate::{AppData, AppMsg, AppView};
