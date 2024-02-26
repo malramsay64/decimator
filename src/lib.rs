@@ -25,7 +25,7 @@ mod data;
 mod directory;
 mod import;
 // The menu is not currently working with the iced master branch
-// mod menu;
+mod menu;
 mod picture;
 pub mod telemetry;
 mod thumbnail;
@@ -110,8 +110,8 @@ impl AppData {
     }
 
     fn menu_view(&self) -> Element<AppMsg> {
-        horizontal_space().into()
-        // menu::menu_view(self)
+        // horizontal_space().into()
+        menu::menu_view(self)
     }
 
     fn directory_view(&self) -> Element<AppMsg> {

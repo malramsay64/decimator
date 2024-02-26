@@ -30,11 +30,11 @@ num_cpus = "1.15.0"
 itertools = "^0.12"
 iced = { version="0.12", features = ["image", "tokio", "lazy", "advanced"] }
 # The menu is currently not updated for the latest master relase of iced
-iced_aw = { git = "https://github.com/iced-rs/iced_aw", features = ["grid", "quad", "tab_bar", "wrap", "segmented_button"], default-features = false }
+iced_aw = { version = "0.8", features = ["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button"], default-features = false }
 image = "*"
 dirs = "5.0.1"
 tokio = "*"
-rfd = { version = "0.13", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 lru = "0.12"
 rayon = "1.7.0"
 
