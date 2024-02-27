@@ -101,7 +101,8 @@ impl button::StyleSheet for ButtonCustomTheme {
 impl DirectoryData {
     pub fn view(&self) -> Element<'_, AppMsg, Theme, iced::Renderer> {
         Container::new(text(self.strip_prefix().as_str()).width(Length::Fill))
-            .padding(Padding::horizontal(10.into()))
+            // Top, right, bottom, left
+            .padding(Padding::from([0, 10, 0, 10]))
             .align_y(iced::alignment::Vertical::Center)
             .height(Length::Fill)
             .into()

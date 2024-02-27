@@ -251,14 +251,9 @@ where
         )
     }
 
-    fn layout(
-        &self,
-        tree: &mut iced::advanced::widget::Tree,
-        renderer: &Renderer,
-        limits: &iced::advanced::layout::Limits,
-    ) -> iced::advanced::layout::Node {
-        let padding = Padding::from(self.padding);
-        let limits = limits.shrink(padding).width(self.width).height(self.height);
+    fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+        // let padding = Padding::from(self.padding);
+        let limits = limits.width(self.width).height(self.height);
         let mut children = tree.children.iter_mut();
         let item_size = iced::Size {
             width: self.item_width,
@@ -286,18 +281,19 @@ where
                 node
             })
             .collect();
+
         let (width, height) = match self.direction {
             Direction::Vertical => (self.item_width, self.item_height * self.items.len() as f32),
             Direction::Horizontal => (self.item_width * self.items.len() as f32, self.item_height),
         };
         let size = limits.resolve(self.width, self.height, iced::Size::new(width, height));
 
-        Node::with_children(size.expand(padding), nodes)
+        Node::with_children(size, nodes)
     }
 
     fn draw(
         &self,
-        state: &iced::advanced::widget::Tree,
+        state: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
