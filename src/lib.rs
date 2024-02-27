@@ -8,7 +8,7 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
 use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, Scrollable,
+    button, column, container, horizontal_space, row, scrollable, text, Scrollable, Space,
 };
 use iced::{event, Application, Command, Element, Event, Length, Subscription, Theme};
 use iced_aw::Wrap;
@@ -111,7 +111,7 @@ impl AppData {
 
     fn menu_view(&self) -> Element<AppMsg> {
         // horizontal_space().into()
-        menu::menu_view(self)
+        menu::menu_view(self).into()
     }
 
     fn directory_view(&self) -> Element<AppMsg> {
@@ -121,10 +121,13 @@ impl AppData {
         column![
             row![
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
-                horizontal_space(),
+                // horizontal_space(),
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
             ]
-            .padding(10),
+            // The row doesn't introspect size automatically, so we have to force it with the calls to width and height
+            .height(Length::Shrink)
+            // .width(Length::Fill)
+            .padding(10.),
             Scrollable::new(
                 SelectionList::new(values, |dir| {
                     AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
@@ -133,6 +136,7 @@ impl AppData {
                 .item_height(30.)
                 .width(260.)
             )
+            .height(Length::Fill)
         ]
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -182,6 +186,8 @@ impl AppData {
             .direction(scrollable::Direction::Vertical(
                 Properties::new().width(2.).scroller_width(10.),
             ))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into()
     }
 
@@ -503,7 +509,7 @@ impl Application for App {
                         .height(Length::Fill)
                     }
                     AppView::Grid => {
-                        column![inner.menu_view(), inner.grid_view(),]
+                        column![inner.menu_view(), inner.grid_view()]
                             .width(Length::Fill)
                             .height(Length::Fill)
                     }

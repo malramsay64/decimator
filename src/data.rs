@@ -15,8 +15,7 @@ use image::ImageFormat;
 use itertools::Itertools;
 use rayon::prelude::*;
 use sea_orm::query::*;
-use sea_orm::{sea_query, DatabaseConnection, *};
-use sea_query::Condition;
+use sea_orm::*;
 use uuid::Uuid;
 
 use crate::directory::DirectoryData;

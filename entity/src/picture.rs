@@ -1,9 +1,7 @@
-use super::Flag;
-use super::Rating;
-use super::Selection;
 use camino::Utf8PathBuf;
 use sea_orm::entity::prelude::*;
-use uuid::Uuid;
+
+use super::{Flag, Rating, Selection};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "pictures")]
