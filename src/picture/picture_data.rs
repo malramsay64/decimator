@@ -6,7 +6,7 @@ use entity::{picture, Flag, Rating, Selection};
 use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::io::Reader;
-use image::{ImageFormat, RgbaImage};
+use image::{ImageFormat, RgbImage, RgbaImage};
 use sea_orm::ActiveValue;
 use time::format_description::FormatItem;
 use time::macros::format_description;
@@ -79,18 +79,18 @@ impl PictureData {
         filepath: &Utf8PathBuf,
         scale_x: u32,
         scale_y: u32,
-    ) -> Result<RgbaImage, Error> {
+    ) -> Result<RgbImage, Error> {
         let file = std::fs::File::open(filepath)?;
         let mut cursor = std::io::BufReader::new(file);
         let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
 
         // Reset the buffer to the start to read the image file
         cursor.rewind()?;
-        let image = Reader::new(cursor).with_guessed_format()?.decode()?.resize(
-            scale_x,
-            scale_y,
-            FilterType::Triangle,
-        );
+        let image = Reader::new(cursor)
+            .with_guessed_format()?
+            .decode()?
+            .resize(scale_x, scale_y, FilterType::Triangle)
+            .into_rgb8();
         // Apply Exif image transformations
         // https://sirv.com/help/articles/rotate-photos-to-be-upright/
         Ok(
@@ -98,7 +98,7 @@ impl PictureData {
                 .get_field(Tag::Orientation, In::PRIMARY)
                 .and_then(|e| e.value.get_uint(0))
             {
-                Some(1) => image.into_rgba8(),
+                Some(1) => image,
                 Some(2) => flip_horizontal(&image),
                 Some(3) => rotate180(&image),
                 Some(4) => flip_vertical(&image),
@@ -107,7 +107,7 @@ impl PictureData {
                 Some(7) => rotate90(&flip_horizontal(&image)),
                 Some(8) => rotate270(&image),
                 // Where we can't interpret the exif data, we revert to the base image
-                _ => image.into_rgba8(),
+                _ => image,
             },
         )
     }
