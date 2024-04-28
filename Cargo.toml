@@ -20,7 +20,7 @@ tracing = "~0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-bunyan-formatter = "0.3.4"
 tracing-log = "0.2"
-walkdir = "~2.4"
+walkdir = "^2.4"
 anyhow = "~1.0.65"
 log = "~0.4.17"
 serde = { version = "~1.0.150", features = ["derive"] }
@@ -29,7 +29,6 @@ futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "^0.12"
 iced = { version="0.12", features = ["image", "tokio", "lazy", "advanced"] }
-# The menu is currently not updated for the latest master relase of iced
 iced_aw = { version = "0.8", features = ["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button"], default-features = false }
 image = "*"
 dirs = "5.0.1"
@@ -37,6 +36,7 @@ tokio = "*"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 lru = "0.12"
 rayon = "1.7.0"
+futures-concurrency = "7.6.0"
 
 [profile.release]
 lto = "thin"
