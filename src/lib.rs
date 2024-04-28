@@ -123,6 +123,7 @@ impl AppData {
                 button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
                 // horizontal_space(),
                 button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
+                button(text("Export")).on_press(AppMsg::SelectionExportRequest),
             ]
             // The row doesn't introspect size automatically, so we have to force it with the calls to width and height
             .height(Length::Shrink)
