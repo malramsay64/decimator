@@ -7,9 +7,7 @@ use data::{
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
-use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, Scrollable, Space,
-};
+use iced::widget::{button, column, container, row, scrollable, text, Scrollable};
 use iced::{event, Application, Command, Element, Event, Length, Subscription, Theme};
 use iced_aw::Wrap;
 use import::find_new_images;
@@ -36,7 +34,7 @@ use entity::Selection;
 use picture::PictureThumbnail;
 use thumbnail::ThumbnailData;
 
-/// Messages for runnning the application
+/// Messages for running the application
 #[derive(Debug, Clone)]
 pub enum AppMsg {
     /// Set up the application, this can only be done once within the application

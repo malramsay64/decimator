@@ -129,6 +129,10 @@ pub(crate) async fn query_unique_directories(
         .collect())
 }
 
+/// Modify the state of the selected attribute on an image
+///
+/// Provides an interface to the database ensuring the state of the selected
+/// image is appropriately updated.
 pub(crate) async fn update_selection_state(
     db: &DatabaseConnection,
     id: Uuid,

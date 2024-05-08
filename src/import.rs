@@ -40,7 +40,12 @@ impl Default for ImportStructure {
     }
 }
 
-pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
+/// Find all images nested within a directory.
+///
+/// Looks at all the images within a directory, grouping raw and jpeg files together
+/// providing a way to manage both these files together.
+///
+pub fn find_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
     WalkDir::new(directory)
         // This ensures the filenames are in order
         .sort_by_file_name()
@@ -48,6 +53,7 @@ pub fn map_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
         .filter_map(|e| e.ok())
         .filter(is_image)
         .map(|p| p.into_path().try_into().expect("Invalid UTF-8 path."))
+        // Group by the filenames without extensions, grouping the raw and jpeg files together.
         .group_by(|p: &Utf8PathBuf| p.with_extension(""))
         .into_iter()
         .filter_map(|(_key, group)| {
@@ -216,10 +222,14 @@ pub async fn find_new_images(db: &DatabaseConnection, directory: &Utf8PathBuf) {
     );
 
     let dir = directory.clone();
-    let images: Vec<_> = find_directory_images(&dir)
-        .into_iter()
-        .filter(|p| !existing_pictures.contains(&p.filepath))
-        .collect();
+    let images: Vec<_> = tokio::task::spawn_blocking(move || {
+        find_directory_images(&dir)
+            .into_iter()
+            .filter(|p| !existing_pictures.contains(&p.filepath))
+            .collect()
+    })
+    .await
+    .unwrap();
 
     if images.is_empty() {
         tracing::info!("No new images found in directory {directory}");
