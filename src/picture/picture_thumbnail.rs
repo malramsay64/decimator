@@ -1,7 +1,7 @@
 use entity::Selection;
 use iced::widget::{column, image, row, text};
 use iced::Element;
-use iced_aw::native::SegmentedButton;
+use iced_aw::widgets::SegmentedButton;
 
 use super::PictureData;
 use crate::AppMsg;

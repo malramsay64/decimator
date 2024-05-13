@@ -29,7 +29,7 @@ futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "^0.12"
 iced = { version="0.12", features = ["image", "tokio", "lazy", "advanced"] }
-iced_aw = { version = "0.8", features = ["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button"], default-features = false }
+iced_aw = { version = "0.9.1", features = ["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button", "icons"], default-features = false }
 image = "*"
 dirs = "5.0.1"
 tokio = "*"
