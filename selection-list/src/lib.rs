@@ -7,7 +7,7 @@ use iced::advanced::widget::Tree;
 use iced::advanced::{renderer, Clipboard, Layout, Shell, Widget};
 use iced::mouse::Cursor;
 use iced::widget::{container, scrollable};
-use iced::{event, mouse, touch, Element, Event, Length, Padding, Point, Rectangle};
+use iced::{event, mouse, touch, Element, Event, Length, Point, Rectangle};
 
 mod style;
 
@@ -160,8 +160,13 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
+        // This checks for changes to the values stored within the selection list
         tree.diff_children(&self.items);
+        // Update the state with the latest selected value
+        let state = tree.state.downcast_mut::<ListState>();
+        state.selected_index = self.selected
     }
+
     fn on_event(
         &mut self,
         state: &mut Tree,
@@ -315,6 +320,10 @@ where
             let is_hovered = list_state.hovered_option == Some(index);
 
             let (text_color, background_colour) = if is_selected {
+                tracing::trace!(
+                    "Setting selected for {index}, index {:?}",
+                    list_state.selected_index
+                );
                 (
                     theme.style(self.style).selected_text_color,
                     theme.style(self.style).selected_background,

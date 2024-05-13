@@ -142,6 +142,7 @@ impl AppData {
         .into()
     }
 
+    #[tracing::instrument(name = "Update Thumbnail View", level = "info", skip(self))]
     fn thumbnail_view(&self) -> Element<AppMsg> {
         let view: Vec<_> = self
             .thumbnail_view
@@ -155,12 +156,19 @@ impl AppData {
             )
             .collect();
 
+        let position = self
+            .preview
+            .map_or(Some(0), |id| self.thumbnail_view.get_position(&id));
+        tracing::trace!(
+            "Updating thumbnail scrollable view with preview {:?}, at position {:?}",
+            self.preview,
+            position
+        );
         Scrollable::new(
             SelectionList::new_with_selection(
                 view,
                 |i| AppMsg::UpdatePictureView(Some(i)),
-                self.preview
-                    .map_or(Some(0), |id| self.thumbnail_view.get_position(&id)),
+                position,
             )
             .direction(selection_list::Direction::Horizontal)
             .item_height(320.)
@@ -466,7 +474,7 @@ impl Application for App {
                     AppMsg::DirectoryNext => Command::none(),
                     AppMsg::DirectoryPrev => Command::none(),
                     AppMsg::ThumbnailNext => {
-                        tracing::info!("Selecting Next");
+                        tracing::debug!("Selecting Next Thumbnail");
                         inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
                         if let Some(id) = inner.preview {
                             Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
@@ -475,7 +483,7 @@ impl Application for App {
                         }
                     }
                     AppMsg::ThumbnailPrev => {
-                        tracing::info!("Selecting Prev");
+                        tracing::debug!("Selecting Prev Thumbnail");
                         inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
                         if let Some(id) = inner.preview {
                             Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
