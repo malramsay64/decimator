@@ -162,9 +162,13 @@ where
     fn diff(&self, tree: &mut Tree) {
         // This checks for changes to the values stored within the selection list
         tree.diff_children(&self.items);
-        // Update the state with the latest selected value
-        let state = tree.state.downcast_mut::<ListState>();
-        state.selected_index = self.selected
+        // Update the state with the latest selected value where a value is set. When
+        // there is no value set we want to use the previous value, hence there being
+        // no diff.
+        if self.selected.is_some() {
+            let state = tree.state.downcast_mut::<ListState>();
+            state.selected_index = self.selected
+        }
     }
 
     fn on_event(
