@@ -13,7 +13,7 @@ use iced::{event, Application, Command, Element, Length, Subscription, Theme};
 use iced_aw::Wrap;
 use import::find_new_images;
 use itertools::Itertools;
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use sea_orm::DatabaseConnection;
 use selection_list::SelectionList;
 use uuid::Uuid;
 
@@ -38,8 +38,6 @@ use thumbnail::ThumbnailData;
 /// Messages for running the application
 #[derive(Debug, Clone)]
 pub enum AppMsg {
-    /// Set up the application, this can only be done once within the application
-    Initialise(DatabaseConnection),
     /// The request to open the directory selection menu
     DirectoryAddRequest,
     DirectoryAdd(Utf8PathBuf),
@@ -80,7 +78,7 @@ pub enum AppView {
 }
 
 #[derive(Debug)]
-pub struct AppData {
+pub struct App {
     database: DatabaseConnection,
     directories: Vec<DirectoryData>,
     directory: Option<Utf8PathBuf>,
@@ -93,20 +91,7 @@ pub struct AppData {
     preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
 }
 
-impl AppData {
-    fn new(database: DatabaseConnection) -> Self {
-        Self {
-            database,
-            directories: vec![],
-            directory: None,
-            app_view: Default::default(),
-            thumbnail_view: Default::default(),
-            thumbnail_scroller: Id::unique(),
-            preview: None,
-            preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
-        }
-    }
-
+impl App {
     fn menu_view(&self) -> Element<AppMsg> {
         // horizontal_space().into()
         menu::menu_view(self).into()
@@ -236,254 +221,222 @@ impl AppData {
     }
 }
 
-// TODO: Remove the need to have an uninitialised state of the application
-#[derive(Debug, Default)]
-pub enum App {
-    #[default]
-    Uninitialised,
-    Initialised(AppData),
-}
-
 impl Application for App {
-    type Flags = String;
+    type Flags = DatabaseConnection;
     type Message = AppMsg;
     type Theme = Theme;
     type Executor = iced::executor::Default;
 
     #[tracing::instrument(name = "Initialising App")]
-    fn new(database_path: Self::Flags) -> (Self, Command<AppMsg>) {
+    fn new(database: DatabaseConnection) -> (Self, Command<Self::Message>) {
+        let app = Self {
+            database,
+            directories: vec![],
+            directory: None,
+            app_view: Default::default(),
+            thumbnail_view: Default::default(),
+            thumbnail_scroller: Id::unique(),
+            preview: None,
+            preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
+        };
         (
-            Self::default(),
-            Command::perform(
-                async move {
-                    let mut connection_options = ConnectOptions::new(database_path);
-                    // The minimum number of connections is rather important. There are cases within the application where
-                    // we have multiple connections open simultaneously to handle the streaming of data from the database
-                    // while performing operations on the data. This doesn't work if we don't increase the minimum number
-                    // of connections resulting in a lock on the connections.
-                    connection_options.max_connections(20).min_connections(4);
-                    tracing::debug!("Connection Options: {:?}", connection_options);
-                    Database::connect(connection_options)
-                        .await
-                        .expect("Unable to initialise sqlite database")
-                },
-                AppMsg::Initialise,
-            ),
+            app,
+            Command::perform(async {}, |_| AppMsg::QueryDirectories),
         )
     }
 
     #[tracing::instrument(name = "Updating App", level = "info", skip(self))]
     fn update(&mut self, msg: Self::Message) -> Command<AppMsg> {
-        match self {
-            Self::Uninitialised => match msg {
-                AppMsg::Initialise(database) => {
-                    *self = Self::Initialised(AppData::new(database));
-                    tracing::debug!("Updated app");
-                    Command::perform(async {}, |_| AppMsg::QueryDirectories)
+        let database = self.database.clone();
+        match msg {
+            AppMsg::SetView(view) => {
+                self.app_view = view;
+                Command::none()
+            }
+            AppMsg::DirectoryImportRequest => Command::perform(
+                async move {
+                    rfd::AsyncFileDialog::new()
+                        .pick_folder()
+                        .await
+                        .expect("No Directory found")
+                        .path()
+                        .to_str()
+                        .unwrap()
+                        .into()
+                },
+                AppMsg::DirectoryImport,
+            ),
+            AppMsg::DirectoryImport(dir) => Command::perform(
+                async move { import(&database, &dir).await.unwrap() },
+                |_| AppMsg::QueryDirectories,
+            ),
+            AppMsg::DirectoryAddRequest => Command::perform(
+                async move {
+                    rfd::AsyncFileDialog::new()
+                        .pick_folder()
+                        .await
+                        .expect("No Directory found")
+                        .path()
+                        .to_str()
+                        .unwrap()
+                        .into()
+                },
+                AppMsg::DirectoryAdd,
+            ),
+            AppMsg::DirectoryAdd(dir) => Command::perform(
+                async move {
+                    find_new_images(&database, &dir).await;
+                },
+                |_| AppMsg::QueryDirectories,
+            ),
+            AppMsg::QueryDirectories => Command::perform(
+                async move { query_unique_directories(&database).await.unwrap() },
+                AppMsg::UpdateDirectories,
+            ),
+            AppMsg::UpdateDirectories(dirs) => {
+                self.directories = dirs;
+                Command::none()
+            }
+            AppMsg::UpdateThumbnails(all) => Command::perform(
+                async move {
+                    // TODO: Add a dialog confirmation box
+                    update_thumbnails(&database, all)
+                        .await
+                        .expect("Unable to update thumbnails");
+                },
+                |_| AppMsg::Ignore,
+            ),
+            AppMsg::SelectDirectory(dir) => {
+                self.directory = Some(dir.clone());
+                Command::perform(
+                    async move {
+                        query_directory_pictures(&database, dir.into())
+                            .await
+                            .unwrap()
+                    },
+                    AppMsg::SetThumbnails,
+                )
+            }
+            AppMsg::SetThumbnails(thumbnails) => {
+                self.thumbnail_view.set_thumbnails(thumbnails);
+                // Default to selecting the first image within a directory
+                self.preview = self.thumbnail_view.positions().first().copied();
+                Command::none()
+            }
+            // Modify Thumbnail filters
+            AppMsg::DisplayPick(value) => {
+                self.thumbnail_view.set_pick(value);
+                Command::none()
+            }
+            AppMsg::DisplayOrdinary(value) => {
+                self.thumbnail_view.set_ordinary(value);
+                Command::none()
+            }
+            AppMsg::DisplayIgnore(value) => {
+                self.thumbnail_view.set_ignore(value);
+                Command::none()
+            }
+            AppMsg::DisplayHidden(value) => {
+                self.thumbnail_view.set_hidden(value);
+                Command::none()
+            }
+            // TODO: Implement ScrollTo action
+            AppMsg::ScrollTo(id) => {
+                let offset = self.thumbnail_view.get_position(&id).unwrap() as f32 * 240.;
+                scroll_to(
+                    self.thumbnail_scroller.clone(),
+                    AbsoluteOffset { x: offset, y: 0. },
+                )
+            }
+            AppMsg::SetSelectionCurrent(s) => {
+                if let Some(id) = self.preview {
+                    self.update(AppMsg::SetSelection((id, s)))
+                } else {
+                    Command::none()
                 }
-                _ => panic!("App needs to be initialised"),
-            },
-            Self::Initialised(inner) => {
-                let database = inner.database.clone();
-                match msg {
-                    AppMsg::SetView(view) => {
-                        inner.app_view = view;
-                        Command::none()
-                    }
-                    AppMsg::Initialise(_) => panic!("App is already initialised"),
-                    AppMsg::DirectoryImportRequest => Command::perform(
-                        async move {
-                            rfd::AsyncFileDialog::new()
-                                .pick_folder()
-                                .await
-                                .expect("No Directory found")
-                                .path()
-                                .to_str()
-                                .unwrap()
-                                .into()
-                        },
-                        AppMsg::DirectoryImport,
-                    ),
-                    AppMsg::DirectoryImport(dir) => Command::perform(
-                        async move { import(&database, &dir).await.unwrap() },
-                        |_| AppMsg::QueryDirectories,
-                    ),
-                    AppMsg::DirectoryAddRequest => Command::perform(
-                        async move {
-                            rfd::AsyncFileDialog::new()
-                                .pick_folder()
-                                .await
-                                .expect("No Directory found")
-                                .path()
-                                .to_str()
-                                .unwrap()
-                                .into()
-                        },
-                        AppMsg::DirectoryAdd,
-                    ),
-                    AppMsg::DirectoryAdd(dir) => Command::perform(
-                        async move {
-                            find_new_images(&database, &dir).await;
-                        },
-                        |_| AppMsg::QueryDirectories,
-                    ),
-                    AppMsg::QueryDirectories => Command::perform(
-                        async move { query_unique_directories(&database).await.unwrap() },
-                        AppMsg::UpdateDirectories,
-                    ),
-                    AppMsg::UpdateDirectories(dirs) => {
-                        inner.directories = dirs;
-                        Command::none()
-                    }
-                    AppMsg::UpdateThumbnails(all) => Command::perform(
-                        async move {
-                            // TODO: Add a dialog confirmation box
-                            update_thumbnails(&database, all)
-                                .await
-                                .expect("Unable to update thumbnails");
-                        },
-                        |_| AppMsg::Ignore,
-                    ),
-                    AppMsg::SelectDirectory(dir) => {
-                        inner.directory = Some(dir.clone());
-                        Command::perform(
-                            async move {
-                                query_directory_pictures(&database, dir.into())
-                                    .await
-                                    .unwrap()
-                            },
-                            AppMsg::SetThumbnails,
-                        )
-                    }
-                    AppMsg::SetThumbnails(thumbnails) => {
-                        inner.thumbnail_view.set_thumbnails(thumbnails);
-                        // Default to selecting the first image within a directory
-                        inner.preview = inner.thumbnail_view.positions().first().copied();
-                        Command::none()
-                    }
-                    // Modify Thumbnail filters
-                    AppMsg::DisplayPick(value) => {
-                        inner.thumbnail_view.set_pick(value);
-                        Command::none()
-                    }
-                    AppMsg::DisplayOrdinary(value) => {
-                        inner.thumbnail_view.set_ordinary(value);
-                        Command::none()
-                    }
-                    AppMsg::DisplayIgnore(value) => {
-                        inner.thumbnail_view.set_ignore(value);
-                        Command::none()
-                    }
-                    AppMsg::DisplayHidden(value) => {
-                        inner.thumbnail_view.set_hidden(value);
-                        Command::none()
-                    }
-                    // TODO: Implement ScrollTo action
-                    AppMsg::ScrollTo(id) => {
-                        let offset = inner.thumbnail_view.get_position(&id).unwrap() as f32 * 240.;
-                        scroll_to(
-                            inner.thumbnail_scroller.clone(),
-                            AbsoluteOffset { x: offset, y: 0. },
-                        )
-                    }
-                    AppMsg::SetSelectionCurrent(s) => {
-                        if let Some(id) = inner.preview {
-                            Command::perform(async {}, move |_| AppMsg::SetSelection((id, s)))
-                        } else {
-                            Command::none()
-                        }
-                    }
-                    AppMsg::SetSelection((id, s)) => {
-                        inner.thumbnail_view.set_selection(&id, s);
-                        Command::perform(
-                            async move { update_selection_state(&database, id, s).await.unwrap() },
-                            move |_| AppMsg::Ignore,
-                        )
-                    }
-                    AppMsg::SelectionExportRequest => Command::perform(
-                        async move {
-                            rfd::AsyncFileDialog::new()
-                                .pick_folder()
-                                .await
-                                .expect("No Directory found")
-                                .path()
-                                .to_str()
-                                .unwrap()
-                                .into()
-                        },
-                        AppMsg::SelectionExport,
-                    ),
-                    AppMsg::SelectionExport(dir) => {
-                        let items = inner.thumbnail_view.get_view();
-                        Command::perform(
-                            async move {
-                                for file in items.into_iter() {
-                                    let origin = file.filepath;
-                                    let destination = dir.join(origin.file_name().unwrap());
+            }
+            AppMsg::SetSelection((id, s)) => {
+                self.thumbnail_view.set_selection(&id, s);
+                Command::perform(
+                    async move { update_selection_state(&database, id, s).await.unwrap() },
+                    move |_| AppMsg::Ignore,
+                )
+            }
+            AppMsg::SelectionExportRequest => Command::perform(
+                async move {
+                    rfd::AsyncFileDialog::new()
+                        .pick_folder()
+                        .await
+                        .expect("No Directory found")
+                        .path()
+                        .to_str()
+                        .unwrap()
+                        .into()
+                },
+                AppMsg::SelectionExport,
+            ),
+            AppMsg::SelectionExport(dir) => {
+                let items = self.thumbnail_view.get_view();
+                Command::perform(
+                    async move {
+                        for file in items.into_iter() {
+                            let origin = file.filepath;
+                            let destination = dir.join(origin.file_name().unwrap());
 
-                                    tokio::fs::copy(origin, destination)
-                                        .await
-                                        .expect("Unable to copy image from {path}");
-                                }
-                            },
-                            |_| AppMsg::Ignore,
-                        )
-                    }
-                    AppMsg::SelectionPrintRequest => Command::none(),
-                    AppMsg::Ignore => Command::none(),
-                    AppMsg::DirectoryNext => Command::none(),
-                    AppMsg::DirectoryPrev => Command::none(),
-                    AppMsg::ThumbnailNext => {
-                        tracing::debug!("Selecting Next Thumbnail");
-                        inner.preview = inner.thumbnail_view.next(inner.preview.as_ref());
-                        if let Some(id) = inner.preview {
-                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
-                        } else {
-                            Command::none()
+                            tokio::fs::copy(origin, destination)
+                                .await
+                                .expect("Unable to copy image from {path}");
                         }
-                    }
-                    AppMsg::ThumbnailPrev => {
-                        tracing::debug!("Selecting Prev Thumbnail");
-                        inner.preview = inner.thumbnail_view.prev(inner.preview.as_ref());
-                        if let Some(id) = inner.preview {
-                            Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
-                        } else {
-                            Command::none()
-                        }
-                    }
-                    AppMsg::UpdatePictureView(preview) => {
-                        inner.preview = preview;
-                        Command::none()
-                    }
+                    },
+                    |_| AppMsg::Ignore,
+                )
+            }
+            AppMsg::SelectionPrintRequest => Command::none(),
+            AppMsg::Ignore => Command::none(),
+            AppMsg::DirectoryNext => Command::none(),
+            AppMsg::DirectoryPrev => Command::none(),
+            AppMsg::ThumbnailNext => {
+                tracing::debug!("Selecting Next Thumbnail");
+                self.preview = self.thumbnail_view.next(self.preview.as_ref());
+                if let Some(id) = self.preview {
+                    self.update(AppMsg::ScrollTo(id))
+                } else {
+                    Command::none()
                 }
+            }
+            AppMsg::ThumbnailPrev => {
+                tracing::debug!("Selecting Prev Thumbnail");
+                self.preview = self.thumbnail_view.prev(self.preview.as_ref());
+                if let Some(id) = self.preview {
+                    Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                } else {
+                    Command::none()
+                }
+            }
+            AppMsg::UpdatePictureView(preview) => {
+                self.preview = preview;
+                Command::none()
             }
         }
     }
 
     fn view(&self) -> Element<AppMsg> {
-        let content: Element<AppMsg> = match self {
-            Self::Uninitialised => column![text("Loading...")].into(),
-            Self::Initialised(inner) => row![
-                inner.directory_view(),
-                match inner.app_view {
-                    AppView::Preview => {
-                        column![
-                            inner.menu_view(),
-                            inner.preview_view(),
-                            inner.thumbnail_view()
-                        ]
+        let content: Element<AppMsg> = row![
+            self.directory_view(),
+            match self.app_view {
+                AppView::Preview => {
+                    column![self.menu_view(), self.preview_view(), self.thumbnail_view()]
                         .width(Length::Fill)
                         .height(Length::Fill)
-                    }
-                    AppView::Grid => {
-                        column![inner.menu_view(), inner.grid_view()]
-                            .width(Length::Fill)
-                            .height(Length::Fill)
-                    }
                 }
-            ]
-            .into(),
-        };
+                AppView::Grid => {
+                    column![self.menu_view(), self.grid_view()]
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                }
+            }
+        ]
+        .into();
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
