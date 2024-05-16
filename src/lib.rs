@@ -8,7 +8,8 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
 use iced::widget::{button, column, container, row, scrollable, text, Scrollable};
-use iced::{event, Application, Command, Element, Event, Length, Subscription, Theme};
+use iced::Event::Keyboard;
+use iced::{event, Application, Command, Element, Length, Subscription, Theme};
 use iced_aw::Wrap;
 use import::find_new_images;
 use itertools::Itertools;
@@ -69,7 +70,6 @@ pub enum AppMsg {
     DirectoryNext,
     DirectoryPrev,
     Ignore,
-    EventOccurred(Event),
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -413,46 +413,6 @@ impl Application for App {
                         },
                         AppMsg::SelectionExport,
                     ),
-                    AppMsg::EventOccurred(event) => {
-                        match event {
-                            Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
-                                match key.as_ref() {
-                                    keyboard::Key::Character("h")
-                                    | Key::Named(Named::ArrowLeft) => {
-                                        Command::perform(async move {}, move |_| {
-                                            AppMsg::ThumbnailPrev
-                                        })
-                                    }
-                                    keyboard::Key::Character("l")
-                                    | Key::Named(Named::ArrowRight) => {
-                                        Command::perform(async move {}, move |_| {
-                                            AppMsg::ThumbnailNext
-                                        })
-                                    }
-                                    // TODO: Keyboard Navigation of directories
-                                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
-                                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
-                                    Key::Character("p") => {
-                                        Command::perform(async move {}, move |_| {
-                                            AppMsg::SetSelectionCurrent(Selection::Pick)
-                                        })
-                                    }
-                                    Key::Character("o") => {
-                                        Command::perform(async move {}, move |_| {
-                                            AppMsg::SetSelectionCurrent(Selection::Ordinary)
-                                        })
-                                    }
-                                    Key::Character("i") => {
-                                        Command::perform(async move {}, move |_| {
-                                            AppMsg::SetSelectionCurrent(Selection::Ignore)
-                                        })
-                                    }
-                                    _ => Command::none(),
-                                }
-                            }
-                            _ => Command::none(),
-                        }
-                    }
                     AppMsg::SelectionExport(dir) => {
                         let items = inner.thumbnail_view.get_view();
                         Command::perform(
@@ -533,7 +493,27 @@ impl Application for App {
     }
 
     fn subscription(&self) -> Subscription<AppMsg> {
-        event::listen().map(AppMsg::EventOccurred)
+        let keyboard_sub = event::listen_with(|event, _| match event {
+            Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
+                match key.as_ref() {
+                    Key::Character("h") | Key::Named(Named::ArrowLeft) => {
+                        Some(AppMsg::ThumbnailPrev)
+                    }
+                    Key::Character("l") | Key::Named(Named::ArrowRight) => {
+                        Some(AppMsg::ThumbnailNext)
+                    }
+                    // TODO: Keyboard Navigation of directories
+                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
+                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
+                    Key::Character("p") => Some(AppMsg::SetSelectionCurrent(Selection::Pick)),
+                    Key::Character("o") => Some(AppMsg::SetSelectionCurrent(Selection::Ordinary)),
+                    Key::Character("i") => Some(AppMsg::SetSelectionCurrent(Selection::Ignore)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        });
+        keyboard_sub
     }
 
     fn title(&self) -> String {
