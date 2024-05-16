@@ -39,11 +39,9 @@ use thumbnail::ThumbnailData;
 #[derive(Debug, Clone)]
 pub enum AppMsg {
     /// The request to open the directory selection menu
-    DirectoryAddRequest,
-    DirectoryAdd(Utf8PathBuf),
+    DirectoryAdd,
     /// The request to open the directory selection menu
-    DirectoryImportRequest,
-    DirectoryImport(Utf8PathBuf),
+    DirectoryImport,
     QueryDirectories,
     UpdateDirectories(Vec<DirectoryData>),
     UpdateThumbnails(bool),
@@ -58,10 +56,9 @@ pub enum AppMsg {
     SetSelectionCurrent(Selection),
     // Signal to emit when we want to export, this creates the export dialog
     SetView(AppView),
-    SelectionExportRequest,
+    SelectionExport,
     // Contains the path where the files are being exported to
-    SelectionExport(Utf8PathBuf),
-    SelectionPrintRequest,
+    SelectionPrint,
     UpdatePictureView(Option<Uuid>),
     ThumbnailNext,
     ThumbnailPrev,
@@ -103,10 +100,10 @@ impl App {
         let values: Vec<_> = dirs.clone().zip(dirs.map(DirectoryData::view)).collect();
         column![
             row![
-                button(text("Add")).on_press(AppMsg::DirectoryAddRequest),
+                button(text("Add")).on_press(AppMsg::DirectoryAdd),
                 // horizontal_space(),
-                button(text("Import")).on_press(AppMsg::DirectoryImportRequest),
-                button(text("Export")).on_press(AppMsg::SelectionExportRequest),
+                button(text("Import")).on_press(AppMsg::DirectoryImport),
+                button(text("Export")).on_press(AppMsg::SelectionExport),
             ]
             // The row doesn't introspect size automatically, so we have to force it with the calls to width and height
             .height(Length::Shrink)
@@ -253,38 +250,31 @@ impl Application for App {
                 self.app_view = view;
                 Command::none()
             }
-            AppMsg::DirectoryImportRequest => Command::perform(
+            AppMsg::DirectoryImport => Command::perform(
                 async move {
-                    rfd::AsyncFileDialog::new()
+                    let dir: Utf8PathBuf = rfd::AsyncFileDialog::new()
                         .pick_folder()
                         .await
                         .expect("No Directory found")
                         .path()
                         .to_str()
                         .unwrap()
-                        .into()
+                        .into();
+
+                    import(&database, &dir).await.unwrap()
                 },
-                AppMsg::DirectoryImport,
-            ),
-            AppMsg::DirectoryImport(dir) => Command::perform(
-                async move { import(&database, &dir).await.unwrap() },
                 |_| AppMsg::QueryDirectories,
             ),
-            AppMsg::DirectoryAddRequest => Command::perform(
+            AppMsg::DirectoryAdd => Command::perform(
                 async move {
-                    rfd::AsyncFileDialog::new()
+                    let dir = rfd::AsyncFileDialog::new()
                         .pick_folder()
                         .await
                         .expect("No Directory found")
                         .path()
                         .to_str()
                         .unwrap()
-                        .into()
-                },
-                AppMsg::DirectoryAdd,
-            ),
-            AppMsg::DirectoryAdd(dir) => Command::perform(
-                async move {
+                        .into();
                     find_new_images(&database, &dir).await;
                 },
                 |_| AppMsg::QueryDirectories,
@@ -362,23 +352,19 @@ impl Application for App {
                     move |_| AppMsg::Ignore,
                 )
             }
-            AppMsg::SelectionExportRequest => Command::perform(
-                async move {
-                    rfd::AsyncFileDialog::new()
-                        .pick_folder()
-                        .await
-                        .expect("No Directory found")
-                        .path()
-                        .to_str()
-                        .unwrap()
-                        .into()
-                },
-                AppMsg::SelectionExport,
-            ),
-            AppMsg::SelectionExport(dir) => {
+            AppMsg::SelectionExport => {
                 let items = self.thumbnail_view.get_view();
                 Command::perform(
                     async move {
+                        let dir: Utf8PathBuf = rfd::AsyncFileDialog::new()
+                            .pick_folder()
+                            .await
+                            .expect("No Directory found")
+                            .path()
+                            .to_str()
+                            .unwrap()
+                            .into();
+
                         for file in items.into_iter() {
                             let origin = file.filepath;
                             let destination = dir.join(origin.file_name().unwrap());
@@ -391,7 +377,7 @@ impl Application for App {
                     |_| AppMsg::Ignore,
                 )
             }
-            AppMsg::SelectionPrintRequest => Command::none(),
+            AppMsg::SelectionPrint => Command::none(),
             AppMsg::Ignore => Command::none(),
             AppMsg::DirectoryNext => Command::none(),
             AppMsg::DirectoryPrev => Command::none(),
