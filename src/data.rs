@@ -14,8 +14,9 @@ use futures::future::{join_all, try_join_all};
 use image::ImageFormat;
 use itertools::Itertools;
 use rayon::prelude::*;
+use sea_orm::entity::*;
+use sea_orm::prelude::*;
 use sea_orm::query::*;
-use sea_orm::*;
 use uuid::Uuid;
 
 use crate::directory::DirectoryData;
@@ -44,10 +45,10 @@ pub(crate) async fn query_existing_pictures(
             Condition::all()
                 // This matches the current directory. There is no slash after
                 // the directory so we just use the exact value.
-                .add(picture::Column::Directory.eq(&format!("{directory}")))
+                .add(picture::Column::Directory.eq(format!("{directory}")))
                 // This matches all the subdirectories, which are needed since we
                 // perform a recursive search when adding new directories.
-                .add(picture::Column::Directory.like(&format!("{directory}/%"))),
+                .add(picture::Column::Directory.like(format!("{directory}/%"))),
         )
         .all(db)
         .await?

@@ -5,8 +5,7 @@ use camino::Utf8PathBuf;
 use entity::{picture, Flag, Rating, Selection};
 use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
-use image::io::Reader;
-use image::{ImageFormat, RgbImage, RgbaImage};
+use image::{ImageFormat, ImageReader, RgbImage, RgbaImage};
 use sea_orm::ActiveValue;
 use time::format_description::FormatItem;
 use time::macros::format_description;
@@ -86,7 +85,7 @@ impl PictureData {
 
         // Reset the buffer to the start to read the image file
         cursor.rewind()?;
-        let image = Reader::new(cursor)
+        let image = ImageReader::new(cursor)
             .with_guessed_format()?
             .decode()?
             .resize(scale_x, scale_y, FilterType::Triangle)

@@ -7,8 +7,7 @@ use std::path::Path;
 use anyhow::Result;
 use exif::{In, Tag};
 use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
-use image::io::Reader;
-use image::RgbaImage;
+use image::{ImageReader, RgbaImage};
 pub use picture_data::*;
 pub use picture_thumbnail::*;
 
@@ -31,7 +30,7 @@ pub fn load_image(
     // Reset the buffer to the start to read the image file
     cursor.rewind()?;
 
-    let mut image = Reader::new(cursor).with_guessed_format()?.decode()?;
+    let mut image = ImageReader::new(cursor).with_guessed_format()?.decode()?;
     if let Some((scale_x, scale_y)) = size {
         image = image.resize(scale_x, scale_y, FilterType::Triangle)
     }

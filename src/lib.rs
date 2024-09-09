@@ -15,6 +15,7 @@ use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::DatabaseConnection;
 use selection_list::SelectionList;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::import::import;
@@ -96,6 +97,11 @@ impl App {
 
     fn directory_view(&self) -> Element<AppMsg> {
         let dirs = self.directories.iter().sorted_unstable().rev();
+        let mut position = None;
+        if let Some(dir) = self.directory.clone() {
+            position = dirs.clone().position(|d| dir == d.directory);
+        }
+        info!("Position: {:?}", position);
 
         let values: Vec<_> = dirs.clone().zip(dirs.map(DirectoryData::view)).collect();
         column![
@@ -110,9 +116,11 @@ impl App {
             // .width(Length::Fill)
             .padding(10.),
             Scrollable::new(
-                SelectionList::new(values, |dir| {
-                    AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory))
-                },)
+                SelectionList::new_with_selection(
+                    values,
+                    |dir| { AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory)) },
+                    position
+                )
                 .item_width(250.)
                 .item_height(30.)
                 .width(260.)

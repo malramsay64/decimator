@@ -7,7 +7,7 @@ use sea_orm::{ConnectOptions, Database};
 
 fn main() -> Result<(), iced::Error> {
     // Configure tracing information
-    let subscriber = get_subscriber_terminal(APP_ID.into(), "debug".into(), std::io::stdout);
+    let subscriber = get_subscriber_terminal(APP_ID.into(), "trace".into(), std::io::stdout);
     init_subscriber(subscriber);
 
     // Set up the database we are running from

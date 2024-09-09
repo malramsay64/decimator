@@ -8,7 +8,7 @@ description = "An application to quickly manage and prioritise photos."
 documentation = ""
 
 [workspace.dependencies]
-iced = { version="0.12", feature=["image", "tokio", "lazy", "advanced"]}
+iced = { version="0.12", features=["image", "tokio", "lazy", "advanced"]}
 iced_aw = { version="~0.9", features=["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button", "icons"], default-features=false}
 sea-orm = { version="~1", features=["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
 burn = { version = "0.13", features = ["wgpu"] , default-features=false }

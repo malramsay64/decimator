@@ -1,6 +1,6 @@
 use iced::widget::{button, horizontal_space, row, text, toggler};
 use iced::{Border, Color, Element, Length, Renderer, Theme};
-use iced_aw::menu::{self, Item, Menu, MenuBar};
+use iced_aw::menu::{self, Item, Menu};
 use iced_aw::widgets::SegmentedButton;
 use iced_aw::{menu_bar, menu_items, quad};
 

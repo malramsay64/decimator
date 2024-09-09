@@ -59,7 +59,7 @@ impl PictureThumbnail {
         .into();
         if let Some(thumbnail) = self.thumbnail {
             column![
-                iced::widget::image(image::Handle::from_pixels(
+                iced::widget::image::Image::new(image::Handle::from_pixels(
                     thumbnail.width(),
                     thumbnail.height(),
                     thumbnail.to_vec()
