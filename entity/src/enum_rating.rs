@@ -1,4 +1,4 @@
-use sea_orm::{DeriveActiveEnum, EnumIter};
+use sea_orm::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
     EnumIter,
     DeriveActiveEnum,
 )]
-#[sea_orm(rs_type = "String", db_type = "String(None)")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum Rating {
     #[default]
     #[sea_orm(string_value = "Zero")]

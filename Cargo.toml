@@ -1,18 +1,30 @@
+[workspace]
+members = [".", "entity", "facial-recognition", "migration", "selection-list"]
+
+[workspace.package]
+version = "0.2.0"
+authors = ["Malcolm Ramsay <m@malramsay.com>"]
+description = "An application to quickly manage and prioritise photos."
+documentation = ""
+
+[workspace.dependencies]
+iced = { version="0.12", feature=["image", "tokio", "lazy", "advanced"]}
+iced_aw = { version="~0.9", features=["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button", "icons"], default-features=false}
+sea-orm = { version="~1", features=["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
+burn = { version = "0.13", features = ["wgpu"] , default-features=false }
+
 [package]
 name = "decimator"
 version = "0.1.0"
-authors = ["Malcolm Ramsay <m@malramsay.com>"]
 edition = "2021"
 publish = false
 
-[workspace]
-members = [".", "entity", "migration", "selection-list"]
 
 [dependencies]
 entity = { path = "entity" }
 selection-list = { path = "selection-list"}
 kamadak-exif = "~0.5.5"
-sea-orm = {version="~0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
+sea-orm.workspace = true
 uuid = { version = "~1", features = ["v4", "serde"] }
 camino = { version = "~1.1.1", features = ["serde1"] }
 time = {version = "~0.3.17", features = ["serde"] }
@@ -27,9 +39,9 @@ serde = { version = "~1.0.150", features = ["derive"] }
 serde_json = "1.0.89"
 futures = "0.3.28"
 num_cpus = "1.15.0"
-itertools = "^0.12"
-iced = { version="0.12", features = ["image", "tokio", "lazy", "advanced"] }
-iced_aw = { version = "0.9.1", features = ["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button", "icons"], default-features = false }
+itertools = "^0.13"
+iced.workspace = true 
+iced_aw.workspace = true
 image = "*"
 dirs = "5.0.1"
 tokio = "*"
@@ -39,5 +51,5 @@ rayon = "1.7.0"
 futures-concurrency = "7.6.0"
 
 [profile.release]
-lto = "thin"
+# lto = "thin"
 opt-level = 3

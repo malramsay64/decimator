@@ -22,7 +22,7 @@ pub enum Direction {
 
 /// The Private [`ListState`] Handles the State of the inner list.
 #[derive(Debug, Clone, Default)]
-pub struct ListState {
+struct ListState {
     /// Statehood of hovered_option
     pub hovered_option: Option<usize>,
     /// The index in the list of options of the last chosen Item Clicked for Processing

@@ -4,7 +4,7 @@ use iced_aw::menu::{self, Item, Menu, MenuBar};
 use iced_aw::widgets::SegmentedButton;
 use iced_aw::{menu_bar, menu_items, quad};
 
-use crate::{AppData, AppMsg, AppView};
+use crate::{App, AppMsg, AppView};
 
 /// Helper to generate a separator for the menu
 fn separator<'a>() -> Element<'a, AppMsg, Theme, iced::Renderer> {
@@ -20,7 +20,7 @@ fn separator<'a>() -> Element<'a, AppMsg, Theme, iced::Renderer> {
     .into()
 }
 
-pub fn menu_view(data: &AppData) -> Element<'_, AppMsg, Theme, Renderer> {
+pub fn menu_view(data: &App) -> Element<'_, AppMsg, Theme, Renderer> {
     let menu_template = |items| Menu::new(items).spacing(5.0);
 
     #[rustfmt::skip]

@@ -1,5 +1,8 @@
 # TODO
 
+- Select multiple items
+- Include Tags
+- Full text searching (sqlite MATCH)
 - Modal to confirm replacing of all thumbnails
 - Modal to check updating directory path if not found
 - Include rating scale
@@ -17,8 +20,6 @@
     along with the timezone associated with it.
   - Also update the location of the file based on the new datetime information
   - This would probably require storing the local time, along with the timezone
-- Include Tags
-- Full text searching (sqlite MATCH)
 - configure size of thumbnails
   - Within the application settings
   - This should be the value also for HiDPI screens
@@ -43,8 +44,8 @@
 - Style of Widgets
 - Implement Grid View
 - Double click to zoom
-- Implement the abilty to change the sort order of the files. This should be
-  in chronological order to begin with, sorted from the datbase. 
+- Implement the ability to change the sort order of the files. This should be
+  in chronological order to begin with, sorted from the database. 
   This will be the fallback sorting, with the ability to sort by filename
   and to reverse the sort order.
 - Perform the conversion from an image to a pixbuf when binding to a widget
