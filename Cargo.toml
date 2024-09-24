@@ -8,10 +8,11 @@ description = "An application to quickly manage and prioritise photos."
 documentation = ""
 
 [workspace.dependencies]
-iced = { version="0.12", features=["image", "tokio", "lazy", "advanced"]}
-iced_aw = { version="~0.9", features=["menu", "grid", "quad", "tab_bar", "wrap", "segmented_button", "icons"], default-features=false}
+iced = { version="0.13", features=["image", "tokio", "lazy", "advanced"]}
+iced_aw = { version="0.11", features=["menu", "grid", "quad", "tab_bar", "wrap"], default-features=false}
+iced_fonts = {version = "0.1"}
 sea-orm = { version="~1", features=["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
-burn = { version = "0.13", features = ["wgpu"] , default-features=false }
+burn = { version = "0.14", features = ["wgpu"] , default-features=false }
 
 [package]
 name = "decimator"
@@ -42,6 +43,7 @@ num_cpus = "1.15.0"
 itertools = "^0.13"
 iced.workspace = true 
 iced_aw.workspace = true
+iced_fonts.workspace = true
 image = "*"
 dirs = "5.0.1"
 tokio = "*"
