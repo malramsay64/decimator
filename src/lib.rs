@@ -6,10 +6,10 @@ use data::{
 };
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id, Properties};
+use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id};
 use iced::widget::{button, column, container, row, scrollable, text, Scrollable};
 use iced::Event::Keyboard;
-use iced::{event, Application, Command, Element, Length, Subscription, Theme};
+use iced::{event, Element, Length, Subscription, Task};
 use iced_aw::Wrap;
 use import::find_new_images;
 use itertools::Itertools;
@@ -38,7 +38,7 @@ use thumbnail::ThumbnailData;
 
 /// Messages for running the application
 #[derive(Debug, Clone)]
-pub enum AppMsg {
+pub enum Message {
     /// The request to open the directory selection menu
     DirectoryAdd,
     /// The request to open the directory selection menu
@@ -90,12 +90,12 @@ pub struct App {
 }
 
 impl App {
-    fn menu_view(&self) -> Element<AppMsg> {
+    fn menu_view(&self) -> Element<Message> {
         // horizontal_space().into()
-        menu::menu_view(self).into()
+        menu::menu_view(self)
     }
 
-    fn directory_view(&self) -> Element<AppMsg> {
+    fn directory_view(&self) -> Element<Message> {
         let dirs = self.directories.iter().sorted_unstable().rev();
         let mut position = None;
         if let Some(dir) = self.directory.clone() {
@@ -106,10 +106,10 @@ impl App {
         let values: Vec<_> = dirs.clone().zip(dirs.map(DirectoryData::view)).collect();
         column![
             row![
-                button(text("Add")).on_press(AppMsg::DirectoryAdd),
+                button(text("Add")).on_press(Message::DirectoryAdd),
                 // horizontal_space(),
-                button(text("Import")).on_press(AppMsg::DirectoryImport),
-                button(text("Export")).on_press(AppMsg::SelectionExport),
+                button(text("Import")).on_press(Message::DirectoryImport),
+                button(text("Export")).on_press(Message::SelectionExport),
             ]
             // The row doesn't introspect size automatically, so we have to force it with the calls to width and height
             .height(Length::Shrink)
@@ -118,7 +118,7 @@ impl App {
             Scrollable::new(
                 SelectionList::new_with_selection(
                     values,
-                    |dir| { AppMsg::SelectDirectory(DirectoryData::add_prefix(&dir.directory)) },
+                    |dir| { Message::SelectDirectory(DirectoryData::add_prefix(&dir.directory)) },
                     position
                 )
                 .item_width(250.)
@@ -133,7 +133,7 @@ impl App {
     }
 
     #[tracing::instrument(name = "Update Thumbnail View", level = "info", skip(self))]
-    fn thumbnail_view(&self) -> Element<AppMsg> {
+    fn thumbnail_view(&self) -> Element<Message> {
         let view: Vec<_> = self
             .thumbnail_view
             .positions()
@@ -157,7 +157,7 @@ impl App {
         Scrollable::new(
             SelectionList::new_with_selection(
                 view,
-                |i| AppMsg::UpdatePictureView(Some(i)),
+                |i| Message::UpdatePictureView(Some(i)),
                 position,
             )
             .direction(selection_list::Direction::Horizontal)
@@ -166,12 +166,14 @@ impl App {
             .height(320.),
         )
         .id(self.thumbnail_scroller.clone())
-        .direction(scrollable::Direction::Horizontal(Properties::default()))
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::default(),
+        ))
         .into()
     }
 
     /// Provides an overview of all the images on a grid
-    fn grid_view(&self) -> Element<AppMsg> {
+    fn grid_view(&self) -> Element<Message> {
         let mut thumbnails = self
             .thumbnail_view
             .get_view()
@@ -181,14 +183,14 @@ impl App {
         thumbnails.width = Length::Fill;
         scrollable(thumbnails)
             .direction(scrollable::Direction::Vertical(
-                Properties::new().width(2.).scroller_width(10.),
+                scrollable::Scrollbar::new().width(2.).scroller_width(10.),
             ))
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
     }
 
-    fn preview_view(&self) -> Element<AppMsg> {
+    fn preview_view(&self) -> Element<Message> {
         if let Some(id) = &self.preview {
             if let Some(filepath) = self.thumbnail_view.get_filepath(id) {
                 let mut cache = self.preview_cache.borrow_mut();
@@ -196,7 +198,7 @@ impl App {
                     Some(h) => h,
                     None => {
                         let i = picture::load_image(filepath.as_path(), None).unwrap();
-                        let handle = iced::widget::image::Handle::from_pixels(
+                        let handle = iced::widget::image::Handle::from_rgba(
                             i.width(),
                             i.height(),
                             i.to_vec(),
@@ -210,31 +212,26 @@ impl App {
                         .width(Length::Fill)
                         .height(Length::Fill),
                 )
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x()
-                .center_y()
+                // .width(Length::Fill)
+                // .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
                 .into();
             }
         }
         container(text("No image available"))
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .center_x()
-            .center_y()
+            // .height(Length::Fill)
+            // .width(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
             .into()
     }
 }
 
-impl Application for App {
-    type Flags = DatabaseConnection;
-    type Message = AppMsg;
-    type Theme = Theme;
-    type Executor = iced::executor::Default;
-
+impl App {
     #[tracing::instrument(name = "Initialising App")]
-    fn new(database: DatabaseConnection) -> (Self, Command<Self::Message>) {
-        let app = Self {
+    pub fn new(database: DatabaseConnection) -> Self {
+        Self {
             database,
             directories: vec![],
             directory: None,
@@ -243,22 +240,18 @@ impl Application for App {
             thumbnail_scroller: Id::unique(),
             preview: None,
             preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
-        };
-        (
-            app,
-            Command::perform(async {}, |_| AppMsg::QueryDirectories),
-        )
+        }
     }
 
     #[tracing::instrument(name = "Updating App", level = "info", skip(self))]
-    fn update(&mut self, msg: Self::Message) -> Command<AppMsg> {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         let database = self.database.clone();
-        match msg {
-            AppMsg::SetView(view) => {
+        match message {
+            Message::SetView(view) => {
                 self.app_view = view;
-                Command::none()
+                Task::none()
             }
-            AppMsg::DirectoryImport => Command::perform(
+            Message::DirectoryImport => Task::perform(
                 async move {
                     let dir: Utf8PathBuf = rfd::AsyncFileDialog::new()
                         .pick_folder()
@@ -271,9 +264,9 @@ impl Application for App {
 
                     import(&database, &dir).await.unwrap()
                 },
-                |_| AppMsg::QueryDirectories,
+                |_| Message::QueryDirectories,
             ),
-            AppMsg::DirectoryAdd => Command::perform(
+            Message::DirectoryAdd => Task::perform(
                 async move {
                     let dir = rfd::AsyncFileDialog::new()
                         .pick_folder()
@@ -285,84 +278,84 @@ impl Application for App {
                         .into();
                     find_new_images(&database, &dir).await;
                 },
-                |_| AppMsg::QueryDirectories,
+                |_| Message::QueryDirectories,
             ),
-            AppMsg::QueryDirectories => Command::perform(
+            Message::QueryDirectories => Task::perform(
                 async move { query_unique_directories(&database).await.unwrap() },
-                AppMsg::UpdateDirectories,
+                Message::UpdateDirectories,
             ),
-            AppMsg::UpdateDirectories(dirs) => {
+            Message::UpdateDirectories(dirs) => {
                 self.directories = dirs;
-                Command::none()
+                Task::none()
             }
-            AppMsg::UpdateThumbnails(all) => Command::perform(
+            Message::UpdateThumbnails(all) => Task::perform(
                 async move {
                     // TODO: Add a dialog confirmation box
                     update_thumbnails(&database, all)
                         .await
                         .expect("Unable to update thumbnails");
                 },
-                |_| AppMsg::Ignore,
+                |_| Message::Ignore,
             ),
-            AppMsg::SelectDirectory(dir) => {
+            Message::SelectDirectory(dir) => {
                 self.directory = Some(dir.clone());
-                Command::perform(
+                Task::perform(
                     async move {
                         query_directory_pictures(&database, dir.into())
                             .await
                             .unwrap()
                     },
-                    AppMsg::SetThumbnails,
+                    Message::SetThumbnails,
                 )
             }
-            AppMsg::SetThumbnails(thumbnails) => {
+            Message::SetThumbnails(thumbnails) => {
                 self.thumbnail_view.set_thumbnails(thumbnails);
                 // Default to selecting the first image within a directory
                 self.preview = self.thumbnail_view.positions().first().copied();
-                Command::none()
+                Task::none()
             }
             // Modify Thumbnail filters
-            AppMsg::DisplayPick(value) => {
+            Message::DisplayPick(value) => {
                 self.thumbnail_view.set_pick(value);
-                Command::none()
+                Task::none()
             }
-            AppMsg::DisplayOrdinary(value) => {
+            Message::DisplayOrdinary(value) => {
                 self.thumbnail_view.set_ordinary(value);
-                Command::none()
+                Task::none()
             }
-            AppMsg::DisplayIgnore(value) => {
+            Message::DisplayIgnore(value) => {
                 self.thumbnail_view.set_ignore(value);
-                Command::none()
+                Task::none()
             }
-            AppMsg::DisplayHidden(value) => {
+            Message::DisplayHidden(value) => {
                 self.thumbnail_view.set_hidden(value);
-                Command::none()
+                Task::none()
             }
             // TODO: Implement ScrollTo action
-            AppMsg::ScrollTo(id) => {
+            Message::ScrollTo(id) => {
                 let offset = self.thumbnail_view.get_position(&id).unwrap() as f32 * 240.;
                 scroll_to(
                     self.thumbnail_scroller.clone(),
                     AbsoluteOffset { x: offset, y: 0. },
                 )
             }
-            AppMsg::SetSelectionCurrent(s) => {
+            Message::SetSelectionCurrent(s) => {
                 if let Some(id) = self.preview {
-                    self.update(AppMsg::SetSelection((id, s)))
+                    self.update(Message::SetSelection((id, s)))
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
-            AppMsg::SetSelection((id, s)) => {
+            Message::SetSelection((id, s)) => {
                 self.thumbnail_view.set_selection(&id, s);
-                Command::perform(
+                Task::perform(
                     async move { update_selection_state(&database, id, s).await.unwrap() },
-                    move |_| AppMsg::Ignore,
+                    move |_| Message::Ignore,
                 )
             }
-            AppMsg::SelectionExport => {
+            Message::SelectionExport => {
                 let items = self.thumbnail_view.get_view();
-                Command::perform(
+                Task::perform(
                     async move {
                         let dir: Utf8PathBuf = rfd::AsyncFileDialog::new()
                             .pick_folder()
@@ -382,40 +375,40 @@ impl Application for App {
                                 .expect("Unable to copy image from {path}");
                         }
                     },
-                    |_| AppMsg::Ignore,
+                    |_| Message::Ignore,
                 )
             }
-            AppMsg::SelectionPrint => Command::none(),
-            AppMsg::Ignore => Command::none(),
-            AppMsg::DirectoryNext => Command::none(),
-            AppMsg::DirectoryPrev => Command::none(),
-            AppMsg::ThumbnailNext => {
+            Message::SelectionPrint => Task::none(),
+            Message::Ignore => Task::none(),
+            Message::DirectoryNext => Task::none(),
+            Message::DirectoryPrev => Task::none(),
+            Message::ThumbnailNext => {
                 tracing::debug!("Selecting Next Thumbnail");
                 self.preview = self.thumbnail_view.next(self.preview.as_ref());
                 if let Some(id) = self.preview {
-                    self.update(AppMsg::ScrollTo(id))
+                    self.update(Message::ScrollTo(id))
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
-            AppMsg::ThumbnailPrev => {
+            Message::ThumbnailPrev => {
                 tracing::debug!("Selecting Prev Thumbnail");
                 self.preview = self.thumbnail_view.prev(self.preview.as_ref());
                 if let Some(id) = self.preview {
-                    Command::perform(async move {}, move |_| AppMsg::ScrollTo(id))
+                    Task::perform(async move {}, move |_| Message::ScrollTo(id))
                 } else {
-                    Command::none()
+                    Task::none()
                 }
             }
-            AppMsg::UpdatePictureView(preview) => {
+            Message::UpdatePictureView(preview) => {
                 self.preview = preview;
-                Command::none()
+                Task::none()
             }
         }
     }
 
-    fn view(&self) -> Element<AppMsg> {
-        let content: Element<AppMsg> = row![
+    pub fn view(&self) -> Element<Message> {
+        let content: Element<Message> = row![
             self.directory_view(),
             match self.app_view {
                 AppView::Preview => {
@@ -432,42 +425,34 @@ impl Application for App {
         ]
         .into();
         container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x()
-            .center_y()
+            // .width(Length::Fill)
+            // .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
             .into()
     }
 
-    fn subscription(&self) -> Subscription<AppMsg> {
-        let keyboard_sub = event::listen_with(|event, _| match event {
+    pub fn subscription(&self) -> Subscription<Message> {
+        let keyboard_sub = event::listen_with(|event, _, _| match event {
             Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
                 match key.as_ref() {
                     Key::Character("h") | Key::Named(Named::ArrowLeft) => {
-                        Some(AppMsg::ThumbnailPrev)
+                        Some(Message::ThumbnailPrev)
                     }
                     Key::Character("l") | Key::Named(Named::ArrowRight) => {
-                        Some(AppMsg::ThumbnailNext)
+                        Some(Message::ThumbnailNext)
                     }
                     // TODO: Keyboard Navigation of directories
-                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryPrev),
-                    // KeyCode::H | KeyCode::Left => Some(AppMsg::DirectoryNext),
-                    Key::Character("p") => Some(AppMsg::SetSelectionCurrent(Selection::Pick)),
-                    Key::Character("o") => Some(AppMsg::SetSelectionCurrent(Selection::Ordinary)),
-                    Key::Character("i") => Some(AppMsg::SetSelectionCurrent(Selection::Ignore)),
+                    // KeyCode::H | KeyCode::Left => Some(Message::DirectoryPrev),
+                    // KeyCode::H | KeyCode::Left => Some(Message::DirectoryNext),
+                    Key::Character("p") => Some(Message::SetSelectionCurrent(Selection::Pick)),
+                    Key::Character("o") => Some(Message::SetSelectionCurrent(Selection::Ordinary)),
+                    Key::Character("i") => Some(Message::SetSelectionCurrent(Selection::Ignore)),
                     _ => None,
                 }
             }
             _ => None,
         });
         keyboard_sub
-    }
-
-    fn title(&self) -> String {
-        String::from("Decimator")
-    }
-
-    fn theme(&self) -> Theme {
-        Theme::Dark
     }
 }

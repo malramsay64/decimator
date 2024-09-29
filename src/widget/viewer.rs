@@ -1,5 +1,4 @@
 //! Zoom and pan on an image.
-use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 use iced::advanced::image::FilterMethod;
@@ -83,7 +82,7 @@ impl<Handle> Viewer<Handle> {
 impl<Message, Renderer, Handle> Widget<Message, Theme, Renderer> for Viewer<Handle>
 where
     Renderer: image::Renderer<Handle = Handle>,
-    Handle: Clone + Hash,
+    Handle: Clone,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
@@ -99,7 +98,7 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let Size { width, height } = renderer.dimensions(&self.handle);
+        let Size { width, height } = renderer.measure_image(&self.handle);
 
         let mut size = limits.resolve(
             self.width,
@@ -114,7 +113,7 @@ where
         };
 
         // Only calculate viewport sizes if the images are constrained to a limited space.
-        // If they are Fill|Portion let them expand within their alotted space.
+        // If they are Fill|Portion let them expand within their allotted space.
         match expansion_size {
             Length::Shrink | Length::Fixed(_) => {
                 let aspect_ratio = width as f32 / height as f32;
@@ -223,7 +222,7 @@ where
                             let Size {
                                 width: image_width,
                                 height: image_height,
-                            } = renderer.dimensions(&self.handle);
+                            } = renderer.measure_image(&self.handle);
 
                             // TODO: Check whether this should be max or min
                             state.scale = (image_width as f32 / bound_width)
@@ -342,10 +341,14 @@ where
 
         renderer.with_layer(bounds, |renderer| {
             renderer.with_translation(translation, |renderer| {
-                image::Renderer::draw(
-                    renderer,
-                    self.handle.clone(),
-                    FilterMethod::Linear,
+                renderer.draw_image(
+                    image::Image {
+                        handle: self.handle.clone(),
+                        filter_method: FilterMethod::Linear,
+                        rotation: 0.into(),
+                        opacity: 1.,
+                        snap: true,
+                    },
                     Rectangle {
                         x: bounds.x,
                         y: bounds.y,
@@ -416,7 +419,7 @@ impl<'a, Message, Renderer, Handle> From<Viewer<Handle>> for Element<'a, Message
 where
     Renderer: 'a + image::Renderer<Handle = Handle>,
     Message: 'a,
-    Handle: Clone + Hash + 'a,
+    Handle: Clone + 'a,
 {
     fn from(viewer: Viewer<Handle>) -> Element<'a, Message, Theme, Renderer> {
         Element::new(viewer)
@@ -435,7 +438,7 @@ pub fn image_size<Renderer>(
 where
     Renderer: image::Renderer,
 {
-    let Size { width, height } = renderer.dimensions(handle);
+    let Size { width, height } = renderer.measure_image(handle);
 
     let (width, height) = {
         let dimensions = (width as f32, height as f32);

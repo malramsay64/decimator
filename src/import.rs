@@ -54,7 +54,7 @@ pub fn find_directory_images(directory: &Utf8Path) -> Vec<PictureData> {
         .filter(is_image)
         .map(|p| p.into_path().try_into().expect("Invalid UTF-8 path."))
         // Group by the filenames without extensions, grouping the raw and jpeg files together.
-        .group_by(|p: &Utf8PathBuf| p.with_extension(""))
+        .chunk_by(|p: &Utf8PathBuf| p.with_extension(""))
         .into_iter()
         .filter_map(|(_key, group)| {
             group.fold(None, |data: Option<PictureData>, path| {

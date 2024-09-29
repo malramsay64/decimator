@@ -11,7 +11,7 @@ use iced::{event, mouse, touch, Element, Event, Length, Point, Rectangle};
 
 mod style;
 
-use style::StyleSheet;
+use style::Catalog;
 
 #[derive(PartialEq, Clone, Copy, Default, Debug, Eq)]
 pub enum Direction {
@@ -34,7 +34,7 @@ where
     Label: Eq + Hash + Clone,
     Message: Clone,
     Renderer: renderer::Renderer,
-    Theme: StyleSheet + 'a,
+    Theme: Catalog,
 {
     /// The items we are going to display within this widget
     items: Vec<Element<'a, Message, Theme, Renderer>>,
@@ -42,7 +42,7 @@ where
     on_selected: Box<dyn Fn(Label) -> Message + 'a>,
     selected: Option<usize>,
     /// Style for Font colors and Box hover colors.
-    pub style: <Theme as StyleSheet>::Style,
+    pub style: <Theme as Catalog>::Class<'a>,
     item_width: f32,
     item_height: f32,
     width: Length,
@@ -59,7 +59,7 @@ where
     Label: Eq + Hash + Clone + 'a,
     Message: Clone + 'a,
     Renderer: renderer::Renderer + 'a,
-    Theme: StyleSheet + scrollable::StyleSheet + container::StyleSheet + 'a,
+    Theme: Catalog,
 {
     pub fn new(
         values: Vec<(Label, Element<'a, Message, Theme, Renderer>)>,
@@ -84,7 +84,7 @@ where
             direction: Direction::Vertical,
             on_selected: Box::new(on_selected),
             selected: selection,
-            style: <Theme as StyleSheet>::Style::default(),
+            style: <Theme as Catalog>::default(),
             padding: 0.,
             renderer: PhantomData,
         }
@@ -126,7 +126,7 @@ impl<'a, Label, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
 where
     Label: Clone + Eq + Hash + 'a,
     Renderer: renderer::Renderer,
-    Theme: StyleSheet + 'a,
+    Theme: 'a + Catalog,
     Message: std::clone::Clone,
 {
     fn tag(&self) -> Tag {
@@ -329,18 +329,18 @@ where
                     list_state.selected_index
                 );
                 (
-                    theme.style(self.style).selected_text_color,
-                    theme.style(self.style).selected_background,
+                    theme.style(&self.style, style::Status::Selected).text_color,
+                    theme.style(&self.style, style::Status::Selected).background,
                 )
             } else if is_hovered {
                 (
-                    theme.style(self.style).hovered_text_color,
-                    theme.style(self.style).hovered_background,
+                    theme.style(&self.style, style::Status::Hovered).text_color,
+                    theme.style(&self.style, style::Status::Hovered).background,
                 )
             } else {
                 (
-                    theme.style(self.style).text_color,
-                    theme.style(self.style).background,
+                    theme.style(&self.style, style::Status::Active).text_color,
+                    theme.style(&self.style, style::Status::Active).background,
                 )
             };
             let border = iced::Border {
@@ -373,7 +373,7 @@ where
     Label: Clone + Eq + Hash + 'a,
     Renderer: 'a + renderer::Renderer,
     Message: 'a + std::clone::Clone,
-    Theme: StyleSheet + 'a,
+    Theme: 'a + Catalog + container::Catalog + scrollable::Catalog,
 {
     fn from(
         list: SelectionList<'a, Label, Message, Theme, Renderer>,

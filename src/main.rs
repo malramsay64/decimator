@@ -2,7 +2,7 @@ const APP_ID: &str = "com.malramsay.Decimator";
 
 use decimator::telemetry::{get_subscriber_terminal, init_subscriber};
 use decimator::App;
-use iced::{Application, Settings};
+use iced::Task;
 use sea_orm::{ConnectOptions, Database};
 
 fn main() -> Result<(), iced::Error> {
@@ -37,8 +37,7 @@ fn main() -> Result<(), iced::Error> {
             .expect("Unable to initialise sqlite database")
     };
 
-    App::run(Settings {
-        flags: connection,
-        ..Default::default()
-    })
+    let app = App::new(connection);
+
+    iced::application("Decimator", App::update, App::view).run_with(|| (app, Task::none()))
 }

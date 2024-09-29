@@ -1,10 +1,9 @@
 use entity::Selection;
-use iced::widget::{column, image, row, text};
+use iced::widget::{column, image, row, text, Button};
 use iced::Element;
-use iced_aw::widgets::SegmentedButton;
 
 use super::PictureData;
-use crate::AppMsg;
+use crate::Message;
 
 /// Defining the data for a thumbnail image
 pub type PictureThumbnail = PictureData;
@@ -29,37 +28,25 @@ impl Ord for PictureThumbnail {
 }
 
 impl PictureThumbnail {
-    pub fn view(self) -> Element<'static, AppMsg> {
+    pub fn view(self) -> Element<'static, Message> {
         let button_width = iced::Length::from(40.0);
-        let button_ignore: Element<'_, AppMsg> = SegmentedButton::new(
-            text("I"),
-            Selection::Ignore,
-            Some(self.selection),
-            AppMsg::SetSelectionCurrent,
-        )
-        .width(button_width)
-        .into();
+        let button_ignore: Element<'_, Message> = Button::new(text("I"))
+            .on_press(Message::SetSelectionCurrent(Selection::Ignore))
+            .width(button_width)
+            .into();
 
-        let button_ordinary: Element<'_, AppMsg> = SegmentedButton::new(
-            text("O"),
-            Selection::Ordinary,
-            Some(self.selection),
-            AppMsg::SetSelectionCurrent,
-        )
-        .width(button_width)
-        .into();
+        let button_ordinary: Element<'_, Message> = Button::new(text("O"))
+            .on_press(Message::SetSelectionCurrent(Selection::Ordinary))
+            .width(button_width)
+            .into();
 
-        let button_pick: Element<'_, AppMsg> = SegmentedButton::new(
-            text("P"),
-            Selection::Pick,
-            Some(self.selection),
-            AppMsg::SetSelectionCurrent,
-        )
-        .width(button_width)
-        .into();
+        let button_pick: Element<'_, Message> = Button::new(text("P"))
+            .on_press(Message::SetSelectionCurrent(Selection::Pick))
+            .width(button_width)
+            .into();
         if let Some(thumbnail) = self.thumbnail {
             column![
-                iced::widget::image::Image::new(image::Handle::from_pixels(
+                iced::widget::image::Image::new(image::Handle::from_rgba(
                     thumbnail.width(),
                     thumbnail.height(),
                     thumbnail.to_vec()
@@ -69,12 +56,12 @@ impl PictureThumbnail {
                 // TODO: Re-enable once supported by iced_aw
                 row![button_ignore, button_ordinary, button_pick]
             ]
-            .align_items(iced::Alignment::Center)
+            .align_x(iced::Alignment::Center)
             .padding(10)
             .into()
         } else {
             column![text("No thumbnail")]
-                .align_items(iced::Alignment::Center)
+                .align_x(iced::Alignment::Center)
                 .width(240)
                 .height(240)
                 .into()
