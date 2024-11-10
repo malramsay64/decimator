@@ -1,7 +1,7 @@
 const APP_ID: &str = "com.malramsay.Decimator";
 
 use decimator::telemetry::{get_subscriber_terminal, init_subscriber};
-use decimator::App;
+use decimator::{App, Message};
 use iced::Task;
 use sea_orm::{ConnectOptions, Database};
 
@@ -39,5 +39,6 @@ fn main() -> Result<(), iced::Error> {
 
     let app = App::new(connection);
 
-    iced::application("Decimator", App::update, App::view).run_with(|| (app, Task::none()))
+    iced::application("Decimator", App::update, App::view)
+        .run_with(|| (app, Task::perform(async {}, |_| Message::QueryDirectories)))
 }
