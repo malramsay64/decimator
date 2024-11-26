@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::num::NonZero;
 
 use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -155,6 +156,7 @@ pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<
     let new_images = new_images
         // Spawns a concurrent stream to
         .into_co_stream()
+        .limit(NonZero::new(16))
         .map(|mut image| async move {
             tracing::debug!("{:?}", &image);
             // Create the directory structure
