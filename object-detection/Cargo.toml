@@ -1,0 +1,12 @@
+[package]
+name = "object-detection"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+[dependencies]
+burn = { workspace = true, features = ["wgpu"] }
+yolox-burn = {path = "/home/malcolm/Documents/Programming/models/yolox-burn", features=["pretrained"]}
+image = "*"

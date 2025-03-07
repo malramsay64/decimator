@@ -1,6 +1,5 @@
-use burn::backend::wgpu::WgpuDevice;
 use burn::tensor::backend::Backend;
-use burn::tensor::{Data, Device, Element, Shape, Tensor};
+use burn::tensor::{Device, Element, Shape, Tensor, TensorData};
 use facial_recognition::model::BlazeFace;
 
 fn to_tensor<B: Backend, T: Element>(
@@ -8,7 +7,7 @@ fn to_tensor<B: Backend, T: Element>(
     shape: [usize; 3],
     device: &Device<B>,
 ) -> Tensor<B, 3> {
-    Tensor::<B, 3>::from_data(Data::new(data, Shape::new(shape)).convert(), device)
+    Tensor::<B, 3>::from_data(TensorData::new(data, Shape::new(shape)), device)
         // [H, W, C] -> [C, H, W]
         .permute([2, 0, 1])
 }
@@ -18,7 +17,7 @@ fn test_image() {
     let device = burn::backend::wgpu::WgpuDevice::default();
     let model = BlazeFace::<burn::backend::Wgpu>::init(&device);
 
-    let img = image::open("test/data/img_136.jpg").unwrap().resize_exact(
+    let img = image::open("tests/data/img_136.jpg").unwrap().resize_exact(
         256,
         256,
         image::imageops::FilterType::Triangle,

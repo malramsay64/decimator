@@ -101,6 +101,7 @@ pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<
     // Load all existing pictures from the database. We want to do the checks within rust, rather than
     // potentially having large numbers of database queries.
     // The list of all the pictures that currently exist within the database.
+    // TODO: Remove image data from this view of the PictureData
     let pictures_existing = query_existing_pictures(db, &Utf8PathBuf::from(""))
         .await
         .unwrap()

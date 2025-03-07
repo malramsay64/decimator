@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "entity", "facial-recognition", "migration", "selection-list"]
+members = [".", "entity", "facial-recognition", "migration", "object-detection", "selection-list"]
 
 [workspace.package]
 version = "0.2.0"
@@ -13,6 +13,7 @@ iced_aw = { version="0.11", features=["menu", "grid", "quad", "tab_bar", "wrap"]
 iced_fonts = {version = "0.1"}
 sea-orm = { version="~1", features=["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
 burn = { version = "0.14", features = ["wgpu"] , default-features=false }
+# burn-import = { version="0.14", default-features=false }
 
 [package]
 name = "decimator"
@@ -23,6 +24,7 @@ publish = false
 
 [dependencies]
 entity = { path = "entity" }
+sqlx = "0.8.1"
 selection-list = { path = "selection-list"}
 kamadak-exif = "~0.5.5"
 sea-orm.workspace = true
@@ -50,7 +52,7 @@ tokio = "*"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 lru = "0.12"
 rayon = "1.7.0"
-futures-concurrency = "7.6.0"
+futures-concurrency = "~7.6.0"
 
 [profile.release]
 # lto = "thin"

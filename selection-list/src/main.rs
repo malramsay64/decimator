@@ -1,12 +1,13 @@
 use iced::widget::{column, row, text, vertical_space};
-use iced::{Application, Command, Length, Settings, Theme};
+use iced::{Application, Element, Length, Settings, Task, Theme};
 use selection_list::SelectionList;
 
 #[derive(Debug, Clone)]
-enum AppMsg {
+enum Message {
     None,
 }
 
+#[derive(Debug, Default)]
 struct App {
     items: Vec<String>,
 }
@@ -17,27 +18,16 @@ impl App {
             items: (1..100).map(|f| format!("Item {f}")).collect(),
         }
     }
-}
-
-impl Application for App {
-    type Flags = ();
-    type Message = AppMsg;
-    type Theme = Theme;
-    type Executor = iced::executor::Default;
-
-    fn new(_flags: Self::Flags) -> (Self, Command<AppMsg>) {
-        (Self::new(), Command::none())
-    }
 
     fn title(&self) -> String {
         "Selection List Demo".into()
     }
 
-    fn update(&mut self, _message: Self::Message) -> iced::Command<Self::Message> {
-        Command::none()
+    fn update(&mut self, _message: Message) -> Task<Message> {
+        Task::none()
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, Theme, iced::Renderer> {
+    fn view(&self) -> Element<Message> {
         let items_vertical: Vec<_> = self
             .items
             .iter()
@@ -49,7 +39,7 @@ impl Application for App {
             .map(|i| (i.clone(), text(i).into()))
             .collect();
         row![
-            SelectionList::new(items_vertical, |_| AppMsg::None,)
+            SelectionList::new(items_vertical, |_| Message::None,)
                 .item_height(30.)
                 .item_width(200.)
                 .width(200)
@@ -57,7 +47,7 @@ impl Application for App {
                 .direction(selection_list::Direction::Vertical),
             column![
                 vertical_space(),
-                SelectionList::new(items_horizontal, |_| AppMsg::None,)
+                SelectionList::new(items_horizontal, |_| Message::None,)
                     .item_height(60.)
                     .item_width(100.)
                     .height(70)
@@ -69,7 +59,5 @@ impl Application for App {
 }
 
 fn main() -> Result<(), iced::Error> {
-    App::run(Settings {
-        ..Default::default()
-    })
+    iced::application("List", App::update, App::view).run()
 }

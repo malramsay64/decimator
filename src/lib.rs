@@ -7,9 +7,9 @@ use data::{
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id};
-use iced::widget::{button, column, container, row, scrollable, text, Scrollable};
+use iced::widget::{button, column, container, row, scrollable, text, Container, Scrollable};
 use iced::Event::Keyboard;
-use iced::{event, Element, Length, Subscription, Task};
+use iced::{event, Element, Length, Subscription, Task, Theme};
 use iced_aw::Wrap;
 use import::find_new_images;
 use itertools::Itertools;
@@ -154,21 +154,23 @@ impl App {
             self.preview,
             position
         );
-        Scrollable::new(
-            SelectionList::new_with_selection(
-                view,
-                |i| Message::UpdatePictureView(Some(i)),
-                position,
+        Container::new(
+            Scrollable::new(
+                SelectionList::new_with_selection(
+                    view,
+                    |i| Message::UpdatePictureView(Some(i)),
+                    position,
+                )
+                .direction(selection_list::Direction::Horizontal)
+                .item_height(320.)
+                .item_width(240.),
             )
-            .direction(selection_list::Direction::Horizontal)
-            .item_height(320.)
-            .item_width(240.)
-            .height(320.),
+            .id(self.thumbnail_scroller.clone())
+            .direction(scrollable::Direction::Horizontal(
+                scrollable::Scrollbar::default(),
+            )),
         )
-        .id(self.thumbnail_scroller.clone())
-        .direction(scrollable::Direction::Horizontal(
-            scrollable::Scrollbar::default(),
-        ))
+        .style(container::dark)
         .into()
     }
 
@@ -212,8 +214,6 @@ impl App {
                         .width(Length::Fill)
                         .height(Length::Fill),
                 )
-                // .width(Length::Fill)
-                // .height(Length::Fill)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
                 .into();

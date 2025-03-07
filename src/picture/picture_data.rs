@@ -9,7 +9,6 @@ use image::{ImageFormat, ImageReader, RgbImage, RgbaImage};
 use sea_orm::ActiveValue;
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::PrimitiveDateTime;
 use uuid::Uuid;
 use walkdir::DirEntry;
 
@@ -123,7 +122,7 @@ impl From<picture::Model> for PictureData {
             id: value.id,
             filepath: value.filepath(),
             raw_extension: value.raw_extension,
-            capture_time: value.capture_time.map(PrimitiveDateTime::from),
+            capture_time: value.capture_time,
             selection: value.selection,
             rating: value.rating,
             flag: value.flag,

@@ -1,8 +1,5 @@
-use std::iter::zip;
-
-use burn::backend::wgpu::select_device;
 use burn::nn::conv::{Conv2d, Conv2dConfig};
-use burn::nn::{BatchNorm, BatchNormConfig};
+use burn::nn::{BatchNorm, BatchNormConfig, PaddingConfig2d};
 use burn::prelude::*;
 use burn::tensor::activation::{relu, sigmoid};
 use nn::pool::{MaxPool2d, MaxPool2dConfig};
@@ -24,9 +21,18 @@ impl<B: Backend> BlazeBlock<B> {
         out_channels: usize,
         kernel_size: usize,
     ) -> Self {
-        let conv1 = Conv2dConfig::new([in_channels, in_channels], [kernel_size; 2]).init(device);
+        let padding = (kernel_size - 1) / 2;
+        let conv1 = Conv2dConfig::new([in_channels, in_channels], [kernel_size; 2])
+            .with_padding(PaddingConfig2d::Explicit(padding, padding))
+            .with_groups(in_channels)
+            .with_stride([1; 2])
+            .with_bias(true)
+            .init(device);
         let bn1 = BatchNormConfig::new(in_channels).init(device);
-        let conv2 = Conv2dConfig::new([in_channels, out_channels], [1; 2]).init(device);
+        let conv2 = Conv2dConfig::new([in_channels, out_channels], [1; 2])
+            .with_stride([1; 2])
+            .with_bias(true)
+            .init(device);
         let bn2 = BatchNormConfig::new(out_channels).init(device);
 
         Self {
@@ -69,13 +75,22 @@ impl<B: Backend> BlazeBlockStride<B> {
         let stride = 2;
         let conv1 = Conv2dConfig::new([in_channels; 2], [kernel_size; 2])
             .with_stride([stride; 2])
+            .with_padding(PaddingConfig2d::Explicit(1, 1))
             .init(device);
         let bn1 = BatchNormConfig::new(in_channels).init(device);
-        let conv2 = Conv2dConfig::new([in_channels, out_channels], [1; 2]).init(device);
+        let conv2 = Conv2dConfig::new([in_channels, out_channels], [1; 2])
+            // .with_padding(PaddingConfig2d::Explicit(0, 0))
+            .init(device);
         let bn2 = BatchNormConfig::new(out_channels).init(device);
 
-        let max_pool_s = MaxPool2dConfig::new([stride; 2]).init();
-        let conv_s = Conv2dConfig::new([in_channels, out_channels], [1; 2]).init(device);
+        let max_pool_s = MaxPool2dConfig::new([kernel_size; 2])
+            .with_strides([stride; 2])
+            .with_padding(PaddingConfig2d::Explicit(1, 1))
+            // This is the same as no padding
+            .init();
+        let conv_s = Conv2dConfig::new([in_channels, out_channels], [1; 2])
+            // .with_padding(PaddingConfig2d::Valid)
+            .init(device);
         let bn_s = BatchNormConfig::new(out_channels).init(device);
 
         Self {
@@ -115,6 +130,8 @@ impl<B: Backend> BlazeBlockFirst<B> {
     fn init(device: &B::Device, channels: usize, kernel_size: usize) -> Self {
         let conv = Conv2dConfig::new([3, channels], [kernel_size; 2])
             .with_stride([2; 2])
+            .with_padding(PaddingConfig2d::Explicit(2, 2))
+            .with_bias(true)
             .init(device);
         let bn = BatchNormConfig::new(channels).init(device);
 
@@ -138,8 +155,11 @@ impl<B: Backend> FinalBlazeBlock<B> {
     pub fn init(device: &B::Device, channels: usize, kernel_size: usize) -> Self {
         let conv1 = Conv2dConfig::new([channels; 2], [kernel_size; 2])
             .with_stride([2; 2])
+            .with_padding(PaddingConfig2d::Explicit(1, 1))
             .init(device);
-        let conv2 = Conv2dConfig::new([channels; 2], [1; 2]).init(device);
+        let conv2 = Conv2dConfig::new([channels; 2], [1; 2])
+            // .with_padding(PaddingConfig2d::Valid)
+            .init(device);
 
         Self { conv1, conv2 }
     }
@@ -147,6 +167,7 @@ impl<B: Backend> FinalBlazeBlock<B> {
     pub fn forward(self, input: Tensor<B, 4>) -> Tensor<B, 4> {
         let x = self.conv1.forward(input);
         let x = self.conv2.forward(x);
+        dbg!(&x);
 
         relu(x)
     }
@@ -201,8 +222,8 @@ impl<B: Backend> BlazeFace<B> {
         let group3_channels = 48;
         let group4_channels = 96;
         let final_channels = 96;
-        let kernel_size = 5;
-        let init_block = BlazeBlockFirst::init(device, group1_channels, kernel_size);
+        let kernel_size = 3;
+        let init_block = BlazeBlockFirst::init(device, group1_channels, 5);
         let group1_block1 = BlazeBlock::init(device, group1_channels, group1_channels, kernel_size);
         let group1_block2 = BlazeBlock::init(device, group1_channels, group1_channels, kernel_size);
         let group1_block3 = BlazeBlock::init(device, group1_channels, group1_channels, kernel_size);
@@ -239,10 +260,11 @@ impl<B: Backend> BlazeFace<B> {
         let group4_block7 = BlazeBlock::init(device, group4_channels, group4_channels, kernel_size);
 
         let final_block = FinalBlazeBlock::init(device, final_channels, kernel_size);
-        let classifier_8 = Conv2dConfig::new([final_channels, 2], [1; 2]).init(device);
-        let classifier_16 = Conv2dConfig::new([final_channels, 6], [1; 2]).init(device);
-        let regressor_8 = Conv2dConfig::new([final_channels, 32], [1; 2]).init(device);
-        let regressor_16 = Conv2dConfig::new([final_channels, 96], [1; 2]).init(device);
+
+        let classifier_8 = Conv2dConfig::new([88, 2], [1; 2]).init(device);
+        let classifier_16 = Conv2dConfig::new([96, 6], [1; 2]).init(device);
+        let regressor_8 = Conv2dConfig::new([88, 32], [1; 2]).init(device);
+        let regressor_16 = Conv2dConfig::new([96, 96], [1; 2]).init(device);
 
         let anchor_vec: Vec<_> = generate_anchors(&AnchorOptions::back())
             .into_iter()
@@ -333,32 +355,46 @@ impl<B: Backend> BlazeFace<B> {
             .permute([0, 2, 3, 1])
             .reshape([0, -1, 1]);
 
+        assert_eq!(c1.dims()[1..], [512, 1]);
+
         let c2 = self
             .classifier_16
             .forward(h.clone())
             .permute([0, 2, 3, 1])
             .reshape([0, -1, 1]);
 
+        assert_eq!(c1.dims()[1..], [384, 1]);
+
         let c = Tensor::cat(vec![c1, c2], 1);
+
+        assert_eq!(c.dims()[1..], [896, 1]);
 
         let r1 = self
             .regressor_8
             .forward(x)
             .permute([0, 2, 3, 1])
-            .reshape([0, -1, 1]);
+            .reshape([0, -1, 16]);
+
+        assert_eq!(c.dims()[1..], [512, 16]);
+
         let r2 = self
             .regressor_16
             .forward(h)
             .permute([0, 2, 3, 1])
-            .reshape([0, -1, 1]);
+            .reshape([0, -1, 16]);
+
+        assert_eq!(r2.dims()[1..], [384, 16]);
 
         let r = Tensor::cat(vec![r1, r2], 1);
+
+        assert_eq!(r.dims()[1..], [896, 16]);
 
         return (r, c);
     }
 
     pub fn predict(&self, input: Tensor<B, 4>) -> Vec<Tensor<B, 2>> {
         let (detections, scores) = self.forward(input);
+        dbg!(&detections);
         let predictions = self.tensors_to_detections(detections, scores, self.anchors.clone());
         predictions
     }
@@ -391,7 +427,10 @@ impl<B: Backend> BlazeFace<B> {
     }
 
     fn decode_boxes(&self, raw_boxes: Tensor<B, 3>, anchors: Tensor<B, 2>) -> Tensor<B, 3> {
-        assert_eq!(raw_boxes.dims()[2], anchors.dims()[0]);
+        dbg!(&raw_boxes);
+        dbg!(&anchors);
+        // Ensure the number of dimensions for the boxes matches the model
+        assert_eq!(raw_boxes.dims()[1], anchors.dims()[0]);
         assert!(anchors.dims()[1] == 4);
         let shape_boxes = raw_boxes.clone().dims();
         let shape_anchors = anchors.clone().dims();
@@ -443,9 +482,7 @@ impl<B: Backend> BlazeFace<B> {
 
 #[cfg(test)]
 mod tests {
-    use burn::backend::wgpu::WgpuDevice;
     use burn::backend::Wgpu;
-    use burn::module::Devices;
     use burn::tensor::Tensor;
 
     // use super::*;
@@ -466,6 +503,9 @@ mod tests {
         let len = tensor_1.shape().dims[0];
         let tensor_out = tensor_1.clone().slice([0..len, 0..1]);
         dbg!(tensor_res.clone(), tensor_out.clone());
-        assert_eq!(tensor_res.into_data().value, tensor_out.into_data().value);
+        assert_eq!(
+            tensor_res.into_data(),
+            tensor_out.flatten::<1>(0, 1).into_data()
+        );
     }
 }

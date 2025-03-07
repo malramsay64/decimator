@@ -1,6 +1,4 @@
-use burn::backend::wgpu::WgpuDevice;
 use burn::backend::Wgpu;
-use burn::module::Devices;
 use burn::tensor::Tensor;
 
 type Backend = Wgpu;
@@ -15,9 +13,11 @@ fn main() {
     // Print the element-wise addition (done with the WGPU backend) of the two tensors.
     println!("{}", tensor_1.clone() + tensor_2);
     let len = tensor_1.shape().dims[0];
-    let tensor_out = tensor_1.clone().slice([0..len, 1..2]);
+    let tensor_out = tensor_1.clone().slice([0..1, 0..len]);
     dbg!(&tensor_res, &tensor_out);
     // assert!(false)
+    println!("{:.2}", tensor_out);
+    println!("{:.2}", tensor_res);
 
     let result: bool = tensor_out.equal(tensor_res).all().into_scalar();
     assert!(result);
