@@ -7,7 +7,7 @@
 use std::io::Cursor;
 use std::ops::Not;
 
-use ::entity::{picture, Selection};
+use ::entity::{Selection, picture};
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use futures::future::{join_all, try_join_all};
@@ -93,15 +93,20 @@ pub(crate) async fn update_thumbnails(
                         buffer
                     })
                 };
-                if let Ok(buffer) = thumbnail_buffer {
-                    let mut picture: picture::ActiveModel = (*picture).clone().into();
-                    picture.set(picture::Column::Thumbnail, buffer.into_inner().into());
-                    // Updates have to be done to single objects, unlike inserts
-                    // where we can insert many items at once
-                    Some(picture.update(db))
-                } else {
-                    tracing::warn!("Error loading file from {filepath:?}, {thumbnail_buffer:?}");
-                    None
+                match thumbnail_buffer {
+                    Ok(buffer) => {
+                        let mut picture: picture::ActiveModel = (*picture).clone().into();
+                        picture.set(picture::Column::Thumbnail, buffer.into_inner().into());
+                        // Updates have to be done to single objects, unlike inserts
+                        // where we can insert many items at once
+                        Some(picture.update(db))
+                    }
+                    _ => {
+                        tracing::warn!(
+                            "Error loading file from {filepath:?}, {thumbnail_buffer:?}"
+                        );
+                        None
+                    }
                 }
             })
             .collect();

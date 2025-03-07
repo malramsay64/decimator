@@ -6,7 +6,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use exif::{In, Tag};
-use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
+use image::imageops::{FilterType, flip_horizontal, flip_vertical, rotate90, rotate180, rotate270};
 use image::{ImageReader, RgbaImage};
 pub use picture_data::*;
 pub use picture_thumbnail::*;

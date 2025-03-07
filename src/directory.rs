@@ -1,5 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use iced::widget::{text, Container};
+use iced::widget::{Container, text};
 use iced::{Element, Length, Padding, Theme};
 
 use crate::Message;

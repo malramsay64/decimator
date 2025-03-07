@@ -2,14 +2,14 @@ use std::io::{BufReader, Cursor, Seek};
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use entity::{picture, Flag, Rating, Selection};
+use entity::{Flag, Rating, Selection, picture};
 use exif::{In, Tag};
-use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
+use image::imageops::{FilterType, flip_horizontal, flip_vertical, rotate90, rotate180, rotate270};
 use image::{ImageFormat, ImageReader, RgbImage, RgbaImage};
 use sea_orm::ActiveValue;
+use time::PrimitiveDateTime;
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::PrimitiveDateTime;
 use uuid::Uuid;
 use walkdir::DirEntry;
 

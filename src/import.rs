@@ -9,7 +9,7 @@ use sea_orm::DatabaseConnection;
 use walkdir::WalkDir;
 
 use crate::data::{add_new_images, query_existing_pictures};
-use crate::picture::{is_image, PictureData};
+use crate::picture::{PictureData, is_image};
 
 #[derive(Clone, Debug)]
 struct ImportStructure {

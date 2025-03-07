@@ -1,4 +1,4 @@
-use iced::widget::{button, horizontal_space, row, text, toggler, Button};
+use iced::widget::{Button, button, horizontal_space, row, text, toggler};
 use iced::{Border, Color, Element, Length, Renderer, Theme};
 use iced_aw::menu::{self, Item, Menu};
 use iced_aw::{menu_bar, menu_items, quad};

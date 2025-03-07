@@ -1,6 +1,6 @@
 use entity::Selection;
-use iced::widget::{column, image, row, text, Button};
 use iced::Element;
+use iced::widget::{Button, column, image, row, text};
 
 use super::PictureData;
 use crate::Message;

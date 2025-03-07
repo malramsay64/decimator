@@ -4,12 +4,12 @@ use camino::Utf8PathBuf;
 use data::{
     query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
 };
+use iced::Event::Keyboard;
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id};
-use iced::widget::{button, column, container, row, scrollable, text, Container, Scrollable};
-use iced::Event::Keyboard;
-use iced::{event, Element, Length, Subscription, Task, Theme};
+use iced::widget::scrollable::{AbsoluteOffset, Id, scroll_to};
+use iced::widget::{Container, Scrollable, button, column, container, row, scrollable, text};
+use iced::{Element, Length, Subscription, Task, event};
 use iced_aw::Wrap;
 use import::find_new_images;
 use itertools::Itertools;

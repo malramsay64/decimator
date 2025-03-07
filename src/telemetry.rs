@@ -5,7 +5,7 @@ use tracing_log::LogTracer;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::{filter, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, filter};
 
 /// Compose multiple layers into a `tracing`'s subscriber.
 ///
