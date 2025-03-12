@@ -171,94 +171,94 @@ where
         }
     }
 
-    fn on_event(
-        &mut self,
-        state: &mut Tree,
-        event: Event,
-        layout: Layout<'_>,
-        cursor: Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
-        viewport: &Rectangle,
-    ) -> event::Status {
-        let bounds = layout.bounds();
-        let mut status = event::Status::Ignored;
-        let list_state = state.state.downcast_mut::<ListState>();
+    // fn on_event(
+    //     &mut self,
+    //     state: &mut Tree,
+    //     event: Event,
+    //     layout: Layout<'_>,
+    //     cursor: Cursor,
+    //     renderer: &Renderer,
+    //     clipboard: &mut dyn Clipboard,
+    //     shell: &mut Shell<Message>,
+    //     viewport: &Rectangle,
+    // ) -> event::Status {
+    //     let bounds = layout.bounds();
+    //     let mut status = event::Status::Ignored;
+    //     let list_state = state.state.downcast_mut::<ListState>();
 
-        if let Some(cursor) = cursor.position_over(bounds) {
-            match event {
-                Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                    list_state.hovered_option = match self.direction {
-                        Direction::Vertical => Some(
-                            ((cursor.y - bounds.y) / (self.item_height + (self.padding * 2.0)))
-                                as usize,
-                        ),
-                        Direction::Horizontal => Some(
-                            ((cursor.x - bounds.x) / (self.item_width + (self.padding * 2.0)))
-                                as usize,
-                        ),
-                    }
-                }
-                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
-                | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                    list_state.hovered_option = match self.direction {
-                        Direction::Vertical => Some(
-                            ((cursor.y - bounds.y) / (self.item_height + (self.padding * 2.0)))
-                                as usize,
-                        ),
-                        Direction::Horizontal => Some(
-                            ((cursor.x - bounds.x) / (self.item_width + (self.padding * 2.0)))
-                                as usize,
-                        ),
-                    };
+    //     if let Some(cursor) = cursor.position_over(bounds) {
+    //         match event {
+    //             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+    //                 list_state.hovered_option = match self.direction {
+    //                     Direction::Vertical => Some(
+    //                         ((cursor.y - bounds.y) / (self.item_height + (self.padding * 2.0)))
+    //                             as usize,
+    //                     ),
+    //                     Direction::Horizontal => Some(
+    //                         ((cursor.x - bounds.x) / (self.item_width + (self.padding * 2.0)))
+    //                             as usize,
+    //                     ),
+    //                 }
+    //             }
+    //             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+    //             | Event::Touch(touch::Event::FingerPressed { .. }) => {
+    //                 list_state.hovered_option = match self.direction {
+    //                     Direction::Vertical => Some(
+    //                         ((cursor.y - bounds.y) / (self.item_height + (self.padding * 2.0)))
+    //                             as usize,
+    //                     ),
+    //                     Direction::Horizontal => Some(
+    //                         ((cursor.x - bounds.x) / (self.item_width + (self.padding * 2.0)))
+    //                             as usize,
+    //                     ),
+    //                 };
 
-                    if let Some(id) = list_state.hovered_option {
-                        if self.labels.get(id).is_some() {
-                            list_state.selected_index = Some(id);
-                        }
-                    }
+    //                 if let Some(id) = list_state.hovered_option {
+    //                     if self.labels.get(id).is_some() {
+    //                         list_state.selected_index = Some(id);
+    //                     }
+    //                 }
 
-                    status =
-                        list_state
-                            .selected_index
-                            .as_ref()
-                            .map_or(event::Status::Ignored, |last| {
-                                if let Some(option) = self.labels.get(*last) {
-                                    shell.publish((self.on_selected)(option.clone()));
-                                    event::Status::Captured
-                                } else {
-                                    event::Status::Ignored
-                                }
-                            });
-                }
-                _ => {}
-            }
-        } else {
-            list_state.hovered_option = None;
-        }
-        // In addition to handling the events associated with selecting items
-        // from the list, we also need to handle events that occur within each
-        // item. This iterates over each item to handle the events there.
-        status.merge(
-            self.items
-                .iter_mut()
-                .zip(layout.children())
-                .enumerate()
-                .fold(event::Status::Ignored, |status, (index, (item, layout))| {
-                    status.merge(item.as_widget_mut().on_event(
-                        &mut state.children[index],
-                        event.clone(),
-                        layout,
-                        cursor,
-                        renderer,
-                        clipboard,
-                        shell,
-                        viewport,
-                    ))
-                }),
-        )
-    }
+    //                 status =
+    //                     list_state
+    //                         .selected_index
+    //                         .as_ref()
+    //                         .map_or(event::Status::Ignored, |last| {
+    //                             if let Some(option) = self.labels.get(*last) {
+    //                                 shell.publish((self.on_selected)(option.clone()));
+    //                                 event::Status::Captured
+    //                             } else {
+    //                                 event::Status::Ignored
+    //                             }
+    //                         });
+    //             }
+    //             _ => {}
+    //         }
+    //     } else {
+    //         list_state.hovered_option = None;
+    //     }
+    //     // In addition to handling the events associated with selecting items
+    //     // from the list, we also need to handle events that occur within each
+    //     // item. This iterates over each item to handle the events there.
+    //     status.merge(
+    //         self.items
+    //             .iter_mut()
+    //             .zip(layout.children())
+    //             .enumerate()
+    //             .fold(event::Status::Ignored, |status, (index, (item, layout))| {
+    //                 status.merge(item.as_widget_mut().on_event(
+    //                     &mut state.children[index],
+    //                     event.clone(),
+    //                     layout,
+    //                     cursor,
+    //                     renderer,
+    //                     clipboard,
+    //                     shell,
+    //                     viewport,
+    //                 ))
+    //             }),
+    //     )
+    // }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         // let padding = Padding::from(self.padding);

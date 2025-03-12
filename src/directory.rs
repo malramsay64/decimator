@@ -1,5 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use iced::widget::{Container, text};
+use iced::widget::{Container, container, text};
 use iced::{Element, Length, Padding, Theme};
 
 use crate::Message;
@@ -39,12 +39,13 @@ impl From<String> for DirectoryData {
 }
 
 impl DirectoryData {
-    pub fn view(&self) -> Element<'_, Message, Theme, iced::Renderer> {
-        Container::new(text(self.strip_prefix().as_str()).width(Length::Fill))
+    pub fn view(&self) -> Element<'_, Message> {
+        text(self.strip_prefix().as_str())
+            .width(Length::Fill)
             // Top, right, bottom, left
-            .padding(Padding::from([0, 10]))
-            .align_y(iced::alignment::Vertical::Center)
-            .height(Length::Fill)
+            // .padding(Padding::from([0, 10]))
+            // .align_y(iced::alignment::Vertical::Center)
+            // .height(Length::Fill)
             .into()
     }
 }

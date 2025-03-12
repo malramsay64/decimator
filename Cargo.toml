@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "entity", "facial-recognition", "migration", "object-detection", "selection-list"]
+members = [".", "entity", "facial-recognition", "migration", "object-detection"]
 
 [workspace.package]
 version = "0.2.0"
@@ -8,7 +8,7 @@ description = "An application to quickly manage and prioritise photos."
 documentation = ""
 
 [workspace.dependencies]
-iced = { version="0.13", features=["image", "tokio", "lazy", "advanced"]}
+iced = { git="https://github.com/iced-rs/iced", features=["image", "tokio", "lazy", "advanced"]}
 iced_aw = { version="0.11", features=["menu", "grid", "quad", "tab_bar", "wrap"], default-features=false}
 iced_fonts = {version = "0.1"}
 sea-orm = { version="~1", features=["sqlx-sqlite", "runtime-tokio-rustls", "with-time"]}
@@ -18,7 +18,7 @@ burn = { version = "0.14", features = ["wgpu"] , default-features=false }
 [package]
 name = "decimator"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 publish = false
 
 
@@ -44,7 +44,7 @@ futures = "0.3.28"
 num_cpus = "1.15.0"
 itertools = "^0.13"
 iced.workspace = true 
-iced_aw.workspace = true
+# iced_aw.workspace = true
 iced_fonts.workspace = true
 image = "*"
 dirs = "5.0.1"
@@ -53,6 +53,7 @@ rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "t
 lru = "0.12"
 rayon = "1.7.0"
 futures-concurrency = "~7.6.0"
+either = "1.15.0"
 
 [profile.release]
 # lto = "thin"

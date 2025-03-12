@@ -26,7 +26,6 @@ pub struct PictureData {
     pub rating: Option<Rating>,
     pub flag: Option<Flag>,
     pub hidden: bool,
-    pub thumbnail: Option<RgbaImage>,
 }
 
 impl PictureData {
@@ -114,11 +113,6 @@ impl PictureData {
 
 impl From<picture::Model> for PictureData {
     fn from(value: picture::Model) -> Self {
-        let thumbnail = value.thumbnail.as_ref().and_then(|data| {
-            image::load_from_memory_with_format(data, image::ImageFormat::Jpeg)
-                .ok()
-                .map(|i| i.into_rgba8())
-        });
         Self {
             id: value.id,
             filepath: value.filepath(),
@@ -128,17 +122,12 @@ impl From<picture::Model> for PictureData {
             rating: value.rating,
             flag: value.flag,
             hidden: value.hidden,
-            thumbnail,
         }
     }
 }
 
 impl PictureData {
     pub fn into_active(self) -> picture::ActiveModel {
-        let mut thumbnail = Cursor::new(vec![]);
-        if let Some(f) = self.thumbnail.as_ref() {
-            f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap();
-        }
         picture::ActiveModel {
             id: ActiveValue::Unchanged(self.id),
             short_hash: ActiveValue::not_set(),
@@ -151,7 +140,7 @@ impl PictureData {
             rating: ActiveValue::Set(self.rating),
             flag: ActiveValue::Set(self.flag),
             hidden: ActiveValue::Set(self.hidden),
-            thumbnail: ActiveValue::Set(Some(thumbnail.into_inner())),
+            thumbnail: ActiveValue::not_set(),
         }
     }
 }
@@ -188,5 +177,77 @@ impl std::fmt::Debug for PictureData {
             .field("flag", &self.flag)
             .field("hidden", &self.hidden)
             .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ThumbnailData {
+    pub id: Uuid,
+    pub thumbnail: Option<RgbaImage>,
+    pub filepath: Utf8PathBuf,
+}
+
+impl ThumbnailData {
+    pub fn into_active(self) -> picture::ActiveModel {
+        let mut thumbnail = Cursor::new(vec![]);
+        if let Some(f) = self.thumbnail.as_ref() {
+            f.write_to(&mut thumbnail, ImageFormat::Jpeg).unwrap();
+        }
+        picture::ActiveModel {
+            id: ActiveValue::Unchanged(self.id),
+            thumbnail: ActiveValue::Set(Some(thumbnail.into_inner())),
+            ..Default::default()
+        }
+    }
+    pub fn load_thumbnail(
+        filepath: &Utf8PathBuf,
+        scale_x: u32,
+        scale_y: u32,
+    ) -> Result<RgbImage, Error> {
+        let file = std::fs::File::open(filepath)?;
+        let mut cursor = std::io::BufReader::new(file);
+        let exif_data = exif::Reader::new().read_from_container(&mut cursor)?;
+
+        // Reset the buffer to the start to read the image file
+        cursor.rewind()?;
+        let image = ImageReader::new(cursor)
+            .with_guessed_format()?
+            .decode()?
+            .resize(scale_x, scale_y, FilterType::Triangle)
+            .into_rgb8();
+        // Apply Exif image transformations
+        // https://sirv.com/help/articles/rotate-photos-to-be-upright/
+        Ok(
+            match exif_data
+                .get_field(Tag::Orientation, In::PRIMARY)
+                .and_then(|e| e.value.get_uint(0))
+            {
+                Some(1) => image,
+                Some(2) => flip_horizontal(&image),
+                Some(3) => rotate180(&image),
+                Some(4) => flip_vertical(&image),
+                Some(5) => rotate270(&flip_horizontal(&image)),
+                Some(6) => rotate90(&image),
+                Some(7) => rotate90(&flip_horizontal(&image)),
+                Some(8) => rotate270(&image),
+                // Where we can't interpret the exif data, we revert to the base image
+                _ => image,
+            },
+        )
+    }
+}
+
+impl From<picture::Model> for ThumbnailData {
+    fn from(value: picture::Model) -> Self {
+        let thumbnail = value.thumbnail.as_ref().and_then(|data| {
+            image::load_from_memory_with_format(data, image::ImageFormat::Jpeg)
+                .ok()
+                .map(|i| i.into_rgba8())
+        });
+        Self {
+            id: value.id,
+            filepath: value.filepath(),
+            thumbnail,
+        }
     }
 }

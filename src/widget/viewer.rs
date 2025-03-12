@@ -130,169 +130,169 @@ where
         layout::Node::new(size)
     }
 
-    fn on_event(
-        &mut self,
-        tree: &mut Tree,
-        event: Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
-        _shell: &mut Shell<'_, Message>,
-        _viewport: &Rectangle,
-    ) -> event::Status {
-        let bounds = layout.bounds();
+    // fn on_event(
+    //     &mut self,
+    //     tree: &mut Tree,
+    //     event: Event,
+    //     layout: Layout<'_>,
+    //     cursor: mouse::Cursor,
+    //     renderer: &Renderer,
+    //     _clipboard: &mut dyn Clipboard,
+    //     _shell: &mut Shell<'_, Message>,
+    //     _viewport: &Rectangle,
+    // ) -> event::Status {
+    //     let bounds = layout.bounds();
 
-        // Ensure the cursor is within the bounds of the widget
-        if cursor.position_over(bounds).is_none() {
-            return event::Status::Ignored;
-        }
+    //     // Ensure the cursor is within the bounds of the widget
+    //     if cursor.position_over(bounds).is_none() {
+    //         return event::Status::Ignored;
+    //     }
 
-        match event {
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let Some(cursor_position) = cursor.position() else {
-                    return event::Status::Ignored;
-                };
+    //     match event {
+    //         Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+    //             let Some(cursor_position) = cursor.position() else {
+    //                 return event::Status::Ignored;
+    //             };
 
-                match delta {
-                    mouse::ScrollDelta::Lines { y, .. } | mouse::ScrollDelta::Pixels { y, .. } => {
-                        let state = tree.state.downcast_mut::<State>();
-                        let previous_scale = state.scale;
+    //             match delta {
+    //                 mouse::ScrollDelta::Lines { y, .. } | mouse::ScrollDelta::Pixels { y, .. } => {
+    //                     let state = tree.state.downcast_mut::<State>();
+    //                     let previous_scale = state.scale;
 
-                        if y < 0.0 && previous_scale > self.min_scale
-                            || y > 0.0 && previous_scale < self.max_scale
-                        {
-                            state.scale = (if y > 0.0 {
-                                state.scale * (1.0 + self.scale_step)
-                            } else {
-                                state.scale / (1.0 + self.scale_step)
-                            })
-                            .clamp(self.min_scale, self.max_scale);
+    //                     if y < 0.0 && previous_scale > self.min_scale
+    //                         || y > 0.0 && previous_scale < self.max_scale
+    //                     {
+    //                         state.scale = (if y > 0.0 {
+    //                             state.scale * (1.0 + self.scale_step)
+    //                         } else {
+    //                             state.scale / (1.0 + self.scale_step)
+    //                         })
+    //                         .clamp(self.min_scale, self.max_scale);
 
-                            let image_size =
-                                image_size(renderer, &self.handle, state, bounds.size());
+    //                         let image_size =
+    //                             image_size(renderer, &self.handle, state, bounds.size());
 
-                            let factor = state.scale / previous_scale - 1.0;
+    //                         let factor = state.scale / previous_scale - 1.0;
 
-                            let cursor_to_center = cursor_position - bounds.center();
+    //                         let cursor_to_center = cursor_position - bounds.center();
 
-                            let adjustment =
-                                cursor_to_center * factor + state.current_offset * factor;
+    //                         let adjustment =
+    //                             cursor_to_center * factor + state.current_offset * factor;
 
-                            state.current_offset = Vector::new(
-                                if image_size.width > bounds.width {
-                                    state.current_offset.x + adjustment.x
-                                } else {
-                                    0.0
-                                },
-                                if image_size.height > bounds.height {
-                                    state.current_offset.y + adjustment.y
-                                } else {
-                                    0.0
-                                },
-                            );
-                        }
-                    }
-                }
+    //                         state.current_offset = Vector::new(
+    //                             if image_size.width > bounds.width {
+    //                                 state.current_offset.x + adjustment.x
+    //                             } else {
+    //                                 0.0
+    //                             },
+    //                             if image_size.height > bounds.height {
+    //                                 state.current_offset.y + adjustment.y
+    //                             } else {
+    //                                 0.0
+    //                             },
+    //                         );
+    //                     }
+    //                 }
+    //             }
 
-                event::Status::Captured
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                let Some(cursor_position) = cursor.position() else {
-                    return event::Status::Ignored;
-                };
+    //             event::Status::Captured
+    //         }
+    //         Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+    //             let Some(cursor_position) = cursor.position() else {
+    //                 return event::Status::Ignored;
+    //             };
 
-                let state = tree.state.downcast_mut::<State>();
+    //             let state = tree.state.downcast_mut::<State>();
 
-                if let Some(last_click) = state.last_click_time {
-                    // This is the identification of a double click
-                    if (Instant::now() - last_click) < DOUBLE_CLICK_TIMEOUT {
-                        // Where we are at a scale that is not 1, then revert to this scale factor.
-                        //
-                        let previous_scale = state.scale;
-                        if state.scale != 1. {
-                            state.scale = 1.;
-                            state.current_offset = Vector::new(0., 0.);
-                        } else {
-                            let Size {
-                                width: bound_width,
-                                height: bound_height,
-                            } = bounds.size();
+    //             if let Some(last_click) = state.last_click_time {
+    //                 // This is the identification of a double click
+    //                 if (Instant::now() - last_click) < DOUBLE_CLICK_TIMEOUT {
+    //                     // Where we are at a scale that is not 1, then revert to this scale factor.
+    //                     //
+    //                     let previous_scale = state.scale;
+    //                     if state.scale != 1. {
+    //                         state.scale = 1.;
+    //                         state.current_offset = Vector::new(0., 0.);
+    //                     } else {
+    //                         let Size {
+    //                             width: bound_width,
+    //                             height: bound_height,
+    //                         } = bounds.size();
 
-                            let Size {
-                                width: image_width,
-                                height: image_height,
-                            } = renderer.measure_image(&self.handle);
+    //                         let Size {
+    //                             width: image_width,
+    //                             height: image_height,
+    //                         } = renderer.measure_image(&self.handle);
 
-                            // TODO: Check whether this should be max or min
-                            state.scale = (image_width as f32 / bound_width)
-                                .max(image_height as f32 / bound_height);
+    //                         // TODO: Check whether this should be max or min
+    //                         state.scale = (image_width as f32 / bound_width)
+    //                             .max(image_height as f32 / bound_height);
 
-                            let cursor_to_center = cursor_position - bounds.center();
-                            let factor = state.scale / previous_scale - 1.0;
+    //                         let cursor_to_center = cursor_position - bounds.center();
+    //                         let factor = state.scale / previous_scale - 1.0;
 
-                            let adjustment =
-                                cursor_to_center * factor + state.current_offset * factor;
-                            state.current_offset = Vector::new(
-                                state.current_offset.x + adjustment.x,
-                                state.current_offset.y + adjustment.y,
-                            );
-                        }
-                        return event::Status::Captured;
-                    }
-                }
+    //                         let adjustment =
+    //                             cursor_to_center * factor + state.current_offset * factor;
+    //                         state.current_offset = Vector::new(
+    //                             state.current_offset.x + adjustment.x,
+    //                             state.current_offset.y + adjustment.y,
+    //                         );
+    //                     }
+    //                     return event::Status::Captured;
+    //                 }
+    //             }
 
-                state.cursor_grabbed_at = Some(cursor_position);
-                state.last_click_time = Some(Instant::now());
-                state.starting_offset = state.current_offset;
+    //             state.cursor_grabbed_at = Some(cursor_position);
+    //             state.last_click_time = Some(Instant::now());
+    //             state.starting_offset = state.current_offset;
 
-                event::Status::Captured
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                let state = tree.state.downcast_mut::<State>();
+    //             event::Status::Captured
+    //         }
+    //         Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+    //             let state = tree.state.downcast_mut::<State>();
 
-                if state.cursor_grabbed_at.is_some() {
-                    state.cursor_grabbed_at = None;
+    //             if state.cursor_grabbed_at.is_some() {
+    //                 state.cursor_grabbed_at = None;
 
-                    event::Status::Captured
-                } else {
-                    event::Status::Ignored
-                }
-            }
-            Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                let state = tree.state.downcast_mut::<State>();
+    //                 event::Status::Captured
+    //             } else {
+    //                 event::Status::Ignored
+    //             }
+    //         }
+    //         Event::Mouse(mouse::Event::CursorMoved { position }) => {
+    //             let state = tree.state.downcast_mut::<State>();
 
-                if let Some(origin) = state.cursor_grabbed_at {
-                    let image_size = image_size(renderer, &self.handle, state, bounds.size());
+    //             if let Some(origin) = state.cursor_grabbed_at {
+    //                 let image_size = image_size(renderer, &self.handle, state, bounds.size());
 
-                    let hidden_width = (image_size.width - bounds.width / 2.0).max(0.0).round();
+    //                 let hidden_width = (image_size.width - bounds.width / 2.0).max(0.0).round();
 
-                    let hidden_height = (image_size.height - bounds.height / 2.0).max(0.0).round();
+    //                 let hidden_height = (image_size.height - bounds.height / 2.0).max(0.0).round();
 
-                    let delta = position - origin;
+    //                 let delta = position - origin;
 
-                    let x = if bounds.width < image_size.width {
-                        (state.starting_offset.x - delta.x).clamp(-hidden_width, hidden_width)
-                    } else {
-                        0.0
-                    };
+    //                 let x = if bounds.width < image_size.width {
+    //                     (state.starting_offset.x - delta.x).clamp(-hidden_width, hidden_width)
+    //                 } else {
+    //                     0.0
+    //                 };
 
-                    let y = if bounds.height < image_size.height {
-                        (state.starting_offset.y - delta.y).clamp(-hidden_height, hidden_height)
-                    } else {
-                        0.0
-                    };
+    //                 let y = if bounds.height < image_size.height {
+    //                     (state.starting_offset.y - delta.y).clamp(-hidden_height, hidden_height)
+    //                 } else {
+    //                     0.0
+    //                 };
 
-                    state.current_offset = Vector::new(x, y);
+    //                 state.current_offset = Vector::new(x, y);
 
-                    event::Status::Captured
-                } else {
-                    event::Status::Ignored
-                }
-            }
-            _ => event::Status::Ignored,
-        }
-    }
+    //                 event::Status::Captured
+    //             } else {
+    //                 event::Status::Ignored
+    //             }
+    //         }
+    //         _ => event::Status::Ignored,
+    //     }
+    // }
 
     fn mouse_interaction(
         &self,

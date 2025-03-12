@@ -9,6 +9,7 @@ use std::ops::Not;
 
 use ::entity::{Selection, picture};
 use anyhow::Error;
+use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use futures::future::{join_all, try_join_all};
 use image::ImageFormat;
@@ -20,7 +21,8 @@ use sea_orm::query::*;
 use uuid::Uuid;
 
 use crate::directory::DirectoryData;
-use crate::picture::PictureData;
+use crate::picture::PictureThumbnail;
+use crate::picture::{PictureData, ThumbnailData};
 
 /// Search for pictures in the database located within a directory
 ///
@@ -31,13 +33,17 @@ use crate::picture::PictureData;
 pub(crate) async fn query_directory_pictures(
     db: &DatabaseConnection,
     directory: String,
-) -> Result<Vec<PictureData>, Error> {
+) -> Result<Vec<PictureThumbnail>, Error> {
     Ok(picture::Entity::find()
         .filter(picture::Column::Directory.eq(directory))
         .all(db)
         .await?
         .into_iter()
         .map(PictureData::from)
+        .map(|d| PictureThumbnail {
+            data: d,
+            handle: None,
+        })
         .collect())
 }
 
@@ -163,4 +169,12 @@ pub(crate) async fn update_selection_state(
     .update(db)
     .await?;
     Ok(())
+}
+
+pub async fn load_thumbnail(db: &DatabaseConnection, id: Uuid) -> Result<ThumbnailData, Error> {
+    picture::Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .map(ThumbnailData::from)
+        .ok_or(anyhow!("ID does not exist within database."))
 }

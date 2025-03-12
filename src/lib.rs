@@ -2,19 +2,19 @@ use std::cell::RefCell;
 
 use camino::Utf8PathBuf;
 use data::{
-    query_directory_pictures, query_unique_directories, update_selection_state, update_thumbnails,
+    load_thumbnail, query_directory_pictures, query_unique_directories, update_selection_state,
+    update_thumbnails,
 };
-use iced::Event::Keyboard;
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::scrollable::{AbsoluteOffset, Id, scroll_to};
-use iced::widget::{Container, Scrollable, button, column, container, row, scrollable, text};
-use iced::{Element, Length, Subscription, Task, event};
-use iced_aw::Wrap;
+use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id};
+use iced::widget::{button, column, container, row, scrollable, text, Container, Scrollable};
+use iced::Event::Keyboard;
+use iced::Length::Fill;
+use iced::{event, Element, Length, Subscription, Task};
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::DatabaseConnection;
-use selection_list::SelectionList;
 use tracing::info;
 use uuid::Uuid;
 
@@ -33,8 +33,8 @@ mod widget;
 
 use directory::DirectoryData;
 use entity::Selection;
-use picture::PictureThumbnail;
-use thumbnail::ThumbnailData;
+use picture::{PictureThumbnail, ThumbnailData};
+use thumbnail::ThumbnailView;
 
 /// Messages for running the application
 #[derive(Debug, Clone)]
@@ -53,7 +53,7 @@ pub enum Message {
     DisplayIgnore(bool),
     DisplayHidden(bool),
     ScrollTo(Uuid),
-    SetSelection((Uuid, Selection)),
+    SetSelection(Uuid),
     SetSelectionCurrent(Selection),
     // Signal to emit when we want to export, this creates the export dialog
     SetView(AppView),
@@ -61,6 +61,8 @@ pub enum Message {
     // Contains the path where the files are being exported to
     SelectionPrint,
     UpdatePictureView(Option<Uuid>),
+    ThumbnailPoppedIn(Uuid),
+    SetThumbnail(ThumbnailData),
     ThumbnailNext,
     ThumbnailPrev,
     DirectoryNext,
@@ -82,16 +84,11 @@ pub struct App {
     directory: Option<Utf8PathBuf>,
 
     app_view: AppView,
-    thumbnail_view: ThumbnailData,
-    thumbnail_scroller: Id,
-
-    preview: Option<Uuid>,
-    preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
+    thumbnail_view: ThumbnailView,
 }
 
 impl App {
     fn menu_view(&self) -> Element<Message> {
-        // horizontal_space().into()
         menu::menu_view(self)
     }
 
@@ -103,7 +100,13 @@ impl App {
         }
         info!("Position: {:?}", position);
 
-        let values: Vec<_> = dirs.clone().zip(dirs.map(DirectoryData::view)).collect();
+        let values = column(dirs.map(|d| {
+            button(DirectoryData::view(d))
+                .on_press(Message::SelectDirectory(DirectoryData::add_prefix(
+                    &d.directory,
+                )))
+                .into()
+        }));
         column![
             row![
                 button(text("Add")).on_press(Message::DirectoryAdd),
@@ -115,17 +118,7 @@ impl App {
             .height(Length::Shrink)
             // .width(Length::Fill)
             .padding(10.),
-            Scrollable::new(
-                SelectionList::new_with_selection(
-                    values,
-                    |dir| { Message::SelectDirectory(DirectoryData::add_prefix(&dir.directory)) },
-                    position
-                )
-                .item_width(250.)
-                .item_height(30.)
-                .width(260.)
-            )
-            .height(Length::Fill)
+            container(scrollable(values))
         ]
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -133,98 +126,82 @@ impl App {
     }
 
     #[tracing::instrument(name = "Update Thumbnail View", level = "info", skip(self))]
-    fn thumbnail_view(&self) -> Element<Message> {
-        let view: Vec<_> = self
-            .thumbnail_view
-            .positions()
-            .into_iter()
-            .zip(
-                self.thumbnail_view
-                    .get_view()
-                    .into_iter()
-                    .map(PictureThumbnail::view),
-            )
-            .collect();
+    fn thumbnail_view(&self) -> Element<'_, Message> {
+        // let position = self
+        //     .preview
+        //     .map_or(Some(0), |id| self.thumbnail_view.get_position(id));
+        // tracing::trace!(
+        //     "Updating thumbnail scrollable view with preview {:?}, at position {:?}",
+        //     self.preview,
+        //     position
+        // );
 
-        let position = self
-            .preview
-            .map_or(Some(0), |id| self.thumbnail_view.get_position(&id));
-        tracing::trace!(
-            "Updating thumbnail scrollable view with preview {:?}, at position {:?}",
-            self.preview,
-            position
-        );
-        Container::new(
-            Scrollable::new(
-                SelectionList::new_with_selection(
-                    view,
-                    |i| Message::UpdatePictureView(Some(i)),
-                    position,
-                )
-                .direction(selection_list::Direction::Horizontal)
-                .item_height(320.)
-                .item_width(240.),
-            )
-            .id(self.thumbnail_scroller.clone())
-            .direction(scrollable::Direction::Horizontal(
-                scrollable::Scrollbar::default(),
-            )),
-        )
-        .style(container::dark)
-        .into()
+        // scrollable(container(
+        //     row(self
+        //         .thumbnail_view
+        //         .get_view()
+        //         .into_iter()
+        //         .map(PictureThumbnail::view))
+        //     .spacing(10),
+        // ))
+        // .id(self.thumbnail_scroller.clone())
+        // .direction(scrollable::Direction::Horizontal(
+        //     scrollable::Scrollbar::default(),
+        // ))
+        // .into()
+        self.thumbnail_view.get_preview_view()
     }
 
     /// Provides an overview of all the images on a grid
-    fn grid_view(&self) -> Element<Message> {
-        let mut thumbnails = self
-            .thumbnail_view
-            .get_view()
-            .into_iter()
-            .map(PictureThumbnail::view)
-            .fold(Wrap::new(), |i, g| i.push(g));
-        thumbnails.width = Length::Fill;
-        scrollable(thumbnails)
-            .direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new().width(2.).scroller_width(10.),
-            ))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+    fn grid_view<'a>(&'a self) -> Element<'a, Message> {
+        scrollable(
+            container(
+                row(self.thumbnail_view.get_view().map(PictureThumbnail::view))
+                    .spacing(10)
+                    .wrap(),
+            )
+            .center_x(Fill),
+        )
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new().width(2.).scroller_width(10.),
+        ))
+        .into()
     }
 
-    fn preview_view(&self) -> Element<Message> {
-        if let Some(id) = &self.preview {
-            if let Some(filepath) = self.thumbnail_view.get_filepath(id) {
-                let mut cache = self.preview_cache.borrow_mut();
-                let handle = match cache.get(id) {
-                    Some(h) => h,
-                    None => {
-                        let i = picture::load_image(filepath.as_path(), None).unwrap();
-                        let handle = iced::widget::image::Handle::from_rgba(
-                            i.width(),
-                            i.height(),
-                            i.to_vec(),
-                        );
-                        cache.put(*id, handle);
-                        cache.get(id).unwrap()
-                    }
-                };
-                return container(
-                    viewer(handle.clone())
-                        .width(Length::Fill)
-                        .height(Length::Fill),
-                )
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .into();
-            }
-        }
-        container(text("No image available"))
-            // .height(Length::Fill)
-            // .width(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
+    fn preview_view(&self) -> Element<'_, Message> {
+        self.thumbnail_view.get_preview_view()
+        //     if let Some(id) = &self.preview {
+        //         if let Some(filepath) = self.thumbnail_view.get_filepath(id) {
+        //             let mut cache = self.preview_cache.borrow_mut();
+        //             let handle = match cache.get(id) {
+        //                 Some(h) => h,
+        //                 None => {
+        //                     let i = picture::load_image(filepath.as_path(), None).unwrap();
+        //                     let handle = iced::widget::image::Handle::from_rgba(
+        //                         i.width(),
+        //                         i.height(),
+        //                         i.to_vec(),
+        //                     );
+        //                     cache.put(*id, handle);
+        //                     cache.get(id).unwrap()
+        //                 }
+        //             };
+        //             return container(
+        //                 viewer(handle.clone())
+        //                     .width(Length::Fill)
+        //                     .height(Length::Fill),
+        //             )
+        //             .center_x(Length::Fill)
+        //             .center_y(Length::Fill)
+        //             .into();
+        //         }
+        //     }
+        //     container(text("No image available"))
+        //         // .height(Length::Fill)
+        //         // .width(Length::Fill)
+        //         .center_x(Length::Fill)
+        //         .center_y(Length::Fill)
+        //         .into()
     }
 }
 
@@ -236,10 +213,7 @@ impl App {
             directories: vec![],
             directory: None,
             app_view: Default::default(),
-            thumbnail_view: Default::default(),
-            thumbnail_scroller: Id::unique(),
-            preview: None,
-            preview_cache: RefCell::new(lru::LruCache::new(20.try_into().unwrap())),
+            thumbnail_view: ThumbnailView::new(20.try_into().unwrap()),
         }
     }
 
@@ -311,7 +285,7 @@ impl App {
             Message::SetThumbnails(thumbnails) => {
                 self.thumbnail_view.set_thumbnails(thumbnails);
                 // Default to selecting the first image within a directory
-                self.preview = self.thumbnail_view.positions().first().copied();
+                // self.preview = self.thumbnail_view.positions().next();
                 Task::none()
             }
             // Modify Thumbnail filters
@@ -333,28 +307,31 @@ impl App {
             }
             // TODO: Implement ScrollTo action
             Message::ScrollTo(id) => {
-                let offset = self.thumbnail_view.get_position(&id).unwrap() as f32 * 240.;
-                scroll_to(
-                    self.thumbnail_scroller.clone(),
-                    AbsoluteOffset { x: offset, y: 0. },
-                )
+                let offset = self.thumbnail_view.get_position(id).unwrap() as f32 * 240.;
+                // scroll_to(
+                //     self.thumbnail_scroller.clone(),
+                //     AbsoluteOffset { x: offset, y: 0. },
+                // )
+                Task::none()
             }
             Message::SetSelectionCurrent(s) => {
-                if let Some(id) = self.preview {
-                    self.update(Message::SetSelection((id, s)))
-                } else {
-                    Task::none()
-                }
+                // if let Some(id) = self.preview {
+                //     self.update(Message::SetSelection(id))
+                // } else {
+                //     Task::none()
+                // }
+                Task::none()
             }
-            Message::SetSelection((id, s)) => {
-                self.thumbnail_view.set_selection(&id, s);
-                Task::perform(
-                    async move { update_selection_state(&database, id, s).await.unwrap() },
-                    move |_| Message::Ignore,
-                )
+            Message::SetSelection(id) => {
+                // self.thumbnail_view.set_selection(&id s);
+                // Task::perform(
+                //     async move { update_selection_state(&database, id, s).await.unwrap() },
+                //     move |_| Message::Ignore,
+                // )
+                Task::none()
             }
             Message::SelectionExport => {
-                let items = self.thumbnail_view.get_view();
+                let items: Vec<_> = self.thumbnail_view.get_view().cloned().collect();
                 Task::perform(
                     async move {
                         let dir: Utf8PathBuf = rfd::AsyncFileDialog::new()
@@ -367,7 +344,7 @@ impl App {
                             .into();
 
                         for file in items.into_iter() {
-                            let origin = file.filepath;
+                            let origin = file.data.filepath.clone();
                             let destination = dir.join(origin.file_name().unwrap());
 
                             tokio::fs::copy(origin, destination)
@@ -382,26 +359,42 @@ impl App {
             Message::Ignore => Task::none(),
             Message::DirectoryNext => Task::none(),
             Message::DirectoryPrev => Task::none(),
-            Message::ThumbnailNext => {
-                tracing::debug!("Selecting Next Thumbnail");
-                self.preview = self.thumbnail_view.next(self.preview.as_ref());
-                if let Some(id) = self.preview {
-                    self.update(Message::ScrollTo(id))
-                } else {
-                    Task::none()
+            Message::ThumbnailPoppedIn(id) => Task::perform(
+                async move { load_thumbnail(&database, id).await.unwrap() },
+                Message::SetThumbnail,
+            ),
+            Message::SetThumbnail(data) => {
+                if let Some(thumbnail) = data.thumbnail {
+                    let handle = iced::widget::image::Handle::from_rgba(
+                        thumbnail.width(),
+                        thumbnail.height(),
+                        thumbnail.to_vec(),
+                    );
+                    self.thumbnail_view.set_thumbnail(&data.id, handle);
                 }
+
+                Task::none()
+            }
+            Message::ThumbnailNext => {
+                // tracing::debug!("Selecting Next Thumbnail");
+                // self.preview = self.thumbnail_view.next(self.preview);
+                // if let Some(id) = self.preview {
+                //     self.update(Message::ScrollTo(id))
+                // } else {
+                Task::none()
+                // }
             }
             Message::ThumbnailPrev => {
-                tracing::debug!("Selecting Prev Thumbnail");
-                self.preview = self.thumbnail_view.prev(self.preview.as_ref());
-                if let Some(id) = self.preview {
-                    Task::perform(async move {}, move |_| Message::ScrollTo(id))
-                } else {
-                    Task::none()
-                }
+                // tracing::debug!("Selecting Prev Thumbnail");
+                // self.preview = self.thumbnail_view.prev(self.preview);
+                // if let Some(id) = self.preview {
+                //     Task::perform(async move {}, move |_| Message::ScrollTo(id))
+                // } else {
+                Task::none()
+                // }
             }
             Message::UpdatePictureView(preview) => {
-                self.preview = preview;
+                // self.preview = preview;
                 Task::none()
             }
         }
@@ -412,12 +405,15 @@ impl App {
             self.directory_view(),
             match self.app_view {
                 AppView::Preview => {
-                    column![self.menu_view(), self.preview_view(), self.thumbnail_view()]
-                        .width(Length::Fill)
-                        .height(Length::Fill)
+                    column![
+                        menu::menu_view(&self),
+                        self.thumbnail_view.get_preview_view()
+                    ]
+                    .width(Length::Fill)
+                    .height(Length::Fill)
                 }
                 AppView::Grid => {
-                    column![self.menu_view(), self.grid_view()]
+                    column![menu::menu_view(&self), self.thumbnail_view.get_grid_view()]
                         .width(Length::Fill)
                         .height(Length::Fill)
                 }
@@ -425,8 +421,6 @@ impl App {
         ]
         .into();
         container(content)
-            // .width(Length::Fill)
-            // .height(Length::Fill)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
             .into()
