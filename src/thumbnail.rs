@@ -5,21 +5,24 @@ use either::Either;
 use entity::Selection;
 use iced::{
     widget::{
-        column, container, horizontal_space,
-        image::{self, viewer},
+        column, container, horizontal_space, image,
+        image::viewer,
         row, scrollable,
-        scrollable::Id,
+        scrollable::{scroll_to, AbsoluteOffset, Id},
     },
     Element,
     Length::{self, Fill},
+    Task,
 };
 use itertools::Itertools;
 use lru::LruCache;
+use sea_orm::DatabaseConnection;
 use uuid::Uuid;
 
 use crate::{
-    picture::{self, PictureThumbnail},
-    Message,
+    data::{load_thumbnail, update_selection_state},
+    picture::{self, PictureThumbnail, ThumbnailData},
+    DatabaseMessage, Message,
 };
 
 /// Provide the opportunity to filter thumbnails
@@ -80,6 +83,29 @@ pub enum Active {
     Multiple(Vec<Uuid>),
 }
 
+#[derive(Debug, Clone)]
+pub enum ThumbnailMessage {
+    DisplayPick(bool),
+    DisplayOrdinary(bool),
+    DisplayIgnore(bool),
+    DisplayHidden(bool),
+    ScrollTo(Uuid),
+    SetSelection((Uuid, Selection)),
+    ThumbnailPoppedIn(Uuid),
+    SetThumbnail(ThumbnailData),
+    ThumbnailNext,
+    ThumbnailPrev,
+    SetActive(Uuid),
+    ToggleActive(Uuid),
+    ActivateMany(Vec<Uuid>),
+}
+
+impl Into<Message> for ThumbnailMessage {
+    fn into(self) -> Message {
+        Message::Thumbnail(self)
+    }
+}
+
 /// Provide an o
 #[derive(Debug)]
 pub struct ThumbnailView {
@@ -94,10 +120,11 @@ pub struct ThumbnailView {
 
     scroller: Id,
     preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
+    database: DatabaseConnection,
 }
 
 impl ThumbnailView {
-    pub fn new(cache_size: NonZero<usize>) -> Self {
+    pub fn new(db: DatabaseConnection, cache_size: NonZero<usize>) -> Self {
         Self {
             thumbnails: Default::default(),
             filter: Default::default(),
@@ -105,6 +132,63 @@ impl ThumbnailView {
             selection: Default::default(),
             preview_cache: RefCell::new(LruCache::new(cache_size)),
             scroller: Id::unique(),
+            database: db,
+        }
+    }
+
+    pub fn update(&mut self, message: ThumbnailMessage) -> Task<Message> {
+        let database = self.database.clone();
+        match message {
+            ThumbnailMessage::DisplayPick(value) => {
+                self.set_pick(value);
+                Task::none()
+            }
+            ThumbnailMessage::DisplayOrdinary(value) => {
+                self.set_ordinary(value);
+                Task::none()
+            }
+            ThumbnailMessage::DisplayIgnore(value) => {
+                self.set_ignore(value);
+                Task::none()
+            }
+            ThumbnailMessage::DisplayHidden(value) => {
+                self.set_hidden(value);
+                Task::none()
+            }
+            ThumbnailMessage::ScrollTo(id) => {
+                let offset = self.get_position(id).unwrap() as f32 * 240.;
+                scroll_to(self.scroller.clone(), AbsoluteOffset { x: offset, y: 0. })
+            }
+            ThumbnailMessage::SetSelection((id, s)) => {
+                self.set_selection(&id, s);
+                let to_update = self.thumbnails.get(&id).unwrap().data.clone();
+                Task::done(DatabaseMessage::UpdateImage(to_update)).map(Message::Database)
+            }
+            ThumbnailMessage::ThumbnailPoppedIn(id) => Task::perform(
+                async move { load_thumbnail(&database, id).await.unwrap() },
+                ThumbnailMessage::SetThumbnail,
+            )
+            .map(Message::Thumbnail),
+            ThumbnailMessage::SetThumbnail(data) => {
+                if let Some(thumbnail) = data.thumbnail {
+                    let handle = iced::widget::image::Handle::from_rgba(
+                        thumbnail.width(),
+                        thumbnail.height(),
+                        thumbnail.to_vec(),
+                    );
+                    self.set_thumbnail(&data.id, handle);
+                }
+
+                Task::none()
+            }
+            ThumbnailMessage::ThumbnailNext => todo!(),
+            ThumbnailMessage::ThumbnailPrev => todo!(),
+            ThumbnailMessage::SetActive(id) => {
+                self.selection = Active::Single(id);
+                Task::none()
+            }
+            ThumbnailMessage::ToggleActive(uuid) => todo!(),
+            ThumbnailMessage::ActivateMany(vec) => todo!(),
         }
     }
 

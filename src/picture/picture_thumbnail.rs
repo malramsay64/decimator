@@ -3,6 +3,7 @@ use iced::widget::{button, column, container, horizontal_space, image, pop, row,
 use iced::Element;
 
 use super::PictureData;
+use crate::thumbnail::ThumbnailMessage;
 use crate::Message;
 
 /// Defining the data for a thumbnail image
@@ -41,17 +42,17 @@ impl PictureThumbnail {
     pub fn view<'a>(&'a self) -> Element<'a, Message> {
         let button_width = iced::Length::from(40.0);
         let button_ignore: Element<'a, Message> = button(text("I").center())
-            .on_press(Message::SetSelectionCurrent(Selection::Ignore))
+            .on_press(ThumbnailMessage::SetSelection((self.data.id, Selection::Ignore)).into())
             .width(button_width)
             .into();
 
         let button_ordinary: Element<'a, Message> = button(text("O").center())
-            .on_press(Message::SetSelectionCurrent(Selection::Ordinary))
+            .on_press(ThumbnailMessage::SetSelection((self.data.id, Selection::Ordinary)).into())
             .width(button_width)
             .into();
 
         let button_pick: Element<'a, Message> = Button::new(text("P").center())
-            .on_press(Message::SetSelectionCurrent(Selection::Pick))
+            .on_press(ThumbnailMessage::SetSelection((self.data.id, Selection::Pick)).into())
             .width(button_width)
             .into();
 
@@ -64,7 +65,7 @@ impl PictureThumbnail {
         } else {
             pop(container(horizontal_space()).width(240).height(240))
                 .anticipate(240)
-                .on_show(move |_| Message::ThumbnailPoppedIn(self.data.id))
+                .on_show(move |_| ThumbnailMessage::ThumbnailPoppedIn(self.data.id).into())
                 .into()
         };
         button(
@@ -76,7 +77,7 @@ impl PictureThumbnail {
             .align_x(iced::Alignment::Center)
             .padding(10),
         )
-        .on_press(Message::SetSelection(self.data.id))
+        .on_press(ThumbnailMessage::SetActive(self.data.id).into())
         .into()
     }
 }

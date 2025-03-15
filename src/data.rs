@@ -7,9 +7,9 @@
 use std::io::Cursor;
 use std::ops::Not;
 
-use ::entity::{Selection, picture};
-use anyhow::Error;
+use ::entity::{picture, Selection};
 use anyhow::anyhow;
+use anyhow::Error;
 use camino::Utf8PathBuf;
 use futures::future::{join_all, try_join_all};
 use image::ImageFormat;
@@ -150,6 +150,14 @@ pub(crate) async fn query_unique_directories(
         .into_iter()
         .map(DirectoryData::from)
         .collect())
+}
+
+pub(crate) async fn update_picture_data(
+    db: &DatabaseConnection,
+    data: PictureData,
+) -> Result<(), Error> {
+    data.into_active().update(db).await?;
+    Ok(())
 }
 
 /// Modify the state of the selected attribute on an image
