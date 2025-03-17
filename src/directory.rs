@@ -1,6 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use iced::widget::{Container, container, text};
-use iced::{Element, Length, Padding, Theme};
+use iced::widget::text;
+use iced::{Element, Length};
 
 use crate::Message;
 

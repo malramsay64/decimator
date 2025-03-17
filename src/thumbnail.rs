@@ -1,27 +1,30 @@
-use std::{cell::RefCell, collections::HashMap, num::NonZero};
+use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, num::NonZero, sync::RwLock};
+use tokio::task;
 
 use camino::Utf8PathBuf;
 use either::Either;
 use entity::Selection;
+use futures::lock::Mutex;
 use iced::{
     widget::{
-        column, container, horizontal_space, image,
-        image::viewer,
-        row, scrollable,
+        column, container, horizontal_space,
+        image::{self, viewer, Handle},
+        pop, row, scrollable,
         scrollable::{scroll_to, AbsoluteOffset, Id},
     },
-    Element,
-    Length::{self, Fill},
+    ContentFit, Element,
+    Length::{self},
     Task,
 };
 use itertools::Itertools;
 use lru::LruCache;
 use sea_orm::DatabaseConnection;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::{
-    data::{load_thumbnail, update_selection_state},
-    picture::{self, PictureThumbnail, ThumbnailData},
+    data::load_thumbnail,
+    picture::{load_image, PictureThumbnail, ThumbnailData},
     DatabaseMessage, Message,
 };
 
@@ -92,17 +95,19 @@ pub enum ThumbnailMessage {
     ScrollTo(Uuid),
     SetSelection((Uuid, Selection)),
     ThumbnailPoppedIn(Uuid),
+    PreviewPoppedIn(Uuid),
+    ImageLoaded((Uuid, Handle)),
     SetThumbnail(ThumbnailData),
-    ThumbnailNext,
-    ThumbnailPrev,
+    Next,
+    Prev,
     SetActive(Uuid),
     ToggleActive(Uuid),
     ActivateMany(Vec<Uuid>),
 }
 
-impl Into<Message> for ThumbnailMessage {
-    fn into(self) -> Message {
-        Message::Thumbnail(self)
+impl From<ThumbnailMessage> for Message {
+    fn from(val: ThumbnailMessage) -> Self {
+        Message::Thumbnail(val)
     }
 }
 
@@ -119,7 +124,8 @@ pub struct ThumbnailView {
     selection: Active,
 
     scroller: Id,
-    preview_cache: RefCell<lru::LruCache<Uuid, iced::widget::image::Handle>>,
+    viewer: Option<image::Handle>,
+    preview_cache: RefCell<lru::LruCache<Uuid, image::Handle>>,
     database: DatabaseConnection,
 }
 
@@ -131,11 +137,13 @@ impl ThumbnailView {
             sort: Default::default(),
             selection: Default::default(),
             preview_cache: RefCell::new(LruCache::new(cache_size)),
+            viewer: None,
             scroller: Id::unique(),
             database: db,
         }
     }
 
+    #[tracing::instrument(name = "Updating App", level = "info", skip(self))]
     pub fn update(&mut self, message: ThumbnailMessage) -> Task<Message> {
         let database = self.database.clone();
         match message {
@@ -169,6 +177,28 @@ impl ThumbnailView {
                 ThumbnailMessage::SetThumbnail,
             )
             .map(Message::Thumbnail),
+            ThumbnailMessage::PreviewPoppedIn(id) => {
+                let filepath = self.get_filepath(&id).unwrap();
+                Task::perform(
+                    async move {
+                        let handle = task::spawn_blocking(move || {
+                            let image = load_image(filepath.clone(), None).unwrap();
+                            info!("Image Loaded from {filepath}");
+                            Handle::from_rgba(image.width(), image.height(), image.into_vec())
+                        })
+                        .await
+                        .unwrap();
+                        (id, handle)
+                    },
+                    ThumbnailMessage::ImageLoaded,
+                )
+                .map(Message::Thumbnail)
+            }
+            ThumbnailMessage::ImageLoaded((id, handle)) => {
+                self.preview_cache.borrow_mut().put(id, handle.clone());
+                self.viewer = Some(handle);
+                Task::none()
+            }
             ThumbnailMessage::SetThumbnail(data) => {
                 if let Some(thumbnail) = data.thumbnail {
                     let handle = iced::widget::image::Handle::from_rgba(
@@ -181,11 +211,30 @@ impl ThumbnailView {
 
                 Task::none()
             }
-            ThumbnailMessage::ThumbnailNext => todo!(),
-            ThumbnailMessage::ThumbnailPrev => todo!(),
+            ThumbnailMessage::Next => {
+                if let Active::Single(id) = self.selection {
+                    self.selection = Active::Single(self.next(Some(id)).unwrap());
+                }
+                Task::none()
+            }
+            ThumbnailMessage::Prev => {
+                if let Active::Single(id) = self.selection {
+                    Task::done(ThumbnailMessage::SetActive(self.prev(Some(id)).unwrap()))
+                        .map(Message::Thumbnail)
+                } else {
+                    Task::none()
+                }
+            }
             ThumbnailMessage::SetActive(id) => {
                 self.selection = Active::Single(id);
-                Task::none()
+                match self.preview_cache.borrow_mut().get(&id) {
+                    Some(p) => Task::done(ThumbnailMessage::ImageLoaded((id, p.clone()))),
+                    None => {
+                        self.viewer = self.thumbnails.get(&id).unwrap().handle.clone();
+                        Task::done(ThumbnailMessage::PreviewPoppedIn(id))
+                    }
+                }
+                .map(Message::Thumbnail)
             }
             ThumbnailMessage::ToggleActive(uuid) => todo!(),
             ThumbnailMessage::ActivateMany(vec) => todo!(),
@@ -251,6 +300,8 @@ impl ThumbnailView {
     }
 
     pub fn set_thumbnails(&mut self, thumbnails: Vec<PictureThumbnail>) {
+        self.selection = Active::None;
+        self.viewer = None;
         self.thumbnails = thumbnails.into_iter().map(|t| (t.data.id, t)).collect();
     }
 
@@ -278,26 +329,24 @@ impl ThumbnailView {
         self.thumbnails.get_mut(id).unwrap().handle = Some(handle)
     }
 
-    pub fn get_view<'a>(&'a self) -> impl Iterator<Item = &'a PictureThumbnail> {
+    pub fn get_view(&self) -> impl Iterator<Item = &PictureThumbnail> {
         self.positions().map(|i| self.thumbnails.get(&i).unwrap())
     }
 
+    pub fn is_selected(&self, id: &Uuid) -> bool {
+        match &self.selection {
+            Active::None => false,
+            Active::Single(selected) => id == selected,
+            Active::Multiple(selected) => selected.contains(&id),
+        }
+    }
+
     pub fn get_preview_view(&self) -> Element<'_, Message> {
-        let preview: Element<'_, Message> = if let Active::Single(preview_id) = self.selection {
-            // Check cache, and use if available
-            let handle: image::Handle = match self.preview_cache.borrow_mut().get(&preview_id) {
-                Some(x) => x.clone(),
-                None => self
-                    .thumbnails
-                    .get(&preview_id)
-                    .unwrap()
-                    .handle
-                    .clone()
-                    .unwrap(),
-            };
-            viewer(handle)
+        let preview: Element<'_, Message> = if let Some(view) = &self.viewer {
+            viewer(view.clone())
                 .width(Length::Fill)
                 .height(Length::Fill)
+                .content_fit(ContentFit::Contain)
                 .into()
         } else {
             horizontal_space().height(Length::Fill).into()
@@ -305,11 +354,16 @@ impl ThumbnailView {
 
         column![
             preview,
-            scrollable(row(self.get_view().map(PictureThumbnail::view)).spacing(10))
-                .id(self.scroller.clone())
-                .direction(scrollable::Direction::Horizontal(
-                    scrollable::Scrollbar::default(),
-                ))
+            scrollable(
+                row(self
+                    .get_view()
+                    .map(|p| (PictureThumbnail::view(p, self.is_selected(&p.data.id)))))
+                .spacing(10)
+            )
+            .id(self.scroller.clone())
+            .direction(scrollable::Direction::Horizontal(
+                scrollable::Scrollbar::default(),
+            ))
         ]
         .into()
     }
@@ -317,9 +371,11 @@ impl ThumbnailView {
     pub fn get_grid_view(&self) -> Element<'_, Message> {
         scrollable(
             container(
-                row(self.get_view().map(PictureThumbnail::view))
-                    .spacing(10)
-                    .wrap(),
+                row(self
+                    .get_view()
+                    .map(|p| PictureThumbnail::view(p, self.is_selected(&p.data.id))))
+                .spacing(10)
+                .wrap(),
             ), // .center_x(Fill),
         )
         .direction(scrollable::Direction::Vertical(

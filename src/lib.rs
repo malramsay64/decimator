@@ -1,16 +1,9 @@
-use std::cell::RefCell;
-
 use camino::Utf8PathBuf;
-use data::{
-    load_thumbnail, query_directory_pictures, query_unique_directories, update_selection_state,
-    update_thumbnails,
-};
+use data::{query_directory_pictures, query_unique_directories, update_thumbnails};
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::scrollable::{scroll_to, AbsoluteOffset, Id};
-use iced::widget::{button, column, container, row, scrollable, text, Container, Scrollable};
+use iced::widget::{button, column, container, row, scrollable, text};
 use iced::Event::Keyboard;
-use iced::Length::Fill;
 use iced::{event, Element, Length, Subscription, Task};
 use import::find_new_images;
 use itertools::Itertools;
@@ -19,7 +12,6 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::import::import;
-use crate::widget::viewer;
 
 mod data;
 mod directory;
@@ -32,8 +24,7 @@ mod thumbnail;
 mod widget;
 
 use directory::DirectoryData;
-use entity::Selection;
-use picture::{PictureData, PictureThumbnail, ThumbnailData};
+use picture::{PictureData, PictureThumbnail};
 use thumbnail::{ThumbnailMessage, ThumbnailView};
 
 #[derive(Debug, Clone)]
@@ -42,9 +33,9 @@ pub enum AppMessage {}
 #[derive(Debug, Clone)]
 pub enum DirectoryMessage {}
 
-impl Into<Message> for AppMessage {
-    fn into(self) -> Message {
-        Message::App(self)
+impl From<AppMessage> for Message {
+    fn from(val: AppMessage) -> Self {
+        Message::App(val)
     }
 }
 
@@ -54,9 +45,9 @@ pub enum DatabaseMessage {
     LoadThumbnail(Uuid),
 }
 
-impl Into<Message> for DatabaseMessage {
-    fn into(self) -> Message {
-        Message::Database(self)
+impl From<DatabaseMessage> for Message {
+    fn from(val: DatabaseMessage) -> Self {
+        Message::Database(val)
     }
 }
 
@@ -81,7 +72,6 @@ pub enum Message {
     SelectionExport,
     // Contains the path where the files are being exported to
     SelectionPrint,
-    UpdatePictureView(Option<Uuid>),
     DirectoryNext,
     DirectoryPrev,
     Ignore,
@@ -258,10 +248,6 @@ impl App {
             Message::Ignore => Task::none(),
             Message::DirectoryNext => Task::none(),
             Message::DirectoryPrev => Task::none(),
-            Message::UpdatePictureView(preview) => {
-                // self.preview = preview;
-                Task::none()
-            }
         }
     }
 
@@ -271,14 +257,14 @@ impl App {
             match self.app_view {
                 AppView::Preview => {
                     column![
-                        menu::menu_view(&self),
+                        menu::menu_view(self),
                         self.thumbnail_view.get_preview_view()
                     ]
                     .width(Length::Fill)
                     .height(Length::Fill)
                 }
                 AppView::Grid => {
-                    column![menu::menu_view(&self), self.thumbnail_view.get_grid_view()]
+                    column![menu::menu_view(self), self.thumbnail_view.get_grid_view()]
                         .width(Length::Fill)
                         .height(Length::Fill)
                 }
@@ -295,12 +281,12 @@ impl App {
         let keyboard_sub = event::listen_with(|event, _, _| match event {
             Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
                 match key.as_ref() {
-                    // Key::Character("h") | Key::Named(Named::ArrowLeft) => {
-                    //     // Some(Message::ThumbnailPrev)
-                    // }
-                    // Key::Character("l") | Key::Named(Named::ArrowRight) => {
-                    //     // Some(Message::ThumbnailNext)
-                    // }
+                    Key::Character("h") | Key::Named(Named::ArrowLeft) => {
+                        Some(ThumbnailMessage::Next.into())
+                    }
+                    Key::Character("l") | Key::Named(Named::ArrowRight) => {
+                        Some(ThumbnailMessage::Next.into())
+                    }
                     // TODO: Keyboard Navigation of directories
                     // KeyCode::H | KeyCode::Left => Some(Message::DirectoryPrev),
                     // KeyCode::H | KeyCode::Left => Some(Message::DirectoryNext),

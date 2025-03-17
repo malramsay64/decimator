@@ -1,6 +1,6 @@
 use entity::Selection;
 use iced::widget::{button, column, container, horizontal_space, image, pop, row, text, Button};
-use iced::Element;
+use iced::{Background, Element, Theme};
 
 use super::PictureData;
 use crate::thumbnail::ThumbnailMessage;
@@ -11,6 +11,23 @@ use crate::Message;
 pub struct PictureThumbnail {
     pub handle: Option<image::Handle>,
     pub data: PictureData,
+}
+
+fn thumbnail_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+
+    match status {
+        button::Status::Active => {
+            button::Style::default().with_background(palette.background.base.color)
+        }
+        button::Status::Hovered => {
+            button::Style::default().with_background(palette.background.strong.color)
+        }
+        button::Status::Pressed => {
+            button::Style::default().with_background(palette.primary.base.color)
+        }
+        _ => button::primary(theme, status),
+    }
 }
 
 impl PartialEq for PictureThumbnail {
@@ -39,23 +56,24 @@ impl Ord for PictureThumbnail {
 }
 
 impl PictureThumbnail {
-    pub fn view<'a>(&'a self) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, selected: bool) -> Element<'a, Message> {
         let button_width = iced::Length::from(40.0);
-        let button_ignore: Element<'a, Message> = button(text("I").center())
-            .on_press(ThumbnailMessage::SetSelection((self.data.id, Selection::Ignore)).into())
-            .width(button_width)
-            .into();
-
-        let button_ordinary: Element<'a, Message> = button(text("O").center())
-            .on_press(ThumbnailMessage::SetSelection((self.data.id, Selection::Ordinary)).into())
-            .width(button_width)
-            .into();
-
-        let button_pick: Element<'a, Message> = Button::new(text("P").center())
-            .on_press(ThumbnailMessage::SetSelection((self.data.id, Selection::Pick)).into())
-            .width(button_width)
-            .into();
-
+        let buttons = vec![
+            ("I", Selection::Ignore),
+            ("O", Selection::Ordinary),
+            ("P", Selection::Pick),
+        ];
+        let buttons = buttons.into_iter().map(|(t, selection)| {
+            let message = if self.data.selection == selection {
+                None
+            } else {
+                Some(ThumbnailMessage::SetSelection((self.data.id, selection)).into())
+            };
+            button(text(t).center())
+                .on_press_maybe(message)
+                .width(button_width)
+                .into()
+        });
         let image_handle: Element<'a, Message> = if let Some(handle) = &self.handle {
             image(handle)
                 .width(240)
@@ -68,16 +86,18 @@ impl PictureThumbnail {
                 .on_show(move |_| ThumbnailMessage::ThumbnailPoppedIn(self.data.id).into())
                 .into()
         };
+        let message: Option<Message> = if selected {
+            None
+        } else {
+            Some(ThumbnailMessage::SetActive(self.data.id).into())
+        };
         button(
-            column![
-                image_handle,
-                // TODO: Re-enable once supported by iced_aw
-                row![button_ignore, button_ordinary, button_pick]
-            ]
-            .align_x(iced::Alignment::Center)
-            .padding(10),
+            column![image_handle, row(buttons),]
+                .align_x(iced::Alignment::Center)
+                .padding(10),
         )
-        .on_press(ThumbnailMessage::SetActive(self.data.id).into())
+        .style(thumbnail_style)
+        .on_press_maybe(message)
         .into()
     }
 }

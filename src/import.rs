@@ -6,12 +6,10 @@ use camino::{Utf8Path, Utf8PathBuf};
 use futures_concurrency::prelude::*;
 use itertools::Itertools;
 use sea_orm::DatabaseConnection;
-use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::data::{add_new_images, query_existing_pictures};
-use crate::picture::{self, is_image, PictureData, PictureThumbnail};
-use crate::thumbnail::ThumbnailView;
+use crate::picture::{is_image, PictureData};
 
 #[derive(Clone, Debug)]
 struct ImportStructure {
