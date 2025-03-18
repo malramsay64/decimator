@@ -6,10 +6,11 @@ use either::Either;
 use entity::Selection;
 use iced::{
     widget::{
-        column, container, horizontal_space,
-        image::{self, viewer, Handle},
-        row, scrollable,
+        column, container, horizontal_space, image,
+        image::{viewer, Handle},
+        mouse_area, row, scrollable,
         scrollable::{scroll_to, AbsoluteOffset, Id},
+        stack,
     },
     ContentFit, Element,
     Length::{self},
@@ -101,6 +102,7 @@ pub enum ThumbnailMessage {
     Next,
     Prev,
     SetActive(Uuid),
+    ClearActive,
     ToggleActive(Uuid),
     ActivateMany(Vec<Uuid>),
 }
@@ -249,6 +251,11 @@ impl ThumbnailView {
                 }
                 .map(Message::Thumbnail)
             }
+            ThumbnailMessage::ClearActive => {
+                self.selection = Active::None;
+                self.viewer = None;
+                Task::none()
+            }
             ThumbnailMessage::ToggleActive(uuid) => todo!(),
             ThumbnailMessage::ActivateMany(vec) => todo!(),
         }
@@ -381,7 +388,7 @@ impl ThumbnailView {
     }
 
     pub fn get_grid_view(&self) -> Element<'_, Message> {
-        scrollable(container(
+        let grid = scrollable(container(
             row(self.get_view().map(|p| {
                 PictureThumbnail::view(p, self.is_selected(&p.data.id), self.thumbnail_size)
             }))
@@ -392,8 +399,26 @@ impl ThumbnailView {
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new().width(2.).scroller_width(10.),
         ))
-        .width(Length::Fill)
-        .into()
+        .width(Length::Fill);
+
+        if let Some(view) = &self.viewer {
+            let view_area: Element<'_, Message> = mouse_area(
+                container(
+                    image(view)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .content_fit(ContentFit::Contain),
+                )
+                .center(Length::Fill)
+                .padding(20),
+            )
+            .on_press(ThumbnailMessage::ClearActive.into())
+            .into();
+
+            stack![grid, view_area].into()
+        } else {
+            grid.into()
+        }
     }
 
     pub fn get_filepath(&self, id: &Uuid) -> Option<Utf8PathBuf> {
