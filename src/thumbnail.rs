@@ -1,15 +1,13 @@
-use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, num::NonZero, sync::RwLock};
+use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, num::NonZero};
 use tokio::task;
 
 use camino::Utf8PathBuf;
 use either::Either;
 use entity::Selection;
-use futures::lock::Mutex;
 use iced::{
     widget::{
         column, container, horizontal_space,
-        image::{self, viewer, Handle},
-        pop, row, scrollable,
+        image::{self, viewer, Handle}, row, scrollable,
         scrollable::{scroll_to, AbsoluteOffset, Id},
     },
     ContentFit, Element,
@@ -337,7 +335,7 @@ impl ThumbnailView {
         match &self.selection {
             Active::None => false,
             Active::Single(selected) => id == selected,
-            Active::Multiple(selected) => selected.contains(&id),
+            Active::Multiple(selected) => selected.contains(id),
         }
     }
 

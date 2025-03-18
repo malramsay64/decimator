@@ -1,6 +1,6 @@
 use entity::Selection;
-use iced::widget::{button, column, container, horizontal_space, image, pop, row, text, Button};
-use iced::{Background, Element, Theme};
+use iced::widget::{button, column, container, horizontal_space, image, pop, row, text};
+use iced::{Element, Theme};
 
 use super::PictureData;
 use crate::thumbnail::ThumbnailMessage;
