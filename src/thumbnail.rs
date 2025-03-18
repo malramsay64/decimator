@@ -77,7 +77,7 @@ pub enum Order {
     Descending,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum Active {
     #[default]
     None,
@@ -93,6 +93,7 @@ pub enum ThumbnailMessage {
     DisplayHidden(bool),
     ScrollTo(Uuid),
     SetSelection((Uuid, Selection)),
+    SetThumbnails(Vec<PictureThumbnail>),
     ThumbnailPoppedIn(Uuid),
     PreviewPoppedIn(Uuid),
     ImageLoaded((Uuid, Handle)),
@@ -179,6 +180,12 @@ impl ThumbnailView {
                 ThumbnailMessage::SetThumbnail,
             )
             .map(Message::Thumbnail),
+            ThumbnailMessage::SetThumbnails(thumbnails) => {
+                self.set_thumbnails(thumbnails);
+                // Default to selecting the first image within a directory
+                // self.preview = self.thumbnail_view.positions().next();
+                Task::none()
+            }
             ThumbnailMessage::PreviewPoppedIn(id) => {
                 let filepath = self.get_filepath(&id).unwrap();
                 Task::perform(
@@ -225,6 +232,7 @@ impl ThumbnailView {
             ThumbnailMessage::Prev => {
                 if let Active::Single(id) = self.selection {
                     Task::done(ThumbnailMessage::SetActive(self.prev(Some(id)).unwrap()))
+                        .chain(Task::done(ThumbnailMessage::ScrollTo(id)))
                         .map(Message::Thumbnail)
                 } else {
                     Task::none()
@@ -373,19 +381,18 @@ impl ThumbnailView {
     }
 
     pub fn get_grid_view(&self) -> Element<'_, Message> {
-        scrollable(
-            container(
-                row(self.get_view().map(|p| {
-                    PictureThumbnail::view(p, self.is_selected(&p.data.id), self.thumbnail_size)
-                }))
-                .spacing(10)
-                .wrap(),
-            )
-            .center_x(Length::Fill),
-        )
+        scrollable(container(
+            row(self.get_view().map(|p| {
+                PictureThumbnail::view(p, self.is_selected(&p.data.id), self.thumbnail_size)
+            }))
+            .spacing(10)
+            .width(Length::Fill)
+            .wrap(),
+        ))
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new().width(2.).scroller_width(10.),
         ))
+        .width(Length::Fill)
         .into()
     }
 

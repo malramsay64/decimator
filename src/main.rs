@@ -1,5 +1,6 @@
 const APP_ID: &str = "com.malramsay.Decimator";
 
+use decimator::directory::DirectoryMessage;
 use decimator::telemetry::{get_subscriber_terminal, init_subscriber};
 use decimator::{App, Message};
 use iced::Task;
@@ -43,5 +44,10 @@ fn main() -> Result<(), iced::Error> {
 
     iced::application("Decimator", App::update, App::view)
         .subscription(App::subscription)
-        .run_with(|| (app, Task::done(Message::QueryDirectories)))
+        .run_with(|| {
+            (
+                app,
+                Task::done(DirectoryMessage::QueryDirectories).map(Message::Directory),
+            )
+        })
 }

@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::import::import;
 
 mod data;
-mod directory;
+pub mod directory;
 mod import;
 // The menu is not currently working with the iced master branch
 mod menu;
@@ -23,15 +23,12 @@ pub mod telemetry;
 mod thumbnail;
 mod widget;
 
-use directory::DirectoryData;
+use directory::{DirectoryData, DirectoryMessage, DirectoryView};
 use picture::{PictureData, PictureThumbnail};
 use thumbnail::{ThumbnailMessage, ThumbnailView};
 
 #[derive(Debug, Clone)]
 pub enum AppMessage {}
-
-#[derive(Debug, Clone)]
-pub enum DirectoryMessage {}
 
 impl From<AppMessage> for Message {
     fn from(val: AppMessage) -> Self {
@@ -58,22 +55,12 @@ pub enum Message {
     Database(DatabaseMessage),
     Directory(DirectoryMessage),
     App(AppMessage),
-    /// The request to open the directory selection menu
-    DirectoryAdd,
-    /// The request to open the directory selection menu
-    DirectoryImport,
-    QueryDirectories,
-    UpdateDirectories(Vec<DirectoryData>),
     UpdateThumbnails(bool),
-    SetThumbnails(Vec<PictureThumbnail>),
-    SelectDirectory(Utf8PathBuf),
     // Signal to emit when we want to export, this creates the export dialog
     SetView(AppView),
     SelectionExport,
     // Contains the path where the files are being exported to
     SelectionPrint,
-    DirectoryNext,
-    DirectoryPrev,
     Ignore,
 }
 
@@ -87,11 +74,11 @@ pub enum AppView {
 #[derive(Debug)]
 pub struct App {
     database: DatabaseConnection,
-    directories: Vec<DirectoryData>,
-    directory: Option<Utf8PathBuf>,
-
+    // directories: Vec<DirectoryData>,
+    // directory: Option<Utf8PathBuf>,
     app_view: AppView,
     thumbnail_view: ThumbnailView,
+    directory_view: DirectoryView,
 }
 
 impl App {
@@ -99,45 +86,11 @@ impl App {
         menu::menu_view(self)
     }
 
-    fn directory_view(&self) -> Element<Message> {
-        let dirs = self.directories.iter().sorted_unstable().rev();
-        let mut position = None;
-        if let Some(dir) = self.directory.clone() {
-            position = dirs.clone().position(|d| dir == d.directory);
-        }
-        info!("Position: {:?}", position);
-
-        let values = column(dirs.map(|d| {
-            button(DirectoryData::view(d))
-                .on_press(Message::SelectDirectory(DirectoryData::add_prefix(
-                    &d.directory,
-                )))
-                .into()
-        }));
-        column![
-            row![
-                button(text("Add")).on_press(Message::DirectoryAdd),
-                // horizontal_space(),
-                button(text("Import")).on_press(Message::DirectoryImport),
-                button(text("Export")).on_press(Message::SelectionExport),
-            ]
-            // The row doesn't introspect size automatically, so we have to force it with the calls to width and height
-            .height(Length::Shrink)
-            // .width(Length::Fill)
-            .padding(10.),
-            container(scrollable(values))
-        ]
-        .width(Length::Shrink)
-        .height(Length::Fill)
-        .into()
-    }
-
     #[tracing::instrument(name = "Initialising App")]
     pub fn new(database: DatabaseConnection) -> Self {
         Self {
             database: database.clone(),
-            directories: vec![],
-            directory: None,
+            directory_view: DirectoryView::new(database.clone()),
             app_view: Default::default(),
             thumbnail_view: ThumbnailView::new(database, 20.try_into().unwrap()),
         }
@@ -150,46 +103,9 @@ impl App {
             Message::Database(m) => Task::none(),
             Message::Thumbnail(m) => self.thumbnail_view.update(m),
             Message::App(m) => Task::none(),
-            Message::Directory(m) => Task::none(),
+            Message::Directory(m) => self.directory_view.update(m),
             Message::SetView(view) => {
                 self.app_view = view;
-                Task::none()
-            }
-            Message::DirectoryImport => Task::perform(
-                async move {
-                    let dir: Utf8PathBuf = rfd::AsyncFileDialog::new()
-                        .pick_folder()
-                        .await
-                        .expect("No Directory found")
-                        .path()
-                        .to_str()
-                        .unwrap()
-                        .into();
-
-                    import(&database, &dir).await.unwrap()
-                },
-                |_| Message::QueryDirectories,
-            ),
-            Message::DirectoryAdd => Task::perform(
-                async move {
-                    let dir = rfd::AsyncFileDialog::new()
-                        .pick_folder()
-                        .await
-                        .expect("No Directory found")
-                        .path()
-                        .to_str()
-                        .unwrap()
-                        .into();
-                    find_new_images(&database, &dir).await;
-                },
-                |_| Message::QueryDirectories,
-            ),
-            Message::QueryDirectories => Task::perform(
-                async move { query_unique_directories(&database).await.unwrap() },
-                Message::UpdateDirectories,
-            ),
-            Message::UpdateDirectories(dirs) => {
-                self.directories = dirs;
                 Task::none()
             }
             Message::UpdateThumbnails(all) => Task::perform(
@@ -201,23 +117,6 @@ impl App {
                 },
                 |_| Message::Ignore,
             ),
-            Message::SelectDirectory(dir) => {
-                self.directory = Some(dir.clone());
-                Task::perform(
-                    async move {
-                        query_directory_pictures(&database, dir.into())
-                            .await
-                            .unwrap()
-                    },
-                    Message::SetThumbnails,
-                )
-            }
-            Message::SetThumbnails(thumbnails) => {
-                self.thumbnail_view.set_thumbnails(thumbnails);
-                // Default to selecting the first image within a directory
-                // self.preview = self.thumbnail_view.positions().next();
-                Task::none()
-            }
             // Modify Thumbnail filters
             Message::SelectionExport => {
                 let items: Vec<_> = self.thumbnail_view.get_view().cloned().collect();
@@ -246,14 +145,12 @@ impl App {
             }
             Message::SelectionPrint => Task::none(),
             Message::Ignore => Task::none(),
-            Message::DirectoryNext => Task::none(),
-            Message::DirectoryPrev => Task::none(),
         }
     }
 
     pub fn view(&self) -> Element<Message> {
         let content: Element<Message> = row![
-            self.directory_view(),
+            self.directory_view.view(),
             match self.app_view {
                 AppView::Preview => {
                     column![
