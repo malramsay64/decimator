@@ -282,7 +282,7 @@ impl App {
             Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
                 match key.as_ref() {
                     Key::Character("h") | Key::Named(Named::ArrowLeft) => {
-                        Some(ThumbnailMessage::Next.into())
+                        Some(ThumbnailMessage::Prev.into())
                     }
                     Key::Character("l") | Key::Named(Named::ArrowRight) => {
                         Some(ThumbnailMessage::Next.into())

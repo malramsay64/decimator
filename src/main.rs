@@ -4,6 +4,8 @@ use decimator::telemetry::{get_subscriber_terminal, init_subscriber};
 use decimator::{App, Message};
 use iced::Task;
 use sea_orm::{ConnectOptions, Database};
+use tracing::instrument::WithSubscriber;
+use tracing::Instrument;
 
 fn main() -> Result<(), iced::Error> {
     // Configure tracing information
@@ -40,5 +42,6 @@ fn main() -> Result<(), iced::Error> {
     let app = App::new(connection);
 
     iced::application("Decimator", App::update, App::view)
-        .run_with(|| (app, Task::perform(async {}, |_| Message::QueryDirectories)))
+        .subscription(App::subscription)
+        .run_with(|| (app, Task::done(Message::QueryDirectories)))
 }

@@ -56,7 +56,7 @@ impl Ord for PictureThumbnail {
 }
 
 impl PictureThumbnail {
-    pub fn view<'a>(&'a self, selected: bool) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, selected: bool, thumbnail_size: u32) -> Element<'a, Message> {
         let button_width = iced::Length::from(40.0);
         let buttons = vec![
             ("I", Selection::Ignore),
@@ -76,28 +76,27 @@ impl PictureThumbnail {
         });
         let image_handle: Element<'a, Message> = if let Some(handle) = &self.handle {
             image(handle)
-                .width(240)
-                .height(240)
+                .width(thumbnail_size)
+                .height(thumbnail_size)
                 .content_fit(iced::ContentFit::Contain)
                 .into()
         } else {
-            pop(container(horizontal_space()).width(240).height(240))
-                .anticipate(240)
-                .on_show(move |_| ThumbnailMessage::ThumbnailPoppedIn(self.data.id).into())
-                .into()
+            pop(container(horizontal_space())
+                .width(thumbnail_size)
+                .height(thumbnail_size))
+            .anticipate(2 * thumbnail_size)
+            .on_show(move |_| ThumbnailMessage::ThumbnailPoppedIn(self.data.id).into())
+            .into()
         };
         let message: Option<Message> = if selected {
             None
         } else {
             Some(ThumbnailMessage::SetActive(self.data.id).into())
         };
-        button(
-            column![image_handle, row(buttons),]
-                .align_x(iced::Alignment::Center)
-                .padding(10),
-        )
-        .style(thumbnail_style)
-        .on_press_maybe(message)
-        .into()
+        button(column![image_handle, row(buttons),].align_x(iced::Alignment::Center))
+            .style(thumbnail_style)
+            .on_press_maybe(message)
+            .padding(10)
+            .into()
     }
 }

@@ -7,7 +7,8 @@ use entity::Selection;
 use iced::{
     widget::{
         column, container, horizontal_space,
-        image::{self, viewer, Handle}, row, scrollable,
+        image::{self, viewer, Handle},
+        row, scrollable,
         scrollable::{scroll_to, AbsoluteOffset, Id},
     },
     ContentFit, Element,
@@ -120,6 +121,7 @@ pub struct ThumbnailView {
     sort: Order,
     // The items that have been selected
     selection: Active,
+    thumbnail_size: u32,
 
     scroller: Id,
     viewer: Option<image::Handle>,
@@ -137,6 +139,7 @@ impl ThumbnailView {
             preview_cache: RefCell::new(LruCache::new(cache_size)),
             viewer: None,
             scroller: Id::unique(),
+            thumbnail_size: 240,
             database: db,
         }
     }
@@ -162,7 +165,8 @@ impl ThumbnailView {
                 Task::none()
             }
             ThumbnailMessage::ScrollTo(id) => {
-                let offset = self.get_position(id).unwrap() as f32 * 240.;
+                let offset =
+                    self.get_position(id).unwrap() as f32 * (self.thumbnail_size + 2 * 10) as f32;
                 scroll_to(self.scroller.clone(), AbsoluteOffset { x: offset, y: 0. })
             }
             ThumbnailMessage::SetSelection((id, s)) => {
@@ -211,9 +215,12 @@ impl ThumbnailView {
             }
             ThumbnailMessage::Next => {
                 if let Active::Single(id) = self.selection {
-                    self.selection = Active::Single(self.next(Some(id)).unwrap());
+                    Task::done(ThumbnailMessage::SetActive(self.next(Some(id)).unwrap()))
+                        .chain(Task::done(ThumbnailMessage::ScrollTo(id)))
+                        .map(Message::Thumbnail)
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
             ThumbnailMessage::Prev => {
                 if let Active::Single(id) = self.selection {
@@ -352,12 +359,11 @@ impl ThumbnailView {
 
         column![
             preview,
-            scrollable(
-                row(self
-                    .get_view()
-                    .map(|p| (PictureThumbnail::view(p, self.is_selected(&p.data.id)))))
-                .spacing(10)
-            )
+            scrollable(row(self.get_view().map(|p| (PictureThumbnail::view(
+                p,
+                self.is_selected(&p.data.id),
+                240
+            )))))
             .id(self.scroller.clone())
             .direction(scrollable::Direction::Horizontal(
                 scrollable::Scrollbar::default(),
@@ -369,12 +375,13 @@ impl ThumbnailView {
     pub fn get_grid_view(&self) -> Element<'_, Message> {
         scrollable(
             container(
-                row(self
-                    .get_view()
-                    .map(|p| PictureThumbnail::view(p, self.is_selected(&p.data.id))))
+                row(self.get_view().map(|p| {
+                    PictureThumbnail::view(p, self.is_selected(&p.data.id), self.thumbnail_size)
+                }))
                 .spacing(10)
                 .wrap(),
-            ), // .center_x(Fill),
+            )
+            .center_x(Length::Fill),
         )
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new().width(2.).scroller_width(10.),
