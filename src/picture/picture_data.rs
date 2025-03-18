@@ -2,14 +2,14 @@ use std::io::{BufReader, Cursor, Seek};
 
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use entity::{Flag, Rating, Selection, picture};
+use entity::{picture, Flag, Rating, Selection};
 use exif::{In, Tag};
-use image::imageops::{FilterType, flip_horizontal, flip_vertical, rotate90, rotate180, rotate270};
+use image::imageops::{flip_horizontal, flip_vertical, rotate180, rotate270, rotate90, FilterType};
 use image::{ImageFormat, ImageReader, RgbImage, RgbaImage};
 use sea_orm::ActiveValue;
-use time::PrimitiveDateTime;
 use time::format_description::FormatItem;
 use time::macros::format_description;
+use time::PrimitiveDateTime;
 use uuid::Uuid;
 use walkdir::DirEntry;
 
@@ -26,6 +26,7 @@ pub struct PictureData {
     pub rating: Option<Rating>,
     pub flag: Option<Flag>,
     pub hidden: bool,
+    pub directory_id: Option<Uuid>,
 }
 
 impl PictureData {
@@ -122,6 +123,7 @@ impl From<picture::Model> for PictureData {
             rating: value.rating,
             flag: value.flag,
             hidden: value.hidden,
+            directory_id: value.directory_id,
         }
     }
 }
@@ -141,6 +143,7 @@ impl PictureData {
             flag: ActiveValue::Set(self.flag),
             hidden: ActiveValue::Set(self.hidden),
             thumbnail: ActiveValue::not_set(),
+            directory_id: ActiveValue::Set(self.directory_id),
         }
     }
 }

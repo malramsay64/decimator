@@ -3,12 +3,14 @@ use std::num::NonZero;
 
 use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
+use entity::directory::Entity;
 use futures_concurrency::prelude::*;
 use itertools::Itertools;
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, EntityOrSelect};
 use walkdir::WalkDir;
 
 use crate::data::{add_new_images, query_existing_pictures};
+use crate::get_parent_directory;
 use crate::picture::{is_image, PictureData};
 
 #[derive(Clone, Debug)]
@@ -206,6 +208,9 @@ pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<
             }
 
             image.filepath = new_path;
+            image.directory_id = get_parent_directory(db, &image.directory().into())
+                .await
+                .expect("");
             image
         })
         .collect()

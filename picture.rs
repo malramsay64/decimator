@@ -8,6 +8,8 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Vec<u8>,
     pub directory: String,
+    // #[sea_orm(indexed)]
+    pub directory_id: Vec<u8>,
     pub filename: String,
     pub raw_extension: Option<String>,
     pub short_hash: Option<Vec<u8>>,
@@ -21,6 +23,19 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::directory::Entity",
+        from = "Column::DirectoryId",
+        to = "super::directory::Column::Id"
+    )]
+    Directory,
+}
+
+impl Related<super::directory::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Directory.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

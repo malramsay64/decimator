@@ -1,12 +1,21 @@
 const APP_ID: &str = "com.malramsay.Decimator";
 
-use decimator::directory::DirectoryMessage;
+use anyhow::Error;
+use camino::Utf8PathBuf;
+use decimator::directory::{DirectoryData, DirectoryMessage};
 use decimator::telemetry::{get_subscriber_terminal, init_subscriber};
 use decimator::{App, Message};
+use entity::directory;
+use entity::picture;
+use futures::{StreamExt, TryStreamExt};
 use iced::Task;
-use sea_orm::{ConnectOptions, Database};
+use sea_orm::entity::*;
+use sea_orm::prelude::*;
+use sea_orm::query::*;
+use sea_orm::{ConnectOptions, Database, DatabaseConnection, EntityOrSelect, EntityTrait};
 use tracing::instrument::WithSubscriber;
 use tracing::Instrument;
+use uuid::Uuid;
 
 fn main() -> Result<(), iced::Error> {
     // Configure tracing information

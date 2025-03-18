@@ -5,10 +5,10 @@ use itertools::Itertools;
 use sea_orm::DatabaseConnection;
 use tracing::info;
 
-use crate::data::{query_directory_pictures, query_unique_directories};
+use crate::data::{query_directories, query_directory_pictures, query_unique_directories};
 use crate::import::{find_new_images, import};
 use crate::thumbnail::ThumbnailMessage;
-use crate::Message;
+use crate::{DirectoryDataDB, Message};
 
 #[derive(Debug, Default, Clone)]
 pub enum Active {
@@ -20,7 +20,7 @@ pub enum Active {
 
 #[derive(Debug, Clone, Default)]
 pub struct DirectoryView {
-    pub directories: Vec<DirectoryData>,
+    pub directories: Vec<DirectoryDataDB>,
     pub selected: Active,
     pub database: DatabaseConnection,
 }
@@ -50,8 +50,8 @@ pub enum DirectoryMessage {
     /// The request to open the directory selection menu
     DirectoryImport,
     QueryDirectories,
-    UpdateDirectories(Vec<DirectoryData>),
-    SelectDirectory(DirectoryData),
+    UpdateDirectories(Vec<DirectoryDataDB>),
+    SelectDirectory(DirectoryDataDB),
     DirectoryNext,
     DirectoryPrev,
 }
@@ -113,11 +113,12 @@ impl DirectoryView {
             )
             .map(Message::Directory),
             DirectoryMessage::QueryDirectories => Task::perform(
-                async move { query_unique_directories(&database).await.unwrap() },
+                async move { query_directories(&database).await.unwrap() },
                 DirectoryMessage::UpdateDirectories,
             )
             .map(Message::Directory),
             DirectoryMessage::UpdateDirectories(dirs) => {
+                tracing::debug!("Directories: {:?}", self.directories);
                 self.directories = dirs.into_iter().sorted().rev().collect();
                 Task::none()
             }
@@ -125,11 +126,7 @@ impl DirectoryView {
                 self.selected =
                     Active::Single(self.directories.iter().position(|d| d == &dir).unwrap());
                 Task::perform(
-                    async move {
-                        query_directory_pictures(&database, dir.into())
-                            .await
-                            .unwrap()
-                    },
+                    async move { query_directory_pictures(&database, dir).await.unwrap() },
                     ThumbnailMessage::SetThumbnails,
                 )
                 .map(Message::Thumbnail)
@@ -144,7 +141,7 @@ impl DirectoryView {
             self.directories
                 .iter()
                 .enumerate()
-                .map(|(index, d)| DirectoryData::view(d, self.is_selected(&index))),
+                .map(|(index, d)| DirectoryDataDB::view(d, self.is_selected(&index))),
         )
         .into();
 
@@ -204,16 +201,16 @@ impl From<String> for DirectoryData {
     }
 }
 
-impl DirectoryData {
-    pub fn view(&self, selected: bool) -> Element<'_, Message> {
-        let message = if selected {
-            None
-        } else {
-            Some(DirectoryMessage::SelectDirectory(self.clone()).into())
-        };
-        button(text(self.strip_prefix().as_str()).width(Length::Fill))
-            .on_press_maybe(message)
-            .style(directory_style)
-            .into()
-    }
-}
+// impl DirectoryData {
+//     pub fn view(&self, selected: bool) -> Element<'_, Message> {
+//         let message = if selected {
+//             None
+//         } else {
+//             Some(DirectoryMessage::SelectDirectory(self.clone()).into())
+//         };
+//         button(text(self.strip_prefix().as_str()).width(Length::Fill))
+//             .on_press_maybe(message)
+//             .style(directory_style)
+//             .into()
+//     }
+// }

@@ -94,6 +94,7 @@ pub enum ThumbnailMessage {
     DisplayHidden(bool),
     ScrollTo(Uuid),
     SetSelection((Uuid, Selection)),
+    SetSelectionCurrent(Selection),
     SetThumbnails(Vec<PictureThumbnail>),
     ThumbnailPoppedIn(Uuid),
     PreviewPoppedIn(Uuid),
@@ -176,6 +177,15 @@ impl ThumbnailView {
                 self.set_selection(&id, s);
                 let to_update = self.thumbnails.get(&id).unwrap().data.clone();
                 Task::done(DatabaseMessage::UpdateImage(to_update)).map(Message::Database)
+            }
+            ThumbnailMessage::SetSelectionCurrent(s) => {
+                if let Active::Single(id) = self.selection {
+                    self.set_selection(&id, s);
+                    let to_update = self.thumbnails.get(&id).unwrap().data.clone();
+                    Task::done(DatabaseMessage::UpdateImage(to_update)).map(Message::Database)
+                } else {
+                    Task::none()
+                }
             }
             ThumbnailMessage::ThumbnailPoppedIn(id) => Task::perform(
                 async move { load_thumbnail(&database, id).await.unwrap() },
@@ -358,6 +368,13 @@ impl ThumbnailView {
             Active::None => false,
             Active::Single(selected) => id == selected,
             Active::Multiple(selected) => selected.contains(id),
+        }
+    }
+
+    pub fn get_selected(&self) -> Option<Uuid> {
+        match self.selection {
+            Active::Single(selected) => Some(selected),
+            _ => None,
         }
     }
 

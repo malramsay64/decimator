@@ -19,6 +19,7 @@ pub struct Model {
     pub hidden: bool,
     pub selection: Selection,
     pub thumbnail: Option<Vec<u8>>,
+    pub directory_id: Option<Uuid>,
 }
 
 impl Model {
@@ -30,6 +31,30 @@ impl Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::directory::Entity",
+        from = "Column::DirectoryId",
+        to = "super::directory::Column::Id"
+    )]
+    Directory,
+}
+
+// impl RelationTrait for Relation {
+//     fn def(&self) -> RelationDef {
+//         match self {
+//             Self::Directory => Entity::belongs_to(super::directory::Entity)
+//                 .from(Column::DirectoryId)
+//                 .to(super::directory::Column::Id)
+//                 .into(),
+//         }
+//     }
+// }
+
+impl Related<super::directory::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Directory.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

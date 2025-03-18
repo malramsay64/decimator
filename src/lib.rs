@@ -1,14 +1,30 @@
+use std::borrow::Borrow;
+
 use anyhow::Error;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use data::{query_directory_pictures, query_unique_directories, update_thumbnails, Progress};
+use entity::directory as entity_directory;
+use entity::directory::Model;
+use entity::picture as entity_picture;
+use entity::Selection;
+use futures::future::Select;
+use futures::{StreamExt, TryStreamExt};
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
 use iced::wgpu::hal::ProgrammableStage;
 use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
+use iced::Color;
 use iced::Event::Keyboard;
+use iced::Theme;
 use iced::{event, task, Element, Length, Subscription, Task};
 use import::find_new_images;
 use itertools::Itertools;
+use picture::ThumbnailData;
+use sea_orm::entity::*;
+use sea_orm::prelude::*;
+use sea_orm::query::*;
+use sea_orm::ActiveValue;
 use sea_orm::DatabaseConnection;
 use tracing::info;
 use uuid::Uuid;
@@ -20,7 +36,7 @@ pub mod directory;
 mod import;
 // The menu is not currently working with the iced master branch
 mod menu;
-mod picture;
+pub mod picture;
 pub mod telemetry;
 mod thumbnail;
 mod widget;
@@ -49,6 +65,139 @@ impl From<DatabaseMessage> for Message {
         Message::Database(val)
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+pub struct DirectoryDataDB {
+    id: Uuid,
+    directory: Utf8PathBuf,
+    parent_id: Option<Uuid>,
+    children: Vec<Uuid>,
+}
+
+fn directory_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+
+    let mut style = match status {
+        button::Status::Active => {
+            button::Style::default().with_background(palette.background.base.color)
+        }
+        button::Status::Hovered => {
+            button::Style::default().with_background(palette.background.strong.color)
+        }
+        button::Status::Pressed => {
+            button::Style::default().with_background(palette.primary.base.color)
+        }
+        _ => button::primary(theme, status),
+    };
+    style.text_color = Color::WHITE;
+    style
+}
+impl DirectoryDataDB {
+    fn new(model: entity::directory::Model, children: Vec<entity::directory::Model>) -> Self {
+        Self {
+            id: model.id,
+            directory: model.directory.into(),
+            parent_id: model.parent_id,
+            children: children.into_iter().map(|i| i.id).collect(),
+        }
+    }
+    fn into_active(self) -> entity::directory::ActiveModel {
+        entity_directory::ActiveModel {
+            id: ActiveValue::Unchanged(self.id),
+            directory: ActiveValue::Set(self.directory.to_string()),
+            parent_id: ActiveValue::Set(self.parent_id),
+        }
+    }
+    pub fn strip_prefix(&self) -> &Utf8Path {
+        &self.directory
+        // .strip_prefix(dirs::home_dir().unwrap())
+        // .unwrap()
+    }
+    pub fn view(&self, selected: bool) -> Element<'_, Message> {
+        let message = if selected {
+            None
+        } else {
+            Some(DirectoryMessage::SelectDirectory(self.clone()).into())
+        };
+        button(text(self.strip_prefix().as_str()).width(Length::Fill))
+            .on_press_maybe(message)
+            .style(directory_style)
+            .into()
+    }
+}
+
+impl PartialOrd for DirectoryDataDB {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.directory.partial_cmp(&other.directory)
+    }
+}
+
+impl From<entity::directory::Model> for DirectoryDataDB {
+    fn from(value: entity::directory::Model) -> Self {
+        Self {
+            id: value.id,
+            directory: value.directory.into(),
+            parent_id: value.parent_id,
+            children: vec![],
+        }
+    }
+}
+
+async fn get_parent_directory(
+    db: &DatabaseConnection,
+    current_dir: &Utf8PathBuf,
+) -> Result<Option<Uuid>, Error> {
+    let d = entity::directory::Entity::find()
+        .filter(entity::directory::Column::Directory.eq(current_dir.clone().into_string()))
+        .one(db)
+        .await?;
+    tracing::debug!("Directories {:?}", d);
+    // The directory already exists within the database
+    if let Some(db_dir) = d {
+        tracing::debug!("Directory already exists {:?}", db_dir);
+        Ok(Some(db_dir.id))
+    // We have a parent directory that could be created
+    } else if let Some(parent) = current_dir.parent() {
+        let parent_id = Box::pin(get_parent_directory(db, &parent.to_path_buf())).await?;
+        let id = Uuid::new_v4();
+        let db_dir = DirectoryDataDB {
+            parent_id,
+            id,
+            directory: current_dir.clone(),
+            children: vec![],
+        };
+        tracing::debug!("Adding directory {db_dir:?} from parent: {parent:?}");
+        entity::directory::Entity::insert(db_dir.into_active())
+            .exec(db)
+            .await
+            .inspect_err(|e| tracing::error!("{e:?}"))?;
+        Ok(Some(id))
+    } else {
+        tracing::debug!("No parent directories");
+        Ok(None)
+    }
+}
+
+async fn update_database(database: &DatabaseConnection) -> Result<(), Error> {
+    let mut stream = entity_picture::Entity::find().stream(database).await?;
+    while let Some(p) = stream.next().await {
+        let p = p.expect("Value not loaded correctly.");
+        let directory: Utf8PathBuf = p.directory.clone().into();
+        tracing::debug!("Updating Picture: {}", p.filename);
+        let d = get_parent_directory(database, &directory).await?;
+        tracing::debug!("Found Parent Directory: {:?}", d);
+        let picture_update = entity::picture::ActiveModel {
+            id: ActiveValue::Unchanged(p.id),
+            directory_id: ActiveValue::Set(d),
+            ..Default::default()
+        };
+
+        entity_picture::Entity::update(picture_update)
+            .exec(database)
+            .await
+            .inspect_err(|e| tracing::error!("{e:?}"))?;
+    }
+    Ok(())
+}
 
 /// Messages for running the application
 #[derive(Debug, Clone)]
@@ -66,6 +215,7 @@ pub enum Message {
     // Contains the path where the files are being exported to
     SelectionPrint,
     Ignore,
+    Update,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +331,12 @@ impl App {
             }
             Message::SelectionPrint => Task::none(),
             Message::Ignore => Task::none(),
+            Message::Update => {
+                let database = self.database.clone();
+                Task::perform(async move { update_database(&database).await }, |_| {
+                    Message::Ignore
+                })
+            }
         }
     }
 
@@ -211,6 +367,7 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
+        let selected = self.thumbnail_view.get_selected();
         let keyboard_sub = event::listen_with(|event, _, _| match event {
             Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
                 match key.as_ref() {
@@ -223,9 +380,15 @@ impl App {
                     // TODO: Keyboard Navigation of directories
                     // KeyCode::H | KeyCode::Left => Some(Message::DirectoryPrev),
                     // KeyCode::H | KeyCode::Left => Some(Message::DirectoryNext),
-                    // Key::Character("p") => Some(Message::SetSelectionCurrent(Selection::Pick)),
-                    // Key::Character("o") => Some(Message::SetSelectionCurrent(Selection::Ordinary)),
-                    // Key::Character("i") => Some(Message::SetSelectionCurrent(Selection::Ignore)),
+                    Key::Character("p") => {
+                        Some(ThumbnailMessage::SetSelectionCurrent(Selection::Pick).into())
+                    }
+                    Key::Character("o") => {
+                        Some(ThumbnailMessage::SetSelectionCurrent(Selection::Ordinary).into())
+                    }
+                    Key::Character("i") => {
+                        Some(ThumbnailMessage::SetSelectionCurrent(Selection::Ignore).into())
+                    }
                     _ => None,
                 }
             }

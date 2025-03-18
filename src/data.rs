@@ -15,6 +15,7 @@ use anyhow::anyhow;
 use anyhow::Error;
 use anyhow::Result;
 use camino::Utf8PathBuf;
+use entity::directory;
 use futures::future::{join_all, try_join_all};
 use futures::{StreamExt, TryStreamExt};
 use futures_concurrency::prelude::*;
@@ -31,6 +32,7 @@ use uuid::Uuid;
 use crate::directory::DirectoryData;
 use crate::picture::PictureThumbnail;
 use crate::picture::{PictureData, ThumbnailData};
+use crate::DirectoryDataDB;
 
 /// Search for pictures in the database located within a directory
 ///
@@ -40,10 +42,12 @@ use crate::picture::{PictureData, ThumbnailData};
 #[tracing::instrument(name = "Querying Picture from directories", skip(db))]
 pub(crate) async fn query_directory_pictures(
     db: &DatabaseConnection,
-    directory: String,
+    directory: DirectoryDataDB,
 ) -> Result<Vec<PictureThumbnail>, Error> {
+    let mut ids: Vec<Uuid> = vec![directory.id];
+    ids.extend(directory.children.iter());
     Ok(picture::Entity::find()
-        .filter(picture::Column::Directory.eq(directory))
+        .filter(picture::Column::DirectoryId.is_in(ids))
         .all(db)
         .await?
         .into_iter()
@@ -177,6 +181,23 @@ pub(crate) async fn add_new_images(
     }
     join_all(futures).await;
     Ok(())
+}
+
+pub(crate) async fn query_directories(
+    db: &DatabaseConnection,
+) -> Result<Vec<DirectoryDataDB>, Error> {
+    tracing::debug!("Loading directories");
+    let directories_with_children: Vec<(directory::Model, Vec<directory::Model>)> =
+        directory::Entity::find()
+            .order_by_desc(directory::Column::Directory)
+            .find_with_linked(directory::SelfReferencingLink)
+            .all(db)
+            .await?;
+    tracing::debug!("Loaded {} directories", directories_with_children.len());
+    Ok(directories_with_children
+        .into_iter()
+        .map(|(m, c)| DirectoryDataDB::new(m, c))
+        .collect())
 }
 
 pub(crate) async fn query_unique_directories(

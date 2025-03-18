@@ -28,7 +28,9 @@ pub fn menu_view(data: &App) -> Element<'_, Message> {
     let tabs = row!(
         Button::new(text("Preview")).on_press(Message::SetView(AppView::Preview)),
         Button::new(text("Grid")).on_press(Message::SetView(AppView::Grid)),
-    );
+        Button::new("Update").on_press(Message::Update),
+    )
+    .padding(10);
     let tabs = if let DownloadState::Downloading { progress, .. } = data.thumbnail_import {
         tabs.push(progress_bar(0.0..=100.0, progress))
     } else {
