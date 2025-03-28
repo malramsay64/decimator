@@ -4,10 +4,8 @@
 // to be properly handled and tested, so we split it into this file to maintain
 // the understanding and separation.
 
-use std::future;
 use std::io::Cursor;
 use std::ops::Not;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use ::entity::{picture, Selection};
@@ -16,14 +14,12 @@ use anyhow::Error;
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use entity::directory;
-use futures::future::{join_all, try_join_all};
-use futures::{StreamExt, TryStreamExt};
-use futures_concurrency::prelude::*;
+use futures::future::join_all;
+use futures::StreamExt;
 use iced::task::sipper;
 use iced::task::Straw;
 use image::ImageFormat;
 use itertools::Itertools;
-use rayon::prelude::*;
 use sea_orm::entity::*;
 use sea_orm::prelude::*;
 use sea_orm::query::*;

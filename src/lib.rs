@@ -1,35 +1,23 @@
-use std::borrow::Borrow;
-
 use anyhow::Error;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use data::{query_directory_pictures, query_unique_directories, update_thumbnails, Progress};
+use data::{update_thumbnails, Progress};
 use entity::directory as entity_directory;
-use entity::directory::Model;
 use entity::picture as entity_picture;
 use entity::Selection;
-use futures::future::Select;
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::wgpu::hal::ProgrammableStage;
-use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
+use iced::widget::{button, column, container, row, text};
 use iced::Color;
 use iced::Event::Keyboard;
 use iced::Theme;
 use iced::{event, task, Element, Length, Subscription, Task};
-use import::find_new_images;
-use itertools::Itertools;
-use picture::ThumbnailData;
 use sea_orm::entity::*;
 use sea_orm::prelude::*;
-use sea_orm::query::*;
 use sea_orm::ActiveValue;
 use sea_orm::DatabaseConnection;
-use tracing::info;
 use uuid::Uuid;
-
-use crate::import::import;
 
 mod data;
 pub mod directory;
@@ -41,8 +29,8 @@ pub mod telemetry;
 mod thumbnail;
 mod widget;
 
-use directory::{DirectoryData, DirectoryMessage, DirectoryView};
-use picture::{PictureData, PictureThumbnail};
+use directory::{DirectoryMessage, DirectoryView};
+use picture::PictureData;
 use thumbnail::{ThumbnailMessage, ThumbnailView};
 
 #[derive(Debug, Clone)]
@@ -268,9 +256,9 @@ impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         let database = self.database.clone();
         match message {
-            Message::Database(m) => Task::none(),
+            Message::Database(_m) => Task::none(),
             Message::Thumbnail(m) => self.thumbnail_view.update(m),
-            Message::App(m) => Task::none(),
+            Message::App(_m) => Task::none(),
             Message::Directory(m) => self.directory_view.update(m),
             Message::SetView(view) => {
                 self.app_view = view;
@@ -367,7 +355,6 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let selected = self.thumbnail_view.get_selected();
         let keyboard_sub = event::listen_with(|event, _, _| match event {
             Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
                 match key.as_ref() {

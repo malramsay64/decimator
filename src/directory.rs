@@ -1,11 +1,10 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
-use iced::{Color, Element, Length, Task, Theme};
+use iced::{Color, Element, Task, Theme};
 use itertools::Itertools;
 use sea_orm::DatabaseConnection;
-use tracing::info;
 
-use crate::data::{query_directories, query_directory_pictures, query_unique_directories};
+use crate::data::{query_directories, query_directory_pictures};
 use crate::import::{find_new_images, import};
 use crate::thumbnail::ThumbnailMessage;
 use crate::{DirectoryDataDB, Message};

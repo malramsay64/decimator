@@ -3,10 +3,9 @@ use std::num::NonZero;
 
 use anyhow::Error;
 use camino::{Utf8Path, Utf8PathBuf};
-use entity::directory::Entity;
 use futures_concurrency::prelude::*;
 use itertools::Itertools;
-use sea_orm::{DatabaseConnection, EntityOrSelect};
+use sea_orm::DatabaseConnection;
 use walkdir::WalkDir;
 
 use crate::data::{add_new_images, query_existing_pictures};
@@ -160,58 +159,61 @@ pub async fn import(db: &DatabaseConnection, directory: &Utf8PathBuf) -> Result<
         // Spawns a concurrent stream to
         .into_co_stream()
         .limit(NonZero::new(16))
-        .map(|mut image| async move {
-            tracing::debug!("{:?}", &image);
-            // Create the directory structure
-            let structure = ImportStructure::default();
+        .map(|mut image| {
+            let db_inner = db.clone();
+            async move {
+                // tracing::debug!("{:?}", &image);
+                // Create the directory structure
+                let structure = ImportStructure::default();
 
-            let new_path = structure
-                .build_filename(&image)
-                .expect("Unable to build filename");
+                let new_path = structure
+                    .build_filename(&image)
+                    .expect("Unable to build filename");
 
-            let parent = new_path.parent();
-            tracing::debug!("Importing {} into {}", image.filepath, &new_path);
+                let parent = new_path.parent();
+                tracing::debug!("Importing {} into {}", image.filepath, &new_path);
 
-            // Where the new path is the same as the old one we are actually adding the
-            // file rather than importing, so we can skip all the import steps.
-            if image.filepath != new_path {
-                // Copy to new location
+                // Where the new path is the same as the old one we are actually adding the
+                // file rather than importing, so we can skip all the import steps.
+                if image.filepath != new_path {
+                    // Copy to new location
 
-                // Firstly we have to be sure that the directory already exists we are
-                // going to be copying to. This creates the entire directory structure
-                // where it doesn't already exist.
-                // Within tokio this is guaranteed not to fail in a race condition with
-                // itself. https://docs.rs/tokio/latest/tokio/fs/fn.create_dir_all.html
-                tokio::fs::create_dir_all(parent.unwrap())
-                    .await
-                    .expect("Unable to create directory.");
-
-                // Where there is a file that already exists within the new locaton,
-                // we don't want to overwrite it, which does result in the contents
-                // of the file being removed.
-                if new_path.try_exists().expect("Error checking path exists") {
-                    tracing::warn!("File {} already exists, not copying", &new_path);
-                } else {
-                    tokio::fs::copy(&image.filepath, &new_path)
+                    // Firstly we have to be sure that the directory already exists we are
+                    // going to be copying to. This creates the entire directory structure
+                    // where it doesn't already exist.
+                    // Within tokio this is guaranteed not to fail in a race condition with
+                    // itself. https://docs.rs/tokio/latest/tokio/fs/fn.create_dir_all.html
+                    tokio::fs::create_dir_all(parent.unwrap())
                         .await
-                        .expect("Unable to copy file");
-                    // Also copy across the raw file
-                    if let Some(ref ext) = image.raw_extension {
-                        tokio::fs::copy(
-                            &image.filepath.with_extension(ext),
-                            &new_path.with_extension(ext),
-                        )
-                        .await
-                        .expect("Unable to copy file");
+                        .expect("Unable to create directory.");
+
+                    // Where there is a file that already exists within the new locaton,
+                    // we don't want to overwrite it, which does result in the contents
+                    // of the file being removed.
+                    if new_path.try_exists().expect("Error checking path exists") {
+                        tracing::warn!("File {} already exists, not copying", &new_path);
+                    } else {
+                        tokio::fs::copy(&image.filepath, &new_path)
+                            .await
+                            .expect("Unable to copy file");
+                        // Also copy across the raw file
+                        if let Some(ref ext) = image.raw_extension {
+                            tokio::fs::copy(
+                                &image.filepath.with_extension(ext),
+                                &new_path.with_extension(ext),
+                            )
+                            .await
+                            .expect("Unable to copy file");
+                        }
                     }
                 }
-            }
 
-            image.filepath = new_path;
-            image.directory_id = get_parent_directory(db, &image.directory().into())
-                .await
-                .expect("");
-            image
+                image.filepath = new_path;
+                image.directory_id = get_parent_directory(&db_inner, &image.directory().into())
+                    .await
+                    .expect("");
+                image
+            }
         })
         .collect()
         .await;

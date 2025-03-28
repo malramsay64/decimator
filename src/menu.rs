@@ -1,7 +1,5 @@
-use iced::widget::{
-    button, column, horizontal_rule, horizontal_space, progress_bar, row, text, toggler, Button,
-};
-use iced::{Element, Length, Renderer, Theme};
+use iced::widget::{button, column, horizontal_space, progress_bar, row, text, toggler, Button};
+use iced::{Element, Length};
 
 use crate::thumbnail::ThumbnailMessage;
 use crate::{App, AppView, DownloadState, Message};
