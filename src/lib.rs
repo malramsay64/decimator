@@ -1,10 +1,12 @@
+use anyhow::Error;
 use camino::Utf8PathBuf;
-use data::{query_directory_pictures, query_unique_directories, update_thumbnails};
+use data::{query_directory_pictures, query_unique_directories, update_thumbnails, Progress};
 use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key};
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::wgpu::hal::ProgrammableStage;
+use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
 use iced::Event::Keyboard;
-use iced::{event, Element, Length, Subscription, Task};
+use iced::{event, task, Element, Length, Subscription, Task};
 use import::find_new_images;
 use itertools::Itertools;
 use sea_orm::DatabaseConnection;
@@ -51,6 +53,8 @@ impl From<DatabaseMessage> for Message {
 /// Messages for running the application
 #[derive(Debug, Clone)]
 pub enum Message {
+    ThumbnailUpdate(Progress),
+    ThumbnailFinished(Result<(), data::ThumbnailError>),
     Thumbnail(ThumbnailMessage),
     Database(DatabaseMessage),
     Directory(DirectoryMessage),
@@ -71,6 +75,18 @@ pub enum AppView {
     Grid,
 }
 
+#[derive(Debug, Clone, Default)]
+pub enum DownloadState {
+    #[default]
+    Idle,
+    Downloading {
+        progress: f32,
+        _task: task::Handle,
+    },
+    Finished,
+    Errored,
+}
+
 #[derive(Debug)]
 pub struct App {
     database: DatabaseConnection,
@@ -79,6 +95,7 @@ pub struct App {
     app_view: AppView,
     thumbnail_view: ThumbnailView,
     directory_view: DirectoryView,
+    thumbnail_import: DownloadState,
 }
 
 impl App {
@@ -93,6 +110,7 @@ impl App {
             directory_view: DirectoryView::new(database.clone()),
             app_view: Default::default(),
             thumbnail_view: ThumbnailView::new(database, 20.try_into().unwrap()),
+            thumbnail_import: Default::default(),
         }
     }
 
@@ -108,15 +126,33 @@ impl App {
                 self.app_view = view;
                 Task::none()
             }
-            Message::UpdateThumbnails(all) => Task::perform(
-                async move {
-                    // TODO: Add a dialog confirmation box
-                    update_thumbnails(&database, all)
-                        .await
-                        .expect("Unable to update thumbnails");
-                },
-                |_| Message::Ignore,
-            ),
+            Message::ThumbnailUpdate(new_progress) => {
+                if let DownloadState::Downloading { progress, .. } = &mut self.thumbnail_import {
+                    *progress = new_progress.percent;
+                }
+                Task::none()
+            }
+            Message::ThumbnailFinished(result) => {
+                self.thumbnail_import = match result {
+                    Ok(_) => DownloadState::Finished,
+                    Err(_) => DownloadState::Errored,
+                };
+                // self.thumbnail_import = None;
+                Task::none()
+            }
+            Message::UpdateThumbnails(all) => {
+                let (task, handle) = Task::sip(
+                    update_thumbnails(&database, all),
+                    Message::ThumbnailUpdate,
+                    Message::ThumbnailFinished,
+                )
+                .abortable();
+                self.thumbnail_import = DownloadState::Downloading {
+                    progress: 0.,
+                    _task: handle.abort_on_drop(),
+                };
+                task
+            }
             // Modify Thumbnail filters
             Message::SelectionExport => {
                 let items: Vec<_> = self.thumbnail_view.get_view().cloned().collect();

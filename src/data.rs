@@ -4,14 +4,22 @@
 // to be properly handled and tested, so we split it into this file to maintain
 // the understanding and separation.
 
+use std::future;
 use std::io::Cursor;
 use std::ops::Not;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use ::entity::{picture, Selection};
 use anyhow::anyhow;
 use anyhow::Error;
+use anyhow::Result;
 use camino::Utf8PathBuf;
 use futures::future::{join_all, try_join_all};
+use futures::{StreamExt, TryStreamExt};
+use futures_concurrency::prelude::*;
+use iced::task::sipper;
+use iced::task::Straw;
 use image::ImageFormat;
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -72,53 +80,87 @@ pub(crate) async fn query_existing_pictures(
         .collect::<Vec<_>>())
 }
 
-pub(crate) async fn update_thumbnails(
+fn load_thumbnail_buffer(filepath: &Utf8PathBuf, size: u32) -> Result<Vec<u8>, Error> {
+    let _span = tracing::info_span!("Updating thumbnail");
+    let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> = {
+        let mut buffer = Cursor::new(vec![]);
+        tracing::debug!("loading file from {}", filepath);
+        PictureData::load_thumbnail(filepath, size, size).map(|f| {
+            f.write_to(&mut buffer, ImageFormat::Jpeg)
+                .expect("Error writing image to buffer");
+            buffer
+        })
+    };
+    thumbnail_buffer.map(|i| i.into_inner())
+}
+
+#[derive(Debug, Clone)]
+pub struct Progress {
+    pub percent: f32,
+}
+
+pub(crate) fn update_thumbnails(
     db: &DatabaseConnection,
     update_all: bool,
-) -> Result<(), Error> {
-    let query = picture::Entity::find().apply_if(update_all.not().then_some(()), |q, _| {
-        q.filter(picture::Column::Thumbnail.is_null())
-    });
-    let num_items = query.clone().count(db).await?;
+) -> impl Straw<(), Progress, ThumbnailError> {
+    let db = db.clone();
+    sipper(async move |mut progress| {
+        let query = picture::Entity::find().apply_if(update_all.not().then_some(()), |q, _| {
+            q.filter(picture::Column::Thumbnail.is_null())
+        });
+        let num_items = query
+            .clone()
+            .count(&db)
+            .await
+            .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
+        tracing::info!("{} {:?}", update_all, num_items);
+        let mut paginated_results = query
+            .stream(&db)
+            .await
+            .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
 
-    tracing::info!("{} {:?}", update_all, num_items);
+        let mut index = 0;
+        while let Some(picture) = paginated_results.next().await {
+            // tracing::debug!("Loading Picture {picture:?}");
+            let picture = picture.map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
+            let filepath = picture.filepath().clone();
+            let buffer_result =
+                tokio::task::spawn_blocking(move || load_thumbnail_buffer(&filepath, 480))
+                    .await
+                    .inspect_err(|e| tracing::error!("{e:?}"))
+                    .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
+            if let Ok(buffer) = buffer_result {
+                let mut picture: picture::ActiveModel = picture.into();
+                picture.set(picture::Column::Thumbnail, buffer.into());
+                // Updates have to be done to single objects, unlike inserts
+                // where we can insert many items at once
+                picture
+                    .update(&db)
+                    .await
+                    .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
+                tracing::debug!("Successfully loaded picture into buffer");
+            } else {
+                tracing::error!("{buffer_result:?}");
+                continue;
+            };
+            index += 1;
+            // .inspect_err(|e| tracing::error!("{e:?}"))
+            // .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
+            // let buffer = tokio::task::spawn_blocking(move || load_thumbnail_buffer(&filepath, 480))
+            //     .await
+            //     .inspect_err(|e| tracing::error!("{e:?}"))
+            //     .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?
+            //     .inspect_err(|e| tracing::error!("{e:?}"))
+            //     .map_err(|e| Into::<ThumbnailError>::into(Error::from(e)))?;
 
-    let mut paginated_results = query.paginate(db, 8);
-    while let Some(results) = paginated_results.fetch_and_next().await? {
-        let futures: Vec<_> = results
-            .par_iter()
-            .filter_map(|picture| {
-                let filepath = picture.filepath().clone();
-                let _span = tracing::info_span!("Updating thumbnail");
-                let thumbnail_buffer: Result<Cursor<Vec<u8>>, Error> = {
-                    let mut buffer = Cursor::new(vec![]);
-                    tracing::debug!("loading file from {}", &filepath);
-                    PictureData::load_thumbnail(&filepath, 240, 240).map(|f| {
-                        f.write_to(&mut buffer, ImageFormat::Jpeg)
-                            .expect("Error writing image to buffer");
-                        buffer
-                    })
-                };
-                match thumbnail_buffer {
-                    Ok(buffer) => {
-                        let mut picture: picture::ActiveModel = (*picture).clone().into();
-                        picture.set(picture::Column::Thumbnail, buffer.into_inner().into());
-                        // Updates have to be done to single objects, unlike inserts
-                        // where we can insert many items at once
-                        Some(picture.update(db))
-                    }
-                    _ => {
-                        tracing::warn!(
-                            "Error loading file from {filepath:?}, {thumbnail_buffer:?}"
-                        );
-                        None
-                    }
-                }
-            })
-            .collect();
-        try_join_all(futures).await.unwrap();
-    }
-    Ok(())
+            let _ = progress
+                .send(Progress {
+                    percent: 100.0 * index as f32 / num_items as f32,
+                })
+                .await;
+        }
+        Ok(())
+    })
 }
 
 pub(crate) async fn add_new_images(
@@ -185,4 +227,15 @@ pub async fn load_thumbnail(db: &DatabaseConnection, id: Uuid) -> Result<Thumbna
         .await?
         .map(ThumbnailData::from)
         .ok_or(anyhow!("ID does not exist within database."))
+}
+
+#[derive(Debug, Clone)]
+pub enum ThumbnailError {
+    ThumbnailFailed(Arc<anyhow::Error>),
+}
+
+impl From<anyhow::Error> for ThumbnailError {
+    fn from(error: anyhow::Error) -> Self {
+        ThumbnailError::ThumbnailFailed(Arc::new(error))
+    }
 }
